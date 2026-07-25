@@ -14,11 +14,8 @@ from pathlib import Path
 def render_png(mesh_path: str, size: tuple[int, int] = (640, 480)) -> bytes:
     import pyvista as pv
 
-    # Start a virtual framebuffer so VTK can render without a display.
-    try:
-        pv.start_xvfb()
-    except Exception:  # noqa: BLE001 - some images use OSMesa instead of xvfb
-        pass
+    # A display is provided by the `xvfb-run` wrapper (see worker.render_preview_isolated),
+    # so mesa can do software OpenGL rendering headless.
     pv.OFF_SCREEN = True
 
     mesh = pv.read(mesh_path)
@@ -31,3 +28,13 @@ def render_png(mesh_path: str, size: tuple[int, int] = (640, 480)) -> bytes:
     plotter.screenshot(str(out))
     plotter.close()
     return out.read_bytes()
+
+
+if __name__ == "__main__":
+    # Invoked (under xvfb-run) as: python -m app.cad.preview <mesh_path>
+    # Writes base64-encoded PNG to stdout; a non-zero exit / crash => no preview.
+    import base64
+    import sys
+
+    png = render_png(sys.argv[1])
+    sys.stdout.write(base64.b64encode(png).decode("ascii"))

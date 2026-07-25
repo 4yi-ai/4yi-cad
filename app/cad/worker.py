@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -24,6 +25,37 @@ import traceback
 def _b64_file(path: str) -> str:
     with open(path, "rb") as fh:
         return base64.b64encode(fh.read()).decode("ascii")
+
+
+def render_preview_isolated(
+    stl_path: str,
+    *,
+    preview_argv: list[str] | None = None,
+    timeout: float = 30.0,
+) -> str | None:
+    """Render a preview PNG in a CHILD process, returning base64 or None.
+
+    VTK can segfault headless; running it in-process would take down the whole
+    worker and lose the already-exported STEP/STL. Isolating it means any
+    failure/crash/timeout degrades to preview=None while exports survive.
+    `xvfb-run` provides a virtual X display for mesa software rendering.
+    """
+    argv = preview_argv or [
+        "xvfb-run",
+        "-a",
+        sys.executable,
+        "-m",
+        "app.cad.preview",
+        stl_path,
+    ]
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if proc.returncode != 0:
+        return None
+    out = (proc.stdout or "").strip()
+    return out or None
 
 
 def run(script: str) -> dict:
@@ -54,13 +86,8 @@ def run(script: str) -> dict:
 
     exports = {"step": _b64_file(step_path), "stl": _b64_file(stl_path)}
 
-    preview_png_b64 = None
-    try:
-        from app.cad.preview import render_png
-
-        preview_png_b64 = base64.b64encode(render_png(stl_path)).decode("ascii")
-    except Exception:  # noqa: BLE001 - preview is best-effort
-        preview_png_b64 = None
+    # Preview is best-effort and isolated: a native VTK crash cannot lose exports.
+    preview_png_b64 = render_preview_isolated(stl_path)
 
     return {"ok": True, "preview_png_b64": preview_png_b64, "exports": exports}
 

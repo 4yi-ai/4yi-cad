@@ -5,11 +5,13 @@ FROM python:3.11-slim
 # System libs for VTK/PyVista offscreen rendering and OpenCASCADE (cadquery-ocp).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgl1 \
+      libgl1-mesa-dri \
       libglu1-mesa \
       libxrender1 \
       libxext6 \
       libsm6 \
       libgomp1 \
+      xauth \
       xvfb \
     && rm -rf /var/lib/apt/lists/*
 
