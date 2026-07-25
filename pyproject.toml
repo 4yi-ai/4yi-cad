@@ -1,0 +1,18 @@
+[project]
+name = "4yi-cad"
+version = "0.1.0"
+description = "AI CAD app (prompt -> parametric 3D model -> preview -> export), packaged as a 4yi dedicated app"
+requires-python = ">=3.10"
+
+# Runtime deps live in requirements.txt / requirements-cad.txt so the Docker
+# image can layer the heavy CAD stack (cadquery, freecad) separately from the
+# light web stack. Unit tests only need requirements-dev.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

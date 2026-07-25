@@ -1,0 +1,6 @@
+# Heavy CAD stack — installed in the Docker image only, not needed for unit tests.
+# The codegen subprocess (app/cad/runner.py) imports cadquery; app/cad/preview.py
+# imports pyvista; app/cad/freecad.py shells out to headless FreeCADCmd.
+cadquery>=2.4
+pyvista>=0.43
+numpy>=1.26

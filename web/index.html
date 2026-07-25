@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>4yi-cad</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; }
+  header { padding: 14px 20px; border-bottom: 1px solid #8883; font-weight: 600; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 72px; padding: 10px;
+             font: inherit; border-radius: 8px; border: 1px solid #8886; }
+  button { margin-top: 8px; padding: 9px 16px; border-radius: 8px; border: 0;
+           background: #33415c; color: #fff; font: inherit; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  #status { min-height: 20px; color: #888; margin: 12px 0; }
+  #preview img { max-width: 100%; border: 1px solid #8884; border-radius: 8px; }
+  pre { background: #8881; padding: 12px; border-radius: 8px; overflow: auto; }
+  .links a { margin-right: 14px; }
+  .err { color: #c0392b; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>4yi-cad — prompt → 3D model</header>
+<main>
+  <textarea id="prompt" placeholder="e.g. a 20mm cube with a 6mm hole through the center"></textarea>
+  <div><button id="go">Generate</button></div>
+  <div id="status"></div>
+  <div id="preview"></div>
+  <div class="links" id="links"></div>
+  <details><summary>CadQuery script</summary><pre id="script"></pre></details>
+</main>
+<script>
+// The client is the source of truth: it keeps the conversation history and
+// replays it to the (stateless) server on each request.
+const history = [];
+const $ = (id) => document.getElementById(id);
+
+function setStatus(t) { $("status").textContent = t; }
+function dataUrl(mime, b64) { return `data:${mime};base64,${b64}`; }
+
+async function generate(prompt) {
+  $("go").disabled = true;
+  $("preview").innerHTML = ""; $("links").innerHTML = ""; $("script").textContent = "";
+  setStatus("submitting…");
+
+  let resp;
+  // Retry on 503 — the app may be cold-starting after idle auto-pause.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    resp = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, history }),
+    });
+    if (resp.status !== 503) break;
+    setStatus("waking up… (" + (attempt + 1) + ")");
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (!resp.ok && resp.status !== 200) {
+    setStatus("error: HTTP " + resp.status);
+    $("go").disabled = false;
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastScript = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop();
+    for (const frame of frames) {
+      const dataLine = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) continue; // comment / heartbeat
+      const ev = JSON.parse(dataLine.slice(6));
+      handle(ev);
+      if (ev.type === "script") lastScript = ev.script;
+    }
+  }
+  $("go").disabled = false;
+
+  // Append this turn to the client-held history.
+  history.push({ role: "user", content: prompt });
+  if (lastScript) {
+    history.push({ role: "assistant", content: "```python\n" + lastScript + "\n```" });
+  }
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "status": setStatus(ev.message); break;
+    case "script": $("script").textContent = ev.script; break;
+    case "preview":
+      if (ev.png_b64) $("preview").innerHTML =
+        `<img alt="preview" src="${dataUrl("image/png", ev.png_b64)}">`;
+      break;
+    case "artifact": {
+      const mime = ev.format === "step" ? "application/step" : "model/stl";
+      const a = document.createElement("a");
+      a.href = dataUrl(mime, ev.data_b64);
+      a.download = "model." + ev.format;
+      a.textContent = "Download ." + ev.format;
+      $("links").appendChild(a);
+      break;
+    }
+    case "error": $("preview").innerHTML = `<div class="err">${ev.message}</div>`; break;
+    case "done": if (ev.ok) setStatus("done"); break;
+  }
+}
+
+$("go").addEventListener("click", () => {
+  const p = $("prompt").value.trim();
+  if (p) generate(p);
+});
+</script>
+</body>
+</html>
