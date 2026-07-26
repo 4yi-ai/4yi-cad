@@ -76,7 +76,12 @@
   .tool-button:hover, .icon-button:hover { background: var(--panel-2); }
   .tool-button.active, .icon-button.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
   .icon-button { width: 32px; padding: 0; border: 1px solid var(--line-soft); background: var(--panel); box-shadow: var(--shadow); }
-  .toolbar svg, .panel-title svg, .tree svg { width: 16px; height: 16px; stroke-width: 1.9; }
+  .toolbar svg, .panel-title svg, .tree svg, .section h3 svg, .tab-button svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.9;
+    flex: 0 0 auto;
+  }
 
   .status-chip {
     border: 1px solid var(--line);
@@ -94,8 +99,11 @@
   .workspace {
     min-height: 0;
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr) 360px;
-    grid-template-rows: minmax(0, 1fr) 180px;
+    grid-template-columns: 280px minmax(0, 1fr) clamp(320px, 24vw, 390px);
+    grid-template-rows: minmax(360px, 1fr) clamp(240px, 30vh, 320px);
+    grid-template-areas:
+      "tree viewport props"
+      "tree console props";
   }
 
   .panel {
@@ -105,10 +113,10 @@
     display: flex;
     flex-direction: column;
   }
-  .left { grid-row: 1 / 3; border-right: 1px solid var(--line); }
-  .right { grid-row: 1 / 3; border-left: 1px solid var(--line); }
-  .viewport-wrap { min-height: 0; border-bottom: 1px solid var(--line); background: #f4f6fa; position: relative; overflow: hidden; }
-  .bottom { border-top: 0; background: var(--panel); }
+  .left { grid-area: tree; border-right: 1px solid var(--line); }
+  .right { grid-area: props; border-left: 1px solid var(--line); overflow: hidden; }
+  .viewport-wrap { grid-area: viewport; min-height: 0; border-bottom: 1px solid var(--line); background: #f4f6fa; position: relative; overflow: hidden; }
+  .bottom { grid-area: console; border-top: 0; background: var(--panel); overflow: hidden; }
 
   .panel-title {
     flex: 0 0 44px;
@@ -209,6 +217,7 @@
   .bbox { fill: none; stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 7 5; }
 
   .properties-head { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+  #properties { min-height: 0; overflow: auto; flex: 1; }
   .feature-meta { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
   .feature-meta strong { display: block; font-size: 14px; }
   .feature-meta span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
@@ -257,7 +266,7 @@
     flex: 0 0 42px;
     border-bottom: 1px solid var(--line);
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(480px, 1fr) minmax(240px, 420px);
     align-items: center;
     gap: 10px;
     padding: 0 10px;
@@ -286,8 +295,20 @@
     padding: 0 12px;
     font-weight: 650;
   }
-  .bottom-content { min-height: 0; overflow: auto; padding: 12px; }
+  .bottom-content { min-height: 0; overflow: auto; padding: 10px 12px; }
   .history-list, .log-list { display: grid; gap: 8px; }
+  .chat-panel { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 100%; }
+  .chat-list { display: grid; align-content: start; gap: 8px; }
+  .chat-message {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+  .chat-message.user { background: var(--primary-soft); border-color: #cfe4ff; }
+  .chat-message strong { display: block; margin-bottom: 3px; font-size: 12px; }
+  .chat-message span { color: var(--muted); }
   .history-item, .log-item, .artifact-card {
     border: 1px solid var(--line);
     border-radius: var(--radius);
@@ -308,10 +329,12 @@
     color: #263242;
   }
   .script-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-  .artifact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .artifact-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
-  .artifact-card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .artifact-card span { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+  .artifact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .artifact-card { min-height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+  .artifact-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-weight: 750; }
+  .artifact-title span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .artifact-ext { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .artifact-detail { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.25; }
   .artifact-card a { color: var(--primary); text-decoration: none; font-weight: 650; font-size: 12px; }
   .badge {
     border-radius: 6px;
@@ -324,6 +347,7 @@
   .badge.ready { color: var(--success); background: #eaf7ef; border-color: #ccebd8; }
   .badge.queued { color: var(--warning); background: #fff7df; border-color: #ffe8a3; }
   .badge.preview { color: var(--primary); background: var(--primary-soft); border-color: #cfe4ff; }
+  .badge.planned { color: var(--muted); background: #eef1f5; border-color: #dfe4ec; }
   .err { color: var(--danger); white-space: pre-wrap; }
 
   @media (max-width: 1100px) {
@@ -335,12 +359,18 @@
     .workspace {
       grid-template-columns: 1fr;
       grid-template-rows: 250px 470px 390px 230px;
+      grid-template-areas:
+        "tree"
+        "viewport"
+        "props"
+        "console";
       overflow: visible;
     }
     .left, .right { grid-row: auto; border: 0; border-bottom: 1px solid var(--line); }
     .right { border-left: 0; }
     .viewport-wrap { min-height: 470px; }
     .axis-readout { display: none; }
+    .bottom-tabs { grid-template-columns: 1fr; height: auto; padding: 7px 10px; }
     .script-grid, .artifact-grid { grid-template-columns: 1fr; }
   }
 </style>
@@ -393,7 +423,7 @@
       <div class="bottom-tabs">
         <div class="tab-list" id="bottomTabs"></div>
         <form class="command-form" id="commandForm">
-          <input class="command-input" id="commandInput" placeholder="把四个孔改成 6mm, or describe a new part" />
+          <input class="command-input" id="commandInput" placeholder="Chat / modify: 把四个孔改成 6mm" />
           <button class="primary-button" id="applyButton" type="submit">Apply</button>
         </form>
       </div>
@@ -419,9 +449,12 @@ const state = {
   showDims: true,
   exploded: false,
   selectedFeatureId: "base_plate",
-  bottomTab: "history",
+  bottomTab: "chat",
   viewport: { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 },
   chatHistory: [],
+  chatMessages: [
+    { role: "assistant", text: "Ready for CAD changes. Parameter edits use CADPatch; new-part prompts use the CAD agent." },
+  ],
 };
 
 const parameterOrder = [
@@ -826,10 +859,11 @@ function paramRow(name) {
 
 function renderBottomTabs() {
   const tabs = [
+    ["chat", "Chat", "pointer"],
     ["history", "History", "undo"],
     ["script", "Script", "code"],
     ["logs", "Logs", "code"],
-    ["artifacts", "Artifacts", "download"],
+    ["artifacts", "Files", "download"],
   ];
   $("bottomTabs").innerHTML = tabs.map(([id, label, iconName]) =>
     `<button class="tab-button ${state.bottomTab === id ? "active" : ""}" type="button" onclick="setBottomTab('${id}')">${icon(iconName)}${label}</button>`
@@ -838,6 +872,15 @@ function renderBottomTabs() {
 
 function renderBottom() {
   renderBottomTabs();
+  if (state.bottomTab === "chat") {
+    $("bottomContent").innerHTML = `<div class="chat-panel"><div class="chat-list">${state.chatMessages.map((item) => `
+      <article class="chat-message ${item.role === "user" ? "user" : ""}">
+        <strong>${item.role === "user" ? "You" : "CAD agent"}</strong>
+        <span>${escapeHtml(item.text)}</span>
+      </article>
+    `).join("")}</div></div>`;
+    return;
+  }
   if (state.bottomTab === "history") {
     $("bottomContent").innerHTML = `<div class="history-list">${state.history.map((item) => `
       <article class="history-item"><header><span>${escapeHtml(item.label)}</span><span>v${item.version}</span></header><p>${escapeHtml(item.detail)}</p></article>
@@ -860,21 +903,24 @@ function renderBottom() {
 
 function artifactCards() {
   const artifacts = [
-    ["step", "STEP solid", ".step", "manufacturing exchange", "ready"],
-    ["stl", "STL mesh", ".stl", "mesh export", "ready"],
-    ["feature_tree", "Feature tree", ".json", "DesignState", "ready"],
-    ["fcstd", "FreeCAD document", ".FCStd", "Phase 2 FreeCAD backend", "queued"],
-    ["pdf", "Engineering drawing", ".pdf", "TechDraw backend", "queued"],
-    ["svg", "Vector drawing", ".svg", "2D projection", "queued"],
+    ["step", "STEP solid", ".step", "live export from sandbox", "ready", true],
+    ["stl", "STL mesh", ".stl", "live export from sandbox", "ready", true],
+    ["feature_tree", "Feature tree", ".json", "live DesignState JSON", "ready", true],
+    ["fcstd", "FreeCAD document", ".FCStd", "planned FreeCAD backend", "planned", false],
+    ["pdf", "Engineering drawing", ".pdf", "planned TechDraw backend", "planned", false],
+    ["svg", "Vector drawing", ".svg", "planned 2D projection", "planned", false],
   ];
-  return artifacts.map(([key, title, ext, detail, readyStatus]) => {
+  return artifacts.map(([key, title, ext, detail, readyStatus, implemented]) => {
     const value = key === "feature_tree" ? btoa(unescape(encodeURIComponent(JSON.stringify(state.designState, null, 2)))) : state.artifacts[key];
-    const status = value ? readyStatus : (key === "stl" ? "preview" : "queued");
+    const status = value ? readyStatus : (implemented ? "not ready" : "planned");
     const href = value ? dataUrl(key === "stl" ? "model/stl" : key === "feature_tree" ? "application/json" : "application/step", value) : "";
     const download = key === "feature_tree" ? "feature-tree.json" : `model.${key}`;
     return `<article class="artifact-card">
-      <div><strong>${escapeHtml(title)} <span>${escapeHtml(ext)}</span></strong><span>${escapeHtml(detail)}</span></div>
-      ${href ? `<a href="${href}" download="${download}">Download</a>` : `<span class="badge ${status}">${status}</span>`}
+      <div>
+        <div class="artifact-title"><span>${escapeHtml(title)}</span><span class="artifact-ext">${escapeHtml(ext)}</span></div>
+        <span class="artifact-detail">${escapeHtml(detail)}</span>
+      </div>
+      ${href ? `<a href="${href}" download="${download}">Download</a>` : `<span class="badge ${status === "planned" ? "planned" : "queued"}">${status}</span>`}
     </article>`;
   });
 }
@@ -904,8 +950,10 @@ function selectGeometry(featureId) {
 }
 
 function setView(value) {
+  state.viewport = { ...state.viewport, scale: 1, tx: 0, ty: 0 };
   if (value === "fit") {
-    state.viewport = { ...state.viewport, scale: 1, tx: 0, ty: 0 };
+    renderAll();
+    return;
   } else {
     state.viewMode = value;
   }
@@ -1040,9 +1088,12 @@ async function submitCommand(event) {
   if (!text) return;
   const patch = parseConversationalPatch(text);
   input.value = "";
+  state.chatMessages.unshift({ role: "user", text });
+  setBottomTab("chat");
   if (patch) {
     await applyPatches([patch], `Conversation: ${patch.name}`, `${patch.name} = ${formatNumber(patch.value)} mm`);
-    setBottomTab("script");
+    state.chatMessages.unshift({ role: "assistant", text: `Applied CADPatch: ${patch.name} = ${formatNumber(patch.value)} mm.` });
+    setBottomTab("chat");
     return;
   }
   await generateFromPrompt(text);
@@ -1072,6 +1123,7 @@ async function generateFromPrompt(prompt) {
   } catch (error) {
     setStatus("generation failed");
     log(`Generation failed: ${error.message}`);
+    state.chatMessages.unshift({ role: "assistant", text: `Generation failed: ${error.message}` });
   } finally {
     $("applyButton").disabled = false;
     renderAll();
@@ -1124,6 +1176,7 @@ function handleAgentEvent(ev) {
   if (ev.type === "done") {
     setStatus(ev.ok ? "done" : "failed");
     addHistory(ev.ok ? "Agent generation" : "Agent generation failed", ev.ok ? "Generated preview and artifacts" : "See logs for failure");
+    state.chatMessages.unshift({ role: "assistant", text: ev.ok ? "Generated a CAD script and available preview/artifacts." : "Generation failed. See Logs for details." });
   }
   renderBottom();
 }
