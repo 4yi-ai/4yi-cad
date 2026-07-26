@@ -33,8 +33,18 @@ def _require(name: str) -> str:
     return value.strip()
 
 
+def _require_any(names: list[str]) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value.strip()
+    raise ConfigError(f"Missing required environment variable: one of {', '.join(names)}")
+
+
 def load_config() -> Config:
-    openai_base_url = _require("OPENAI_BASE_URL")
+    # The gateway base URL may arrive as OPENAI_BASE_URL (newer) or OPENAI_API_BASE
+    # (older name the import scanner sometimes injects) — accept either.
+    openai_base_url = _require_any(["OPENAI_BASE_URL", "OPENAI_API_BASE"])
     openai_api_key = _require("OPENAI_API_KEY")
     text_model = _require("TEXT_MODEL")
 
