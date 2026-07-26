@@ -740,6 +740,7 @@ function renderIsoSvg(p, enabled) {
     <polygon class="${shapeClass("base_plate")}" ${onShape("base_plate")} points="${points(top)}" fill="url(#plateTop)" stroke="#2a5bbf"/>
     ${enabled.has("fillet_corners") ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("fillet_corners")}" ${onShape("fillet_corners")} cx="${x}" cy="${y}" rx="25" ry="13" fill="#a8b0ba" stroke="#7a8490"/>`).join("") : ""}
     ${showHoles ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${x}" cy="${y}" rx="${Math.max(6, p.hole_d * 2.2)}" ry="${Math.max(3.5, p.hole_d * 1.25)}" fill="#39445a" stroke="#182032"/>`).join("") : ""}
+    ${showHoles && shouldShowHoleDiameterCallout() ? holeDiameterCallout(p, holeCenters[1][0], holeCenters[1][1], holeCenters[1][0] + 54, holeCenters[1][1] - 34) : ""}
     ${showBoss ? `<ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy + bossH}" rx="${bossR}" ry="${bossR * .38}" fill="#4f8f78" opacity=".9"/>
       <rect x="${bossCx - bossR}" y="${bossCy}" width="${bossR * 2}" height="${bossH}" fill="url(#boss)" opacity=".85"/>
       <ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy}" rx="${bossR}" ry="${bossR * .38}" fill="#9bd3bd" stroke="#4e8b75"/>
@@ -747,6 +748,19 @@ function renderIsoSvg(p, enabled) {
     ${state.showBBox ? `<polygon class="bbox" points="${points([[top[0][0]-10, top[0][1]-10], [top[1][0]+10, top[1][1]-10], [bottom[2][0]+10, bottom[2][1]+10], [bottom[3][0]-10, bottom[3][1]+10]])}"/>` : ""}
     ${state.showDims ? isoDims(p, top, bottom, bossCx, bossCy) : ""}
   </svg>`;
+}
+
+function shouldShowHoleDiameterCallout() {
+  return state.selectedFeatureId === "hole_pattern" || state.measureMode === "diameter";
+}
+
+function holeDiameterCallout(p, x, y, labelX, labelY) {
+  const text = `4x dia ${formatNumber(p.hole_d)} mm`;
+  return `
+    <line class="dim-line" x1="${x + 10}" y1="${y - 8}" x2="${labelX}" y2="${labelY + 5}"/>
+    <rect x="${labelX - 8}" y="${labelY - 18}" width="104" height="26" rx="6" fill="rgba(255,255,255,.94)" stroke="#cfe4ff"/>
+    <text class="dim-label" x="${labelX}" y="${labelY}">${text}</text>
+  `;
 }
 
 function grid() {
@@ -777,6 +791,7 @@ function renderTopSvg(p, enabled) {
     ${svgDefs()}<rect width="100%" height="100%" fill="#f6f8fb"/>${grid()}
     <rect class="${shapeClass("base_plate")}" ${onShape("base_plate")} x="${x}" y="${y}" width="${plateW}" height="${plateH}" rx="${enabled.has("fillet_corners") ? Math.max(6, p.corner_radius * 3) : 2}" fill="#6faaf5" stroke="#2a5bbf"/>
     ${enabled.has("hole_pattern") ? holes.map(([hx, hy]) => `<circle class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${hx}" cy="${hy}" r="${Math.max(7, p.hole_d * 2.8)}" fill="#39445a"/>`).join("") : ""}
+    ${enabled.has("hole_pattern") && shouldShowHoleDiameterCallout() ? holeDiameterCallout(p, holes[1][0], holes[1][1], holes[1][0] + 36, holes[1][1] - 32) : ""}
     ${enabled.has("center_boss") ? `<circle class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(35, p.boss_d * 2.2)}" fill="#8bc6ad" stroke="#4e8b75"/>
       ${enabled.has("center_hole") ? `<circle class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(12, p.center_hole_d * 2.2)}" fill="#111827"/>` : ""}` : ""}
     ${state.showBBox ? `<rect class="bbox" x="${x-8}" y="${y-8}" width="${plateW+16}" height="${plateH+16}"/>` : ""}
