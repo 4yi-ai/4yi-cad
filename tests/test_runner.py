@@ -79,6 +79,21 @@ def test_worker_nonzero_exit_is_failure_not_hang():
     assert res.error
 
 
+def test_subprocess_setup_error_is_failure_not_exception(monkeypatch):
+    def raise_setup_error(*args, **kwargs):
+        raise subprocess.SubprocessError("preexec failed")
+
+    import subprocess
+
+    monkeypatch.setattr("app.cad.runner.subprocess.run", raise_setup_error)
+
+    res = run_sandboxed({}, timeout_s=5, worker_argv=[PY, "-c", "print('{}')"])
+
+    assert res.success is False
+    assert res.timed_out is False
+    assert "preexec failed" in res.error
+
+
 def test_request_is_delivered_to_worker_on_stdin():
     worker = [
         PY,

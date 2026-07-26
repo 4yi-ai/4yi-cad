@@ -167,7 +167,10 @@ def create_app(*, gateway=None, execute=None) -> FastAPI:
     async def design_render(req: DesignRenderRequest):
         execute = _get_execute(app)
         script = render_cadquery_script(req.design_state)
-        result = await execute(script)
+        try:
+            result = await execute(script)
+        except Exception as exc:  # noqa: BLE001 - render must report failure, not 500
+            result = ExecResult(ok=False, error=f"sandbox execution failed: {exc}")
         return {
             "ok": result.ok,
             "design_state": req.design_state.model_dump(),

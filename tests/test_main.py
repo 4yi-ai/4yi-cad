@@ -35,8 +35,12 @@ async def _fake_execute(script):
     return ExecResult(ok=True, preview_png_b64="UE5H", exports={"step": "/tmp/a.step"})
 
 
-def _client():
-    app = create_app(gateway=FakeGateway(), execute=_fake_execute)
+async def _raising_execute(script):
+    raise RuntimeError("sandbox unavailable")
+
+
+def _client(*, execute=_fake_execute):
+    app = create_app(gateway=FakeGateway(), execute=execute)
     return TestClient(app)
 
 
@@ -117,6 +121,19 @@ def test_design_render_uses_injected_executor():
     assert body["preview_png_b64"] == "UE5H"
     assert body["exports"] == {"step": "/tmp/a.step"}
     assert "result =" in body["script"]
+
+
+def test_design_render_reports_executor_failure_without_500():
+    client = _client(execute=_raising_execute)
+    initial = client.get("/api/design/initial").json()["design_state"]
+
+    resp = client.post("/api/design/render", json={"design_state": initial})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["exports"] == {}
+    assert "sandbox unavailable" in body["error"]
 
 
 def test_root_serves_the_spa():

@@ -111,6 +111,11 @@ def run_sandboxed(
             else (exc.stderr or ""),
             duration_s=timeout_s,
         )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return SandboxResult(
+            success=False,
+            error=f"sandbox subprocess setup failed: {exc}",
+        )
 
     if proc.returncode != 0:
         return SandboxResult(
