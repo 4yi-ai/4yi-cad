@@ -1,13 +1,16 @@
-"""MVP generation loop: prompt -> run_cadquery tool call -> sandboxed execute -> events.
+"""V1 self-correcting generation loop.
 
-The loop is an async generator of plain-dict domain events (formatted into SSE wire
-frames by app/events.py). It is dependency-injected with a `gateway` (any object
-exposing async chat_completion) and an async `execute(script) -> ExecResult`, so it
-is fully unit-testable with fakes and needs neither the network nor cadquery.
+A real tool-calling agent loop: ask the model for a run_cadquery script, execute it
+in the sandbox, and if execution fails feed the error back as a tool result and ask
+for a fix. Bounded to `max_attempts`, each a SEPARATE gateway call (<290s) — the
+self-correction is multiple calls, never one long call.
 
-MVP scope: a single model turn that must produce a run_cadquery tool call; the
-script is executed once. There is NO self-correction yet (that is V1) — a failed
-execution is reported as an error event and the run ends.
+The loop is an async generator of plain-dict domain events (formatted into SSE by
+app/events.py) and is dependency-injected with a `gateway` (async chat_completion)
+and an async `execute(script) -> ExecResult`, so it is fully unit-testable with
+fakes — no network, no cadquery.
+
+Events: status | script | retry | preview | artifact | error | done.
 """
 
 from __future__ import annotations
@@ -18,30 +21,36 @@ from typing import AsyncIterator, Awaitable, Callable
 
 from app.agent.tools import MVP_TOOLS, SYSTEM_PROMPT
 
+DEFAULT_MAX_ATTEMPTS = 3
+
 
 @dataclass
 class ExecResult:
     ok: bool
     preview_png_b64: str | None = None
-    exports: dict[str, str] = field(default_factory=dict)
+    exports: dict[str, str] = field(default_factory=dict)  # format -> base64
     error: str | None = None
 
 
 Executor = Callable[[str], Awaitable[ExecResult]]
 
+_FORCE_RUN = {"type": "function", "function": {"name": "run_cadquery"}}
 
-def _extract_script(completion) -> str | None:
+
+def _first_run_call(completion):
     for call in completion.tool_calls or []:
-        fn = call.get("function", {})
-        if fn.get("name") == "run_cadquery":
-            try:
-                args = json.loads(fn.get("arguments") or "{}")
-            except json.JSONDecodeError:
-                return None
-            script = args.get("script")
-            if isinstance(script, str) and script.strip():
-                return script
+        if call.get("function", {}).get("name") == "run_cadquery":
+            return call
     return None
+
+
+def _script_of(call) -> str | None:
+    try:
+        args = json.loads(call.get("function", {}).get("arguments") or "{}")
+    except json.JSONDecodeError:
+        return None
+    script = args.get("script")
+    return script if isinstance(script, str) and script.strip() else None
 
 
 async def run_generation(
@@ -52,42 +61,63 @@ async def run_generation(
     history: list[dict] | None = None,
     system_prompt: str = SYSTEM_PROMPT,
     tools: list[dict] | None = None,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> AsyncIterator[dict]:
     tools = tools if tools is not None else MVP_TOOLS
-    messages = [{"role": "system", "content": system_prompt}]
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
     messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
 
     yield {"type": "status", "message": "thinking"}
 
-    completion = await gateway.chat_completion(
-        messages,
-        tools=tools,
-        tool_choice={"type": "function", "function": {"name": "run_cadquery"}},
-    )
+    last_error = "no CAD script was produced"
 
-    script = _extract_script(completion)
-    if script is None:
-        yield {
-            "type": "error",
-            "message": "The model did not produce a CAD script.",
-        }
-        yield {"type": "done", "ok": False}
-        return
+    for attempt in range(1, max_attempts + 1):
+        completion = await gateway.chat_completion(
+            messages, tools=tools, tool_choice=_FORCE_RUN
+        )
 
-    yield {"type": "script", "script": script}
+        call = _first_run_call(completion)
+        script = _script_of(call) if call else None
 
-    result = await execute(script)
+        if script is None:
+            # Model replied without a usable tool call — nudge and retry.
+            last_error = "you must call run_cadquery with a complete script"
+            if attempt < max_attempts:
+                yield {"type": "retry", "attempt": attempt, "message": last_error}
+                messages.append({"role": "assistant", "content": completion.content or ""})
+                messages.append({"role": "user", "content": last_error})
+                continue
+            break
 
-    if not result.ok:
-        yield {"type": "error", "message": result.error or "execution failed"}
-        yield {"type": "done", "ok": False}
-        return
+        yield {"type": "script", "script": script, "attempt": attempt}
 
-    if result.preview_png_b64:
-        yield {"type": "preview", "png_b64": result.preview_png_b64}
+        result = await execute(script)
 
-    for fmt, data_b64 in result.exports.items():
-        yield {"type": "artifact", "format": fmt, "data_b64": data_b64}
+        if result.ok:
+            if result.preview_png_b64:
+                yield {"type": "preview", "png_b64": result.preview_png_b64}
+            for fmt, data_b64 in result.exports.items():
+                yield {"type": "artifact", "format": fmt, "data_b64": data_b64}
+            yield {"type": "done", "ok": True}
+            return
 
-    yield {"type": "done", "ok": True}
+        # Recoverable execution failure — feed the error back and try again.
+        last_error = result.error or "execution failed"
+        if attempt < max_attempts:
+            yield {"type": "retry", "attempt": attempt, "message": last_error}
+            messages.append(
+                {"role": "assistant", "content": completion.content, "tool_calls": completion.tool_calls}
+            )
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.get("id"),
+                    "content": f"Execution failed:\n{last_error}\nFix the script and call run_cadquery again.",
+                }
+            )
+            continue
+        break
+
+    yield {"type": "error", "message": last_error}
+    yield {"type": "done", "ok": False}

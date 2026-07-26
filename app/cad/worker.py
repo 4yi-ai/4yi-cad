@@ -75,6 +75,25 @@ def run(script: str) -> dict:
     if result is None:
         return {"ok": False, "error": "script did not assign a `result` object"}
 
+    # Geometry validation: reject empty / zero-volume results so the agent loop can
+    # self-correct instead of silently exporting an empty model. Only block on a
+    # DEFINITIVE zero volume; if volume can't be computed, don't block (some valid
+    # shapes raise) — export will surface a real failure.
+    try:
+        shape = result.val() if hasattr(result, "val") else result
+        volume = shape.Volume()
+    except Exception:  # noqa: BLE001
+        volume = None
+    if volume is not None and volume <= 1e-9:
+        return {
+            "ok": False,
+            "error": (
+                f"resulting model has ~zero volume ({volume:.3g}); it is not a valid "
+                "solid. Ensure the sketch is extruded/revolved into a solid and that "
+                "cuts don't remove all material."
+            ),
+        }
+
     workdir = tempfile.mkdtemp()
     step_path = os.path.join(workdir, "model.step")
     stl_path = os.path.join(workdir, "model.stl")
