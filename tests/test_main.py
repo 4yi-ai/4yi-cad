@@ -67,6 +67,58 @@ def test_generate_requires_prompt():
     assert resp.status_code == 422
 
 
+def test_design_initial_returns_state_and_script():
+    resp = _client().get("/api/design/initial")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["design_state"]["parameters"]["plate_length"] == 60
+    assert "plate_length = 60" in body["script"]
+    assert body["geometry_summary"]["bbox_mm"] == [60, 40, 14]
+
+
+def test_design_patch_applies_update_parameter_without_llm():
+    initial = _client().get("/api/design/initial").json()["design_state"]
+
+    resp = _client().post(
+        "/api/design/patch",
+        json={
+            "design_state": initial,
+            "patches": [{"op": "update_parameter", "name": "hole_d", "value": 6}],
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["design_state"]["parameters"]["hole_d"] == 6
+    assert "hole_d = 6" in body["script"]
+
+
+def test_design_patch_rejects_semantically_invalid_patch():
+    initial = _client().get("/api/design/initial").json()["design_state"]
+
+    resp = _client().post(
+        "/api/design/patch",
+        json={"design_state": initial, "patches": [{"op": "update_parameter"}]},
+    )
+
+    assert resp.status_code == 422
+    assert "name and value" in resp.json()["detail"]
+
+
+def test_design_render_uses_injected_executor():
+    initial = _client().get("/api/design/initial").json()["design_state"]
+
+    resp = _client().post("/api/design/render", json={"design_state": initial})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["preview_png_b64"] == "UE5H"
+    assert body["exports"] == {"step": "/tmp/a.step"}
+    assert "result =" in body["script"]
+
+
 def test_root_serves_the_spa():
     # The single container serves the SPA same-origin (fullstack service).
     resp = _client().get("/")

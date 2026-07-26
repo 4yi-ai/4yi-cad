@@ -5,69 +5,1084 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>4yi-cad</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; }
-  header { padding: 14px 20px; border-bottom: 1px solid #8883; font-weight: 600; }
-  main { max-width: 900px; margin: 0 auto; padding: 20px; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 72px; padding: 10px;
-             font: inherit; border-radius: 8px; border: 1px solid #8886; }
-  button { margin-top: 8px; padding: 9px 16px; border-radius: 8px; border: 0;
-           background: #33415c; color: #fff; font: inherit; cursor: pointer; }
-  button[disabled] { opacity: .5; cursor: default; }
-  #status { min-height: 20px; color: #888; margin: 12px 0; }
-  #preview img { max-width: 100%; border: 1px solid #8884; border-radius: 8px; }
-  pre { background: #8881; padding: 12px; border-radius: 8px; overflow: auto; }
-  .links a { margin-right: 14px; }
-  .err { color: #c0392b; white-space: pre-wrap; }
+  :root {
+    color-scheme: light;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #f9fafb;
+    --text: #1f2937;
+    --muted: #667085;
+    --line: #d9dee8;
+    --line-soft: #e8edf5;
+    --primary: #0b6fe8;
+    --primary-soft: #e7f1ff;
+    --success: #157347;
+    --warning: #9a6700;
+    --danger: #c62828;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .08);
+    --radius: 8px;
+    font-family: Inter, "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; }
+  button, input, textarea { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: .45; }
+
+  .workbench {
+    height: 100vh;
+    min-height: 720px;
+    display: grid;
+    grid-template-rows: 48px minmax(0, 1fr);
+    background: var(--bg);
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 330px) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .brand { min-width: 0; display: flex; align-items: center; gap: 9px; }
+  .brand-mark {
+    width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--primary);
+    display: grid; place-items: center; color: var(--primary); font-weight: 800; font-size: 13px;
+  }
+  .brand-title { min-width: 0; }
+  .brand-title strong { display: block; font-size: 14px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-title span { display: block; margin-top: 1px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .toolbar { min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: thin; }
+  .tool-separator { width: 1px; height: 22px; background: var(--line); margin: 0 5px; flex: 0 0 auto; }
+  .tool-button, .icon-button {
+    min-height: 32px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 9px;
+    white-space: nowrap;
+  }
+  .tool-button:hover, .icon-button:hover { background: var(--panel-2); }
+  .tool-button.active, .icon-button.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
+  .icon-button { width: 32px; padding: 0; border: 1px solid var(--line-soft); background: var(--panel); box-shadow: var(--shadow); }
+  .toolbar svg, .panel-title svg, .tree svg { width: 16px; height: 16px; stroke-width: 1.9; }
+
+  .status-chip {
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    border-radius: var(--radius);
+    padding: 6px 9px;
+    color: var(--muted);
+    font-size: 12px;
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .workspace {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr) 360px;
+    grid-template-rows: minmax(0, 1fr) 180px;
+  }
+
+  .panel {
+    min-height: 0;
+    background: var(--panel);
+    border-color: var(--line);
+    display: flex;
+    flex-direction: column;
+  }
+  .left { grid-row: 1 / 3; border-right: 1px solid var(--line); }
+  .right { grid-row: 1 / 3; border-left: 1px solid var(--line); }
+  .viewport-wrap { min-height: 0; border-bottom: 1px solid var(--line); background: #f4f6fa; position: relative; overflow: hidden; }
+  .bottom { border-top: 0; background: var(--panel); }
+
+  .panel-title {
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 700;
+  }
+  .panel-title > span { min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel-body { min-height: 0; overflow: auto; padding: 10px; }
+
+  .tree { display: grid; gap: 3px; }
+  .tree-item {
+    width: 100%;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 8px;
+    text-align: left;
+  }
+  .tree-item:hover { background: var(--panel-2); }
+  .tree-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
+  .tree-item.inactive { color: var(--muted); opacity: .7; }
+  .tree-item .name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 11px 12px; display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+  .tree-footer div { display: flex; justify-content: space-between; gap: 8px; }
+  .tree-footer strong { color: var(--text); font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .viewport {
+    position: absolute;
+    inset: 0;
+    cursor: grab;
+    touch-action: none;
+    overflow: hidden;
+  }
+  .viewport.dragging { cursor: grabbing; }
+  .viewport-content {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(900px, 100%);
+    aspect-ratio: 16 / 10;
+    transform-origin: 50% 50%;
+  }
+  .viewport svg { width: 100%; height: 100%; display: block; }
+  .view-badge-row { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+  .view-badge {
+    background: rgba(255,255,255,.92);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .measure-card {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 4;
+    max-width: min(330px, calc(100% - 24px));
+    background: rgba(255,255,255,.94);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .measure-card strong { display: block; margin-bottom: 3px; }
+  .measure-card span { color: var(--muted); }
+  .axis-readout {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 4;
+    background: rgba(255,255,255,.94);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .feature-shape { cursor: pointer; transition: opacity .15s ease; }
+  .feature-shape:hover { opacity: .86; }
+  .feature-selected { stroke: var(--primary); stroke-width: 3; }
+  .dim-line { stroke: var(--primary); stroke-width: 1.3; marker-start: url(#arrow); marker-end: url(#arrow); }
+  .dim-label { fill: var(--primary); font: 700 12px system-ui, sans-serif; }
+  .bbox { fill: none; stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 7 5; }
+
+  .properties-head { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+  .feature-meta { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+  .feature-meta strong { display: block; font-size: 14px; }
+  .feature-meta span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .version-pill { border-radius: 999px; background: var(--panel-2); color: var(--muted); padding: 4px 8px; font-size: 12px; font-weight: 650; }
+  .rename-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 8px; margin-top: 12px; }
+  .text-input, .param-input, .command-input {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text);
+    min-width: 0;
+  }
+  .text-input { height: 36px; padding: 0 10px; }
+  .param-input { width: 92px; height: 32px; text-align: right; padding: 0 9px; }
+  .feature-actions { display: grid; grid-template-columns: repeat(4, 34px); gap: 10px; margin-top: 12px; }
+
+  .section { padding: 14px; border-bottom: 1px solid var(--line); }
+  .section h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .param-row {
+    min-height: 42px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 36px;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .param-row:first-of-type { border-top: 0; }
+  .param-row label { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .unit { font-size: 12px; color: var(--muted); }
+  .kv-list { display: grid; gap: 8px; }
+  .kv {
+    min-height: 34px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+  .kv span { color: var(--muted); }
+  .kv strong { font-weight: 650; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .bottom-tabs {
+    flex: 0 0 42px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+  }
+  .tab-list { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
+  .tab-button {
+    border: 0;
+    min-height: 30px;
+    border-radius: var(--radius);
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+  .tab-button.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
+  .command-form { display: grid; grid-template-columns: minmax(0, 1fr) 86px; gap: 8px; min-width: 0; }
+  .command-input { height: 32px; padding: 0 10px; }
+  .primary-button {
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: #fff;
+    height: 32px;
+    padding: 0 12px;
+    font-weight: 650;
+  }
+  .bottom-content { min-height: 0; overflow: auto; padding: 12px; }
+  .history-list, .log-list { display: grid; gap: 8px; }
+  .history-item, .log-item, .artifact-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    padding: 10px 12px;
+  }
+  .history-item header { display: flex; justify-content: space-between; gap: 8px; font-weight: 650; padding: 0; border: 0; }
+  .history-item p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  pre {
+    margin: 0;
+    max-height: 120px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #f8fafc;
+    padding: 10px;
+    font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #263242;
+  }
+  .script-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  .artifact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .artifact-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .artifact-card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .artifact-card span { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+  .artifact-card a { color: var(--primary); text-decoration: none; font-weight: 650; font-size: 12px; }
+  .badge {
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+  .badge.ready { color: var(--success); background: #eaf7ef; border-color: #ccebd8; }
+  .badge.queued { color: var(--warning); background: #fff7df; border-color: #ffe8a3; }
+  .badge.preview { color: var(--primary); background: var(--primary-soft); border-color: #cfe4ff; }
+  .err { color: var(--danger); white-space: pre-wrap; }
+
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    .workbench { min-height: 1100px; height: auto; }
+    .topbar { grid-template-columns: minmax(150px, 1fr); align-items: start; padding: 9px 10px; }
+    .toolbar { order: 2; }
+    .status-chip { order: 3; max-width: none; }
+    .workspace {
+      grid-template-columns: 1fr;
+      grid-template-rows: 250px 470px 390px 230px;
+      overflow: visible;
+    }
+    .left, .right { grid-row: auto; border: 0; border-bottom: 1px solid var(--line); }
+    .right { border-left: 0; }
+    .viewport-wrap { min-height: 470px; }
+    .axis-readout { display: none; }
+    .script-grid, .artifact-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
-<header>4yi-cad — prompt → 3D model</header>
-<main>
-  <textarea id="prompt" placeholder="e.g. a 20mm cube with a 6mm hole through the center"></textarea>
-  <div><button id="go">Generate</button></div>
-  <div id="status"></div>
-  <div id="preview"></div>
-  <div class="links" id="links"></div>
-  <details><summary>CadQuery script</summary><pre id="script"></pre></details>
-</main>
+<div class="workbench">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">C</div>
+      <div class="brand-title">
+        <strong>4yi-cad Workbench</strong>
+        <span id="subtitle">DesignState v1</span>
+      </div>
+    </div>
+    <nav class="toolbar" aria-label="CAD toolbar" id="toolbar"></nav>
+    <div class="status-chip" id="status">loading design state</div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel left">
+      <div class="panel-title"><span data-icon="layers">Project / Model Tree</span></div>
+      <div class="panel-body tree" id="featureTree"></div>
+      <div class="tree-footer">
+        <div><span>Active feature</span><strong id="activeFeature">Base plate</strong></div>
+        <div><span>Latest patch</span><strong id="latestPatch">none</strong></div>
+      </div>
+    </aside>
+
+    <section class="viewport-wrap">
+      <div class="view-badge-row">
+        <div class="view-badge" id="selectionBadge">Object: Base plate</div>
+        <div class="view-badge" id="headBadge">Head preview</div>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="viewport-content" id="viewportContent"></div>
+      </div>
+      <div class="measure-card">
+        <strong id="measureTitle">Distance</strong>
+        <span id="measureText">Plate envelope: 60 x 40 x 14 mm</span>
+      </div>
+      <div class="axis-readout" id="axisReadout">X 60 / Y 40 / Z 14 mm</div>
+    </section>
+
+    <aside class="panel right">
+      <div class="panel-title"><span data-icon="sliders">Properties / Parameters</span></div>
+      <div id="properties"></div>
+    </aside>
+
+    <section class="panel bottom">
+      <div class="bottom-tabs">
+        <div class="tab-list" id="bottomTabs"></div>
+        <form class="command-form" id="commandForm">
+          <input class="command-input" id="commandInput" placeholder="把四个孔改成 6mm, or describe a new part" />
+          <button class="primary-button" id="applyButton" type="submit">Apply</button>
+        </form>
+      </div>
+      <div class="bottom-content" id="bottomContent"></div>
+    </section>
+  </main>
+</div>
+
 <script>
-// The client is the source of truth: it keeps the conversation history and
-// replays it to the (stateless) server on each request.
-const history = [];
 const $ = (id) => document.getElementById(id);
+const state = {
+  designState: null,
+  script: "",
+  patch: null,
+  logs: ["Workbench starting"],
+  history: [],
+  artifacts: {},
+  previewPng: null,
+  viewMode: "iso",
+  selectionMode: "object",
+  measureMode: "distance",
+  showBBox: true,
+  showDims: true,
+  exploded: false,
+  selectedFeatureId: "base_plate",
+  bottomTab: "history",
+  viewport: { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 },
+  chatHistory: [],
+};
 
-function setStatus(t) { $("status").textContent = t; }
-function dataUrl(mime, b64) { return `data:${mime};base64,${b64}`; }
+const parameterOrder = [
+  "plate_length", "plate_width", "plate_thickness", "corner_radius",
+  "hole_d", "boss_d", "boss_h", "center_hole_d",
+];
 
-async function generate(prompt) {
-  $("go").disabled = true;
-  $("preview").innerHTML = ""; $("links").innerHTML = ""; $("script").textContent = "";
-  setStatus("submitting…");
+const parameterLimits = {
+  plate_length: [20, 240],
+  plate_width: [20, 180],
+  plate_thickness: [2, 40],
+  corner_radius: [0, 18],
+  hole_d: [1, 28],
+  boss_d: [4, 80],
+  boss_h: [1, 50],
+  center_hole_d: [1, 32],
+};
 
-  let resp;
-  // Retry on 503 — the app may be cold-starting after idle auto-pause.
-  for (let attempt = 0; attempt < 20; attempt++) {
-    resp = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, history }),
-    });
-    if (resp.status !== 503) break;
-    setStatus("waking up… (" + (attempt + 1) + ")");
-    await new Promise((r) => setTimeout(r, 3000));
+const iconSvg = {
+  box: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='m21 8-9-5-9 5 9 5 9-5Z'/><path d='M3 8v8l9 5 9-5V8'/><path d='M12 13v8'/></svg>",
+  layers: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='m12 2 9 5-9 5-9-5 9-5Z'/><path d='m3 12 9 5 9-5'/><path d='m3 17 9 5 9-5'/></svg>",
+  sliders: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M4 21v-7'/><path d='M4 10V3'/><path d='M12 21v-9'/><path d='M12 8V3'/><path d='M20 21v-5'/><path d='M20 12V3'/><path d='M2 14h4'/><path d='M10 8h4'/><path d='M18 16h4'/></svg>",
+  ruler: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='m16 2 6 6L8 22l-6-6L16 2Z'/><path d='m7 17 2 2'/><path d='m10 14 2 2'/><path d='m13 11 2 2'/><path d='m16 8 2 2'/></svg>",
+  pointer: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M3 3l7.5 18 2.5-7 7-2.5L3 3Z'/></svg>",
+  eye: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z'/><circle cx='12' cy='12' r='3'/></svg>",
+  undo: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M3 7v6h6'/><path d='M21 17a9 9 0 0 0-15-6.7L3 13'/></svg>",
+  redo: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M21 7v6h-6'/><path d='M3 17a9 9 0 0 1 15-6.7L21 13'/></svg>",
+  trash: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14H6L5 6'/></svg>",
+  edit: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M12 20h9'/><path d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z'/></svg>",
+  download: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M12 3v12'/><path d='m7 10 5 5 5-5'/><path d='M5 21h14'/></svg>",
+  code: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='m8 9-4 3 4 3'/><path d='m16 9 4 3-4 3'/><path d='m14 4-4 16'/></svg>",
+};
+
+function icon(name) {
+  return iconSvg[name] || iconSvg.box;
+}
+
+function withIcons(root = document) {
+  root.querySelectorAll("[data-icon]").forEach((node) => {
+    const name = node.getAttribute("data-icon");
+    if (!node.dataset.iconDone) {
+      node.insertAdjacentHTML("afterbegin", icon(name));
+      node.dataset.iconDone = "1";
+    }
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
+function formatNumber(value) {
+  const n = Number(value);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function clampParameter(name, value) {
+  const [min, max] = parameterLimits[name] || [-Infinity, Infinity];
+  return Math.min(max, Math.max(min, Number(value)));
+}
+
+function dataUrl(mime, b64) {
+  return `data:${mime};base64,${b64}`;
+}
+
+async function fetchJson(url, body) {
+  const res = await fetch(url, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.detail || json.error || `HTTP ${res.status}`);
+  return json;
+}
+
+function log(message) {
+  state.logs.unshift(message);
+  state.logs = state.logs.slice(0, 40);
+  renderBottom();
+}
+
+function selectedFeature() {
+  return (state.designState?.features || []).find((f) => f.id === state.selectedFeatureId);
+}
+
+function enabledFeatureIds() {
+  const ds = state.designState;
+  if (!ds) return new Set();
+  let activeIndex = ds.features.length - 1;
+  if (ds.rollback_feature_id) {
+    const idx = ds.features.findIndex((f) => f.id === ds.rollback_feature_id);
+    if (idx >= 0) activeIndex = idx;
   }
-  if (!resp.ok && resp.status !== 200) {
-    setStatus("error: HTTP " + resp.status);
-    $("go").disabled = false;
+  return new Set(ds.features.slice(0, activeIndex + 1).filter((f) => !f.suppressed).map((f) => f.id));
+}
+
+function featureDepth(feature) {
+  const map = { design: 0, body: 1, base_plate: 2, fillet_corners: 2, hole_pattern: 2, center_boss: 2, center_hole: 3 };
+  return map[feature.id] || 0;
+}
+
+function featureIcon(feature) {
+  if (feature.kind === "document") return icon("code");
+  if (feature.kind === "body") return icon("layers");
+  if (feature.kind === "cut") return icon("ruler");
+  return icon("box");
+}
+
+function addHistory(label, detail) {
+  const version = state.designState?.version || 1;
+  state.history.unshift({
+    id: `${Date.now()}-${label}`,
+    version,
+    label,
+    detail,
+  });
+  state.history = state.history.slice(0, 60);
+}
+
+function setStatus(message) {
+  $("status").textContent = message;
+}
+
+function renderToolbar() {
+  const viewButtons = [
+    ["fit", "Fit", "ruler"],
+    ["top", "Top", "box"],
+    ["front", "Front", "ruler"],
+    ["right", "Right", "box"],
+    ["iso", "Iso", "ruler"],
+  ];
+  const modes = [
+    ["object", "Object", "pointer"],
+    ["face", "Face", "box"],
+    ["edge", "Edge", "ruler"],
+  ];
+  const measures = [
+    ["distance", "Distance", "ruler"],
+    ["diameter", "Diameter", "ruler"],
+    ["angle", "Angle", "ruler"],
+  ];
+
+  $("toolbar").innerHTML = [
+    ...viewButtons.map(([value, label, iconName]) => toolButton(label, iconName, state.viewMode === value, `setView('${value}')`)),
+    "<span class='tool-separator'></span>",
+    toolButton("BBox", "box", state.showBBox, "toggleBBox()"),
+    toolButton("Dims", "ruler", state.showDims, "toggleDims()"),
+    toolButton("Explode", "layers", state.exploded, "toggleExplode()"),
+    "<span class='tool-separator'></span>",
+    ...modes.map(([value, label, iconName]) => toolButton(label, iconName, state.selectionMode === value, `setSelectionMode('${value}')`)),
+    "<span class='tool-separator'></span>",
+    ...measures.map(([value, label, iconName]) => toolButton(label, iconName, state.measureMode === value, `setMeasureMode('${value}')`)),
+  ].join("");
+}
+
+function toolButton(label, iconName, active, action) {
+  return `<button class="tool-button ${active ? "active" : ""}" type="button" onclick="${action}" title="${escapeHtml(label)}">${icon(iconName)}<span>${escapeHtml(label)}</span></button>`;
+}
+
+function renderTree() {
+  const ds = state.designState;
+  if (!ds) return;
+  const enabled = enabledFeatureIds();
+  $("featureTree").innerHTML = ds.features.map((feature) => {
+    const depth = featureDepth(feature);
+    const active = feature.id === state.selectedFeatureId;
+    const inactive = !enabled.has(feature.id);
+    const pad = 8 + depth * 18;
+    return `
+      <button class="tree-item ${active ? "active" : ""} ${inactive ? "inactive" : ""}" style="padding-left:${pad}px" type="button" onclick="selectFeature('${feature.id}')">
+        ${depth < 2 ? "<span>⌄</span>" : "<span style='width:12px'></span>"}
+        ${featureIcon(feature)}
+        <span class="name">${escapeHtml(feature.name)}</span>
+        ${feature.suppressed ? "<span title='suppressed'>off</span>" : ""}
+      </button>
+    `;
+  }).join("");
+  $("activeFeature").textContent = selectedFeature()?.name || "Feature";
+  $("latestPatch").textContent = state.patch ? `${state.patch.op}:${state.patch.name || state.patch.feature_id}` : "none";
+}
+
+function measurementText() {
+  const p = state.designState.parameters;
+  const featureId = state.selectedFeatureId;
+  if (state.measureMode === "diameter") {
+    if (featureId === "hole_pattern") return `4x holes: ${formatNumber(p.hole_d)} mm`;
+    if (featureId === "center_boss") return `Boss OD: ${formatNumber(p.boss_d)} mm`;
+    if (featureId === "center_hole") return `Center hole: ${formatNumber(p.center_hole_d)} mm`;
+    return `Envelope diagonal: ${formatNumber(Math.hypot(p.plate_length, p.plate_width))} mm`;
+  }
+  if (state.measureMode === "angle") {
+    return featureId === "base_plate" ? "Primary datum corner: 90 deg" : "Feature axis to plate face: 90 deg";
+  }
+  if (featureId === "hole_pattern") return `Hole centers: ${formatNumber(Math.max(0, p.plate_length - 24))} x ${formatNumber(Math.max(0, p.plate_width - 24))} mm`;
+  if (featureId === "center_boss") return `Boss height: ${formatNumber(p.boss_h)} mm`;
+  return `Plate envelope: ${formatNumber(p.plate_length)} x ${formatNumber(p.plate_width)} x ${formatNumber(p.plate_thickness)} mm`;
+}
+
+function renderViewport() {
+  const ds = state.designState;
+  if (!ds) return;
+  const p = ds.parameters;
+  const feature = selectedFeature();
+  $("subtitle").textContent = `DesignState v${ds.version}`;
+  $("selectionBadge").textContent = `${state.selectionMode[0].toUpperCase() + state.selectionMode.slice(1)}: ${feature?.name || "Feature"}`;
+  $("headBadge").textContent = ds.rollback_feature_id ? "Rollback preview" : "Head preview";
+  $("measureTitle").textContent = state.measureMode[0].toUpperCase() + state.measureMode.slice(1);
+  $("measureText").textContent = measurementText();
+  const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
+  $("axisReadout").textContent = `X ${formatNumber(p.plate_length)} / Y ${formatNumber(p.plate_width)} / Z ${formatNumber(height)} mm`;
+  $("viewportContent").innerHTML = renderModelSvg();
+  applyViewportTransform();
+}
+
+function renderModelSvg() {
+  const ds = state.designState;
+  const p = ds.parameters;
+  const enabled = enabledFeatureIds();
+  const mode = state.viewMode;
+  if (mode === "top") return renderTopSvg(p, enabled);
+  if (mode === "front") return renderFrontSvg(p, enabled);
+  if (mode === "right") return renderRightSvg(p, enabled);
+  return renderIsoSvg(p, enabled);
+}
+
+function shapeClass(featureId) {
+  return `feature-shape ${state.selectedFeatureId === featureId ? "feature-selected" : ""}`;
+}
+
+function onShape(featureId) {
+  return `onclick="selectGeometry('${featureId}')"`;
+}
+
+function svgDefs() {
+  return `<defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#0b6fe8"/></marker>
+    <linearGradient id="plateTop" x1="0" x2="1"><stop offset="0" stop-color="#90c3f3"/><stop offset="1" stop-color="#4f86f7"/></linearGradient>
+    <linearGradient id="plateSide" x1="0" x2="1"><stop offset="0" stop-color="#2363d6"/><stop offset="1" stop-color="#1e4fb8"/></linearGradient>
+    <linearGradient id="boss" x1="0" x2="1"><stop offset="0" stop-color="#9ad3bd"/><stop offset="1" stop-color="#5f9f87"/></linearGradient>
+  </defs>`;
+}
+
+function renderIsoSvg(p, enabled) {
+  const selected = state.selectedFeatureId;
+  const width = 720;
+  const height = 450;
+  const cx = 365;
+  const cy = 220;
+  const sx = Math.min(250, p.plate_length * 4.1);
+  const sy = Math.min(168, p.plate_width * 4);
+  const thick = Math.max(24, p.plate_thickness * 5);
+  const bossR = Math.max(28, p.boss_d * 2.15);
+  const bossH = Math.max(22, p.boss_h * 5);
+  const top = [
+    [cx - sx / 2, cy - sy / 2],
+    [cx + sx / 2, cy - sy / 2 - 28],
+    [cx + sx / 2 + 62, cy + sy / 2 - 8],
+    [cx - sx / 2 + 62, cy + sy / 2 + 20],
+  ];
+  const bottom = top.map(([x, y]) => [x, y + thick]);
+  const points = (arr) => arr.map(([x, y]) => `${x},${y}`).join(" ");
+  const holeCenters = [
+    [top[0][0] + 48, top[0][1] + 44],
+    [top[1][0] - 34, top[1][1] + 42],
+    [top[3][0] + 44, top[3][1] - 26],
+    [top[2][0] - 42, top[2][1] - 34],
+  ];
+  const bossCx = cx + 30;
+  const bossCy = cy - 10;
+  const showBoss = enabled.has("center_boss");
+  const showHoles = enabled.has("hole_pattern");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="CAD preview">
+    ${svgDefs()}
+    <rect width="100%" height="100%" fill="#f6f8fb"/>
+    ${grid()}
+    <line x1="130" y1="340" x2="620" y2="285" stroke="#f5b84b"/>
+    <line x1="130" y1="340" x2="104" y2="150" stroke="#b7eb4a"/>
+    <polygon points="${points([top[0], top[1], bottom[1], bottom[0]])}" fill="url(#plateSide)"/>
+    <polygon points="${points([top[1], top[2], bottom[2], bottom[1]])}" fill="#2d6fe7"/>
+    <polygon class="${shapeClass("base_plate")}" ${onShape("base_plate")} points="${points(top)}" fill="url(#plateTop)" stroke="#2a5bbf"/>
+    ${enabled.has("fillet_corners") ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("fillet_corners")}" ${onShape("fillet_corners")} cx="${x}" cy="${y}" rx="25" ry="13" fill="#a8b0ba" stroke="#7a8490"/>`).join("") : ""}
+    ${showHoles ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${x}" cy="${y}" rx="${Math.max(7, p.hole_d * 1.7)}" ry="${Math.max(4, p.hole_d)}" fill="#39445a" stroke="#182032"/>`).join("") : ""}
+    ${showBoss ? `<ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy + bossH}" rx="${bossR}" ry="${bossR * .38}" fill="#4f8f78" opacity=".9"/>
+      <rect x="${bossCx - bossR}" y="${bossCy}" width="${bossR * 2}" height="${bossH}" fill="url(#boss)" opacity=".85"/>
+      <ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy}" rx="${bossR}" ry="${bossR * .38}" fill="#9bd3bd" stroke="#4e8b75"/>
+      ${enabled.has("center_hole") ? `<ellipse class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${bossCx}" cy="${bossCy}" rx="${Math.max(18, p.center_hole_d * 2.2)}" ry="${Math.max(7, p.center_hole_d)}" fill="#111827" stroke="#05070c"/>` : ""}` : ""}
+    ${state.showBBox ? `<polygon class="bbox" points="${points([[top[0][0]-10, top[0][1]-10], [top[1][0]+10, top[1][1]-10], [bottom[2][0]+10, bottom[2][1]+10], [bottom[3][0]-10, bottom[3][1]+10]])}"/>` : ""}
+    ${state.showDims ? isoDims(p, top, bottom, bossCx, bossCy) : ""}
+  </svg>`;
+}
+
+function grid() {
+  let out = "";
+  for (let i = -8; i <= 12; i++) {
+    out += `<line x1="${60 + i * 48}" y1="390" x2="${260 + i * 48}" y2="110" stroke="#dfe5ee" stroke-width="1"/>`;
+    out += `<line x1="${80 + i * 52}" y1="128" x2="${620 + i * 12}" y2="390" stroke="#e6ebf2" stroke-width="1"/>`;
+  }
+  return out;
+}
+
+function isoDims(p, top, bottom, bossCx, bossCy) {
+  return `
+    <line class="dim-line" x1="${bottom[0][0]}" y1="${bottom[0][1] + 26}" x2="${bottom[1][0]}" y2="${bottom[1][1] + 26}"/>
+    <text class="dim-label" x="${(bottom[0][0] + bottom[1][0]) / 2}" y="${(bottom[0][1] + bottom[1][1]) / 2 + 42}">${formatNumber(p.plate_length)} mm</text>
+    <line class="dim-line" x1="${bottom[2][0] + 20}" y1="${bottom[2][1]}" x2="${bottom[1][0] + 20}" y2="${bottom[1][1]}"/>
+    <text class="dim-label" x="${bottom[2][0] + 34}" y="${(bottom[2][1] + bottom[1][1]) / 2}">${formatNumber(p.plate_width)} mm</text>
+    <line class="dim-line" x1="${top[0][0] - 28}" y1="${top[0][1]}" x2="${bottom[0][0] - 28}" y2="${bottom[0][1]}"/>
+    <text class="dim-label" x="${top[0][0] - 70}" y="${(top[0][1] + bottom[0][1]) / 2}">${formatNumber(p.plate_thickness)} mm</text>
+    <text class="dim-label" x="${bossCx + 46}" y="${bossCy + 6}">${formatNumber(p.center_hole_d)} mm</text>
+  `;
+}
+
+function renderTopSvg(p, enabled) {
+  const w = 720, h = 450, x = 180, y = 110, plateW = 360, plateH = 230;
+  const holes = [[x+58,y+52],[x+plateW-58,y+52],[x+58,y+plateH-52],[x+plateW-58,y+plateH-52]];
+  return `<svg viewBox="0 0 ${w} ${h}">
+    ${svgDefs()}<rect width="100%" height="100%" fill="#f6f8fb"/>${grid()}
+    <rect class="${shapeClass("base_plate")}" ${onShape("base_plate")} x="${x}" y="${y}" width="${plateW}" height="${plateH}" rx="${enabled.has("fillet_corners") ? Math.max(6, p.corner_radius * 3) : 2}" fill="#6faaf5" stroke="#2a5bbf"/>
+    ${enabled.has("hole_pattern") ? holes.map(([hx, hy]) => `<circle class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${hx}" cy="${hy}" r="${Math.max(8, p.hole_d * 2.2)}" fill="#39445a"/>`).join("") : ""}
+    ${enabled.has("center_boss") ? `<circle class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(35, p.boss_d * 2.2)}" fill="#8bc6ad" stroke="#4e8b75"/>
+      ${enabled.has("center_hole") ? `<circle class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(12, p.center_hole_d * 2.2)}" fill="#111827"/>` : ""}` : ""}
+    ${state.showBBox ? `<rect class="bbox" x="${x-8}" y="${y-8}" width="${plateW+16}" height="${plateH+16}"/>` : ""}
+    ${state.showDims ? `<line class="dim-line" x1="${x}" y1="${y+plateH+34}" x2="${x+plateW}" y2="${y+plateH+34}"/><text class="dim-label" x="${x+plateW/2-22}" y="${y+plateH+57}">${formatNumber(p.plate_length)} mm</text><line class="dim-line" x1="${x+plateW+34}" y1="${y}" x2="${x+plateW+34}" y2="${y+plateH}"/><text class="dim-label" x="${x+plateW+48}" y="${y+plateH/2}">${formatNumber(p.plate_width)} mm</text>` : ""}
+  </svg>`;
+}
+
+function renderFrontSvg(p, enabled) {
+  const x = 150, y = 250, plateW = 420, plateH = Math.max(34, p.plate_thickness * 5);
+  const bossH = Math.max(30, p.boss_h * 6), bossW = Math.max(100, p.boss_d * 5);
+  return `<svg viewBox="0 0 720 450">
+    ${svgDefs()}<rect width="100%" height="100%" fill="#f6f8fb"/>${grid()}
+    <rect class="${shapeClass("base_plate")}" ${onShape("base_plate")} x="${x}" y="${y}" width="${plateW}" height="${plateH}" fill="#4f86f7" stroke="#2a5bbf"/>
+    ${enabled.has("center_boss") ? `<rect class="${shapeClass("center_boss")}" ${onShape("center_boss")} x="${x+plateW/2-bossW/2}" y="${y-bossH}" width="${bossW}" height="${bossH}" fill="url(#boss)" stroke="#4e8b75"/>` : ""}
+    ${state.showBBox ? `<rect class="bbox" x="${x-10}" y="${enabled.has("center_boss") ? y-bossH-10 : y-10}" width="${plateW+20}" height="${plateH+(enabled.has("center_boss") ? bossH : 0)+20}"/>` : ""}
+    ${state.showDims ? `<line class="dim-line" x1="${x}" y1="${y+plateH+34}" x2="${x+plateW}" y2="${y+plateH+34}"/><text class="dim-label" x="${x+plateW/2-22}" y="${y+plateH+58}">${formatNumber(p.plate_length)} mm</text>` : ""}
+  </svg>`;
+}
+
+function renderRightSvg(p, enabled) {
+  const x = 190, y = 250, plateW = 340, plateH = Math.max(34, p.plate_thickness * 5);
+  const bossH = Math.max(30, p.boss_h * 6), bossW = Math.max(100, p.boss_d * 5);
+  return `<svg viewBox="0 0 720 450">
+    ${svgDefs()}<rect width="100%" height="100%" fill="#f6f8fb"/>${grid()}
+    <rect class="${shapeClass("base_plate")}" ${onShape("base_plate")} x="${x}" y="${y}" width="${plateW}" height="${plateH}" fill="#4f86f7" stroke="#2a5bbf"/>
+    ${enabled.has("center_boss") ? `<rect class="${shapeClass("center_boss")}" ${onShape("center_boss")} x="${x+plateW/2-bossW/2}" y="${y-bossH}" width="${bossW}" height="${bossH}" fill="url(#boss)" stroke="#4e8b75"/>` : ""}
+    ${state.showDims ? `<line class="dim-line" x1="${x}" y1="${y+plateH+34}" x2="${x+plateW}" y2="${y+plateH+34}"/><text class="dim-label" x="${x+plateW/2-20}" y="${y+plateH+58}">${formatNumber(p.plate_width)} mm</text>` : ""}
+  </svg>`;
+}
+
+function renderProperties() {
+  const ds = state.designState;
+  const feature = selectedFeature();
+  if (!ds || !feature) return;
+  const params = feature.parameters.length ? feature.parameters : parameterOrder;
+  const enabled = enabledFeatureIds().has(feature.id);
+  $("properties").innerHTML = `
+    <div class="properties-head">
+      <div class="feature-meta">
+        <div><strong>${escapeHtml(feature.name)}</strong><span>${escapeHtml(feature.kind)} · ${enabled ? "enabled" : "inactive"}</span></div>
+        <div class="version-pill">v${ds.version}</div>
+      </div>
+      <div class="rename-row">
+        <input class="text-input" id="renameInput" value="${escapeHtml(feature.name)}" />
+        <button class="icon-button" type="button" title="Rename" onclick="renameFeature()">${icon("edit")}</button>
+      </div>
+      <div class="feature-actions">
+        <button class="icon-button" type="button" title="Suppress / enable" onclick="toggleFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("eye")}</button>
+        <button class="icon-button" type="button" title="Rollback" onclick="rollbackFeature()">${icon("undo")}</button>
+        <button class="icon-button" type="button" title="Restore head" onclick="restoreHead()" ${ds.rollback_feature_id ? "" : "disabled"}>${icon("redo")}</button>
+        <button class="icon-button" type="button" title="Delete feature" onclick="deleteFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("trash")}</button>
+      </div>
+    </div>
+    <section class="section">
+      <h3>${icon("ruler")} Parameters</h3>
+      ${params.map((name) => paramRow(name)).join("")}
+    </section>
+    <section class="section">
+      <h3>${icon("box")} Regeneration</h3>
+      <div class="kv-list">
+        <div class="kv"><span>Preview mesh</span><strong>${state.previewPng ? "rendered" : "svg-preview"}</strong></div>
+        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? "ready" : "queued"}</strong></div>
+        <div class="kv"><span>Patch mode</span><strong>update_parameter</strong></div>
+      </div>
+    </section>
+  `;
+  $("renameInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") renameFeature();
+  });
+}
+
+function paramRow(name) {
+  const value = state.designState.parameters[name];
+  return `<div class="param-row">
+    <label for="param-${name}">${escapeHtml(name)}</label>
+    <input class="param-input" id="param-${name}" type="number" step="0.5" value="${escapeHtml(formatNumber(value))}" onchange="commitParameter('${name}', this.value)" />
+    <span class="unit">mm</span>
+  </div>`;
+}
+
+function renderBottomTabs() {
+  const tabs = [
+    ["history", "History", "undo"],
+    ["script", "Script", "code"],
+    ["logs", "Logs", "code"],
+    ["artifacts", "Artifacts", "download"],
+  ];
+  $("bottomTabs").innerHTML = tabs.map(([id, label, iconName]) =>
+    `<button class="tab-button ${state.bottomTab === id ? "active" : ""}" type="button" onclick="setBottomTab('${id}')">${icon(iconName)}${label}</button>`
+  ).join("");
+}
+
+function renderBottom() {
+  renderBottomTabs();
+  if (state.bottomTab === "history") {
+    $("bottomContent").innerHTML = `<div class="history-list">${state.history.map((item) => `
+      <article class="history-item"><header><span>${escapeHtml(item.label)}</span><span>v${item.version}</span></header><p>${escapeHtml(item.detail)}</p></article>
+    `).join("")}</div>`;
     return;
   }
+  if (state.bottomTab === "script") {
+    $("bottomContent").innerHTML = `<div class="script-grid">
+      <pre>${escapeHtml(JSON.stringify(state.patch || { op: "noop" }, null, 2))}</pre>
+      <pre>${escapeHtml(state.script || "No script yet")}</pre>
+    </div>`;
+    return;
+  }
+  if (state.bottomTab === "logs") {
+    $("bottomContent").innerHTML = `<div class="log-list">${state.logs.map((line) => `<div class="log-item">${escapeHtml(line)}</div>`).join("")}</div>`;
+    return;
+  }
+  $("bottomContent").innerHTML = `<div class="artifact-grid">${artifactCards().join("")}</div>`;
+}
 
+function artifactCards() {
+  const artifacts = [
+    ["step", "STEP solid", ".step", "manufacturing exchange", "ready"],
+    ["stl", "STL mesh", ".stl", "mesh export", "ready"],
+    ["feature_tree", "Feature tree", ".json", "DesignState", "ready"],
+    ["fcstd", "FreeCAD document", ".FCStd", "Phase 2 FreeCAD backend", "queued"],
+    ["pdf", "Engineering drawing", ".pdf", "TechDraw backend", "queued"],
+    ["svg", "Vector drawing", ".svg", "2D projection", "queued"],
+  ];
+  return artifacts.map(([key, title, ext, detail, readyStatus]) => {
+    const value = key === "feature_tree" ? btoa(unescape(encodeURIComponent(JSON.stringify(state.designState, null, 2)))) : state.artifacts[key];
+    const status = value ? readyStatus : (key === "stl" ? "preview" : "queued");
+    const href = value ? dataUrl(key === "stl" ? "model/stl" : key === "feature_tree" ? "application/json" : "application/step", value) : "";
+    const download = key === "feature_tree" ? "feature-tree.json" : `model.${key}`;
+    return `<article class="artifact-card">
+      <div><strong>${escapeHtml(title)} <span>${escapeHtml(ext)}</span></strong><span>${escapeHtml(detail)}</span></div>
+      ${href ? `<a href="${href}" download="${download}">Download</a>` : `<span class="badge ${status}">${status}</span>`}
+    </article>`;
+  });
+}
+
+function renderAll() {
+  renderToolbar();
+  renderTree();
+  renderViewport();
+  renderProperties();
+  renderBottom();
+  withIcons();
+}
+
+function selectFeature(featureId) {
+  state.selectedFeatureId = featureId;
+  state.designState.selected_feature_id = featureId;
+  log(`Selected feature: ${selectedFeature()?.name || featureId}`);
+  renderAll();
+}
+
+function selectGeometry(featureId) {
+  state.selectedFeatureId = featureId;
+  state.designState.selected_feature_id = featureId;
+  const feature = selectedFeature();
+  log(`Selected ${state.selectionMode}: ${feature?.name || featureId}`);
+  renderAll();
+}
+
+function setView(value) {
+  if (value === "fit") {
+    state.viewport = { ...state.viewport, scale: 1, tx: 0, ty: 0 };
+  } else {
+    state.viewMode = value;
+  }
+  renderAll();
+}
+function toggleBBox() { state.showBBox = !state.showBBox; renderAll(); }
+function toggleDims() { state.showDims = !state.showDims; renderAll(); }
+function toggleExplode() { state.exploded = !state.exploded; renderAll(); }
+function setSelectionMode(value) { state.selectionMode = value; renderAll(); }
+function setMeasureMode(value) { state.measureMode = value; renderAll(); }
+function setBottomTab(value) { state.bottomTab = value; renderBottom(); }
+
+async function commitParameter(name, value) {
+  const patch = { op: "update_parameter", name, value: clampParameter(name, value) };
+  await applyPatches([patch], `Parameter panel: ${name}`, `${name} = ${formatNumber(patch.value)} mm`);
+}
+
+async function applyPatches(patches, label, detail) {
+  setStatus("applying CADPatch");
+  try {
+    const patched = await fetchJson("/api/design/patch", {
+      design_state: state.designState,
+      patches,
+    });
+    state.designState = patched.design_state;
+    state.selectedFeatureId = state.designState.selected_feature_id;
+    state.script = patched.script;
+    state.patch = patches[patches.length - 1] || null;
+    addHistory(label, detail);
+    await renderDesign();
+  } catch (error) {
+    setStatus("patch failed");
+    log(`Patch failed: ${error.message}`);
+  }
+  renderAll();
+}
+
+async function renderDesign() {
+  setStatus("rendering preview + STEP/STL");
+  try {
+    const rendered = await fetchJson("/api/design/render", { design_state: state.designState });
+    state.script = rendered.script;
+    if (rendered.preview_png_b64) state.previewPng = rendered.preview_png_b64;
+    if (rendered.exports) state.artifacts = { ...state.artifacts, ...rendered.exports };
+    if (!rendered.ok) log(`Render failed: ${rendered.error || "unknown error"}`);
+    setStatus(rendered.ok ? "preview/export ready" : "render failed");
+  } catch (error) {
+    setStatus("render skipped");
+    log(`Render skipped: ${error.message}`);
+  }
+}
+
+function renameFeature() {
+  const feature = selectedFeature();
+  const input = $("renameInput");
+  if (!feature || !input.value.trim()) return;
+  feature.name = input.value.trim();
+  state.designState.version += 1;
+  addHistory(`Rename: ${feature.name}`, `${feature.id} renamed`);
+  renderAll();
+}
+
+async function toggleFeature() {
+  const feature = selectedFeature();
+  if (!feature?.suppressible) return;
+  const op = feature.suppressed ? "enable_feature" : "suppress_feature";
+  await applyPatches([{ op, feature_id: feature.id }], `${feature.suppressed ? "Enable" : "Suppress"}: ${feature.name}`, `${feature.name} toggled`);
+}
+
+async function rollbackFeature() {
+  const feature = selectedFeature();
+  if (!feature) return;
+  await applyPatches([{ op: "rollback_to_feature", feature_id: feature.id }], `Rollback: ${feature.name}`, `Preview regenerated at ${feature.name}`);
+}
+
+function restoreHead() {
+  state.designState.rollback_feature_id = null;
+  state.designState.active_feature_id = state.designState.features[state.designState.features.length - 1]?.id || "body";
+  state.designState.version += 1;
+  addHistory("Restore head", "Feature history restored to latest operation");
+  renderDesign().finally(renderAll);
+}
+
+function deleteFeature() {
+  const feature = selectedFeature();
+  if (!feature?.suppressible) return;
+  const descendants = new Set([feature.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of state.designState.features) {
+      if (item.parent_id && descendants.has(item.parent_id) && !descendants.has(item.id)) {
+        descendants.add(item.id);
+        changed = true;
+      }
+    }
+  }
+  state.designState.features = state.designState.features.filter((item) => !descendants.has(item.id));
+  state.selectedFeatureId = state.designState.features[state.designState.features.length - 1]?.id || "body";
+  state.designState.selected_feature_id = state.selectedFeatureId;
+  state.designState.version += 1;
+  addHistory(`Delete: ${feature.name}`, `${feature.name} and dependent features removed`);
+  renderDesign().finally(renderAll);
+}
+
+function parseConversationalPatch(text) {
+  const valueMatch = text.match(/(-?\d+(?:\.\d+)?)\s*(?:mm|毫米)?/i);
+  if (!valueMatch) return null;
+  const value = Number(valueMatch[1]);
+  const normalized = text.toLowerCase();
+  const pairs = [
+    ["center_hole_d", [/中心孔/, /center\s*hole/]],
+    ["hole_d", [/孔/, /hole/, /holes/, /孔径/, /diameter/]],
+    ["boss_d", [/boss.*d/, /boss.*diameter/, /凸台.*直径/, /凸台.*d/]],
+    ["boss_h", [/boss.*h/, /boss.*height/, /凸台.*高度/, /凸台.*h/]],
+    ["plate_length", [/plate_length/, /length/, /长度/, /长/]],
+    ["plate_width", [/plate_width/, /width/, /宽度/, /宽/]],
+    ["plate_thickness", [/plate_thickness/, /thickness/, /厚度/, /厚/]],
+    ["corner_radius", [/corner/, /fillet/, /radius/, /圆角/, /倒角/]],
+  ];
+  const exact = normalized.match(/\b(plate_length|plate_width|plate_thickness|corner_radius|hole_d|boss_d|boss_h|center_hole_d)\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (exact) return { op: "update_parameter", name: exact[1], value: clampParameter(exact[1], Number(exact[2])) };
+  const found = pairs.find(([, patterns]) => patterns.some((pattern) => pattern.test(normalized)));
+  if (!found) return null;
+  return { op: "update_parameter", name: found[0], value: clampParameter(found[0], value) };
+}
+
+async function submitCommand(event) {
+  event.preventDefault();
+  const input = $("commandInput");
+  const text = input.value.trim();
+  if (!text) return;
+  const patch = parseConversationalPatch(text);
+  input.value = "";
+  if (patch) {
+    await applyPatches([patch], `Conversation: ${patch.name}`, `${patch.name} = ${formatNumber(patch.value)} mm`);
+    setBottomTab("script");
+    return;
+  }
+  await generateFromPrompt(text);
+}
+
+async function generateFromPrompt(prompt) {
+  $("applyButton").disabled = true;
+  state.previewPng = null;
+  state.artifacts = {};
+  state.patch = null;
+  setBottomTab("logs");
+  setStatus("submitting to CAD agent");
+  let resp;
+  try {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      resp = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, history: state.chatHistory }),
+      });
+      if (resp.status !== 503) break;
+      setStatus(`waking up (${attempt + 1})`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    await readSse(resp, prompt);
+  } catch (error) {
+    setStatus("generation failed");
+    log(`Generation failed: ${error.message}`);
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
+}
+
+async function readSse(resp, prompt) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let lastScript = null;
-
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -75,48 +1090,136 @@ async function generate(prompt) {
     const frames = buffer.split("\n\n");
     buffer = frames.pop();
     for (const frame of frames) {
-      const dataLine = frame.split("\n").find((l) => l.startsWith("data: "));
-      if (!dataLine) continue; // comment / heartbeat
+      const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
+      if (!dataLine) continue;
       const ev = JSON.parse(dataLine.slice(6));
-      handle(ev);
+      handleAgentEvent(ev);
       if (ev.type === "script") lastScript = ev.script;
     }
   }
-  $("go").disabled = false;
-
-  // Append this turn to the client-held history.
-  history.push({ role: "user", content: prompt });
+  state.chatHistory.push({ role: "user", content: prompt });
   if (lastScript) {
-    history.push({ role: "assistant", content: "```python\n" + lastScript + "\n```" });
+    state.chatHistory.push({ role: "assistant", content: "```python\n" + lastScript + "\n```" });
   }
 }
 
-function handle(ev) {
-  switch (ev.type) {
-    case "status": setStatus(ev.message); break;
-    case "script": $("script").textContent = ev.script; break;
-    case "preview":
-      if (ev.png_b64) $("preview").innerHTML =
-        `<img alt="preview" src="${dataUrl("image/png", ev.png_b64)}">`;
-      break;
-    case "artifact": {
-      const mime = ev.format === "step" ? "application/step" : "model/stl";
-      const a = document.createElement("a");
-      a.href = dataUrl(mime, ev.data_b64);
-      a.download = "model." + ev.format;
-      a.textContent = "Download ." + ev.format;
-      $("links").appendChild(a);
-      break;
-    }
-    case "error": $("preview").innerHTML = `<div class="err">${ev.message}</div>`; break;
-    case "done": if (ev.ok) setStatus("done"); break;
+function handleAgentEvent(ev) {
+  if (ev.type === "status") setStatus(ev.message);
+  if (ev.type === "script") {
+    state.script = ev.script;
+    log(`CAD agent produced script attempt ${ev.attempt || 1}`);
   }
+  if (ev.type === "retry") log(`Retry ${ev.attempt}: ${ev.message}`);
+  if (ev.type === "preview" && ev.png_b64) {
+    state.previewPng = ev.png_b64;
+    log("Rendered preview PNG");
+  }
+  if (ev.type === "artifact") {
+    state.artifacts[ev.format] = ev.data_b64;
+    log(`Artifact ready: ${ev.format}`);
+  }
+  if (ev.type === "error") {
+    log(ev.message);
+  }
+  if (ev.type === "done") {
+    setStatus(ev.ok ? "done" : "failed");
+    addHistory(ev.ok ? "Agent generation" : "Agent generation failed", ev.ok ? "Generated preview and artifacts" : "See logs for failure");
+  }
+  renderBottom();
 }
 
-$("go").addEventListener("click", () => {
-  const p = $("prompt").value.trim();
-  if (p) generate(p);
-});
+function applyViewportTransform() {
+  const v = state.viewport;
+  $("viewportContent").style.transform = `translate(calc(-50% + ${v.tx}px), calc(-50% + ${v.ty}px)) scale(${v.scale})`;
+}
+
+function installViewportGestures() {
+  const viewport = $("viewport");
+  viewport.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const next = state.viewport.scale * (event.deltaY < 0 ? 1.08 : 0.92);
+    state.viewport.scale = Math.min(3.5, Math.max(.5, next));
+    applyViewportTransform();
+  }, { passive: false });
+  viewport.addEventListener("pointerdown", (event) => {
+    state.viewport.dragging = true;
+    state.viewport.x = event.clientX;
+    state.viewport.y = event.clientY;
+    viewport.classList.add("dragging");
+    viewport.setPointerCapture(event.pointerId);
+  });
+  viewport.addEventListener("pointermove", (event) => {
+    if (!state.viewport.dragging) return;
+    state.viewport.tx += event.clientX - state.viewport.x;
+    state.viewport.ty += event.clientY - state.viewport.y;
+    state.viewport.x = event.clientX;
+    state.viewport.y = event.clientY;
+    applyViewportTransform();
+  });
+  viewport.addEventListener("pointerup", () => {
+    state.viewport.dragging = false;
+    viewport.classList.remove("dragging");
+  });
+}
+
+async function init() {
+  $("commandForm").addEventListener("submit", submitCommand);
+  installViewportGestures();
+  try {
+    const initial = await fetchJson("/api/design/initial");
+    state.designState = initial.design_state;
+    state.script = initial.script;
+    state.selectedFeatureId = state.designState.selected_feature_id;
+    addHistory("Initial parametric body", "Loaded base plate, fillets, hole pattern, boss, and center hole.");
+    setStatus("ready");
+  } catch (error) {
+    setStatus("initial state unavailable");
+    log(`Initial state failed: ${error.message}`);
+    state.designState = fallbackDesignState();
+  }
+  renderAll();
+}
+
+function fallbackDesignState() {
+  return {
+    schema_version: "4yi-cad.design/v1",
+    version: 1,
+    parameters: {
+      plate_length: 60, plate_width: 40, plate_thickness: 8, corner_radius: 5,
+      hole_d: 4.5, boss_d: 20, boss_h: 6, center_hole_d: 8,
+    },
+    features: [
+      { id: "design", parent_id: null, name: "Design", kind: "document", parameters: [], suppressible: false, suppressed: false },
+      { id: "body", parent_id: "design", name: "Body", kind: "body", parameters: [], suppressible: false, suppressed: false },
+      { id: "base_plate", parent_id: "body", name: "Base plate", kind: "solid", parameters: ["plate_length", "plate_width", "plate_thickness"], suppressible: false, suppressed: false },
+      { id: "fillet_corners", parent_id: "body", name: "Fillet corners", kind: "operation", parameters: ["corner_radius"], suppressible: true, suppressed: false },
+      { id: "hole_pattern", parent_id: "body", name: "Hole pattern", kind: "pattern", parameters: ["hole_d"], suppressible: true, suppressed: false },
+      { id: "center_boss", parent_id: "body", name: "Center boss", kind: "solid", parameters: ["boss_d", "boss_h"], suppressible: true, suppressed: false },
+      { id: "center_hole", parent_id: "center_boss", name: "Center hole", kind: "cut", parameters: ["center_hole_d"], suppressible: true, suppressed: false },
+    ],
+    active_feature_id: "center_hole",
+    selected_feature_id: "base_plate",
+    rollback_feature_id: null,
+  };
+}
+
+window.selectFeature = selectFeature;
+window.selectGeometry = selectGeometry;
+window.setView = setView;
+window.toggleBBox = toggleBBox;
+window.toggleDims = toggleDims;
+window.toggleExplode = toggleExplode;
+window.setSelectionMode = setSelectionMode;
+window.setMeasureMode = setMeasureMode;
+window.setBottomTab = setBottomTab;
+window.commitParameter = commitParameter;
+window.renameFeature = renameFeature;
+window.toggleFeature = toggleFeature;
+window.rollbackFeature = rollbackFeature;
+window.restoreHead = restoreHead;
+window.deleteFeature = deleteFeature;
+
+init();
 </script>
 </body>
 </html>

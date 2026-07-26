@@ -15,11 +15,19 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.loop import ExecResult, run_generation
+from app.cad.design_state import (
+    CadPatch,
+    DesignState,
+    apply_patches,
+    default_design_state,
+    geometry_summary,
+    render_cadquery_script,
+)
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
@@ -33,6 +41,15 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     # Client is the source of truth: it replays prior turns as chat messages.
     history: list[dict] = Field(default_factory=list)
+
+
+class DesignPatchRequest(BaseModel):
+    design_state: DesignState = Field(default_factory=default_design_state)
+    patches: list[CadPatch] = Field(default_factory=list)
+
+
+class DesignRenderRequest(BaseModel):
+    design_state: DesignState = Field(default_factory=default_design_state)
 
 
 def _get_gateway(app: FastAPI):
@@ -124,6 +141,42 @@ def create_app(*, gateway=None, execute=None) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.get("/api/design/initial")
+    async def design_initial():
+        state = default_design_state()
+        return {
+            "design_state": state.model_dump(),
+            "script": render_cadquery_script(state),
+            "geometry_summary": geometry_summary(state),
+        }
+
+    @app.post("/api/design/patch")
+    async def design_patch(req: DesignPatchRequest):
+        try:
+            state = apply_patches(req.design_state, req.patches)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "design_state": state.model_dump(),
+            "script": render_cadquery_script(state),
+            "geometry_summary": geometry_summary(state),
+        }
+
+    @app.post("/api/design/render")
+    async def design_render(req: DesignRenderRequest):
+        execute = _get_execute(app)
+        script = render_cadquery_script(req.design_state)
+        result = await execute(script)
+        return {
+            "ok": result.ok,
+            "design_state": req.design_state.model_dump(),
+            "script": script,
+            "preview_png_b64": result.preview_png_b64,
+            "exports": result.exports,
+            "geometry_summary": geometry_summary(req.design_state),
+            "error": result.error,
+        }
 
     @app.get("/")
     async def index():
