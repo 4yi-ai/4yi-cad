@@ -739,7 +739,7 @@ function renderIsoSvg(p, enabled) {
     <polygon points="${points([top[1], top[2], bottom[2], bottom[1]])}" fill="#2d6fe7"/>
     <polygon class="${shapeClass("base_plate")}" ${onShape("base_plate")} points="${points(top)}" fill="url(#plateTop)" stroke="#2a5bbf"/>
     ${enabled.has("fillet_corners") ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("fillet_corners")}" ${onShape("fillet_corners")} cx="${x}" cy="${y}" rx="25" ry="13" fill="#a8b0ba" stroke="#7a8490"/>`).join("") : ""}
-    ${showHoles ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${x}" cy="${y}" rx="${Math.max(7, p.hole_d * 1.7)}" ry="${Math.max(4, p.hole_d)}" fill="#39445a" stroke="#182032"/>`).join("") : ""}
+    ${showHoles ? holeCenters.map(([x, y]) => `<ellipse class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${x}" cy="${y}" rx="${Math.max(6, p.hole_d * 2.2)}" ry="${Math.max(3.5, p.hole_d * 1.25)}" fill="#39445a" stroke="#182032"/>`).join("") : ""}
     ${showBoss ? `<ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy + bossH}" rx="${bossR}" ry="${bossR * .38}" fill="#4f8f78" opacity=".9"/>
       <rect x="${bossCx - bossR}" y="${bossCy}" width="${bossR * 2}" height="${bossH}" fill="url(#boss)" opacity=".85"/>
       <ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy}" rx="${bossR}" ry="${bossR * .38}" fill="#9bd3bd" stroke="#4e8b75"/>
@@ -776,7 +776,7 @@ function renderTopSvg(p, enabled) {
   return `<svg viewBox="0 0 ${w} ${h}">
     ${svgDefs()}<rect width="100%" height="100%" fill="#f6f8fb"/>${grid()}
     <rect class="${shapeClass("base_plate")}" ${onShape("base_plate")} x="${x}" y="${y}" width="${plateW}" height="${plateH}" rx="${enabled.has("fillet_corners") ? Math.max(6, p.corner_radius * 3) : 2}" fill="#6faaf5" stroke="#2a5bbf"/>
-    ${enabled.has("hole_pattern") ? holes.map(([hx, hy]) => `<circle class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${hx}" cy="${hy}" r="${Math.max(8, p.hole_d * 2.2)}" fill="#39445a"/>`).join("") : ""}
+    ${enabled.has("hole_pattern") ? holes.map(([hx, hy]) => `<circle class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${hx}" cy="${hy}" r="${Math.max(7, p.hole_d * 2.8)}" fill="#39445a"/>`).join("") : ""}
     ${enabled.has("center_boss") ? `<circle class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(35, p.boss_d * 2.2)}" fill="#8bc6ad" stroke="#4e8b75"/>
       ${enabled.has("center_hole") ? `<circle class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(12, p.center_hole_d * 2.2)}" fill="#111827"/>` : ""}` : ""}
     ${state.showBBox ? `<rect class="bbox" x="${x-8}" y="${y-8}" width="${plateW+16}" height="${plateH+16}"/>` : ""}
@@ -1060,10 +1060,11 @@ function deleteFeature() {
 }
 
 function parseConversationalPatch(text) {
-  const valueMatch = text.match(/(-?\d+(?:\.\d+)?)\s*(?:mm|毫米)?/i);
-  if (!valueMatch) return null;
-  const value = Number(valueMatch[1]);
   const normalized = text.toLowerCase();
+  const exact = normalized.match(/\b(plate_length|plate_width|plate_thickness|corner_radius|hole_d|boss_d|boss_h|center_hole_d)\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (exact) return { op: "update_parameter", name: exact[1], value: clampParameter(exact[1], Number(exact[2])) };
+  const value = extractCommandValue(text);
+  if (value === null) return null;
   const pairs = [
     ["center_hole_d", [/中心孔/, /center\s*hole/]],
     ["hole_d", [/孔/, /hole/, /holes/, /孔径/, /diameter/]],
@@ -1074,11 +1075,19 @@ function parseConversationalPatch(text) {
     ["plate_thickness", [/plate_thickness/, /thickness/, /厚度/, /厚/]],
     ["corner_radius", [/corner/, /fillet/, /radius/, /圆角/, /倒角/]],
   ];
-  const exact = normalized.match(/\b(plate_length|plate_width|plate_thickness|corner_radius|hole_d|boss_d|boss_h|center_hole_d)\s*=\s*(-?\d+(?:\.\d+)?)/);
-  if (exact) return { op: "update_parameter", name: exact[1], value: clampParameter(exact[1], Number(exact[2])) };
   const found = pairs.find(([, patterns]) => patterns.some((pattern) => pattern.test(normalized)));
   if (!found) return null;
   return { op: "update_parameter", name: found[0], value: clampParameter(found[0], value) };
+}
+
+function extractCommandValue(text) {
+  const unitMatches = [...text.matchAll(/(-?\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)];
+  if (unitMatches.length) return Number(unitMatches[unitMatches.length - 1][1]);
+  const targetMatch = text.match(/(?:改成|改为|设为|设置为|变成|to|at)\s*(-?\d+(?:\.\d+)?)/i);
+  if (targetMatch) return Number(targetMatch[1]);
+  const numbers = [...text.matchAll(/-?\d+(?:\.\d+)?/g)];
+  if (!numbers.length) return null;
+  return Number(numbers[numbers.length - 1][0]);
 }
 
 async function submitCommand(event) {
