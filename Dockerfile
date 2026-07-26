@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
  && pip install --no-cache-dir -r requirements-cad.txt
 
 COPY app ./app
-COPY web ./web
+COPY index.html ./index.html
 
 # Non-root. Read-only rootfs is applied by the k8s securityContext; the sandbox
 # worker writes only to TMPDIR, which must be a writable tmpfs/emptyDir mount.

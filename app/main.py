@@ -16,14 +16,17 @@ import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.loop import ExecResult, run_generation
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
 
-_WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+# The SPA is a single self-contained file at the repo root, served same-origin.
+# Living at the root (next to pyproject/Dockerfile) also makes the deployment
+# scanner classify this one container as a fullstack service, not an undeployed
+# standalone frontend.
+_INDEX_HTML = Path(__file__).resolve().parents[1] / "index.html"
 
 
 class GenerateRequest(BaseModel):
@@ -122,9 +125,11 @@ def create_app(*, gateway=None, execute=None) -> FastAPI:
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    # SPA mounted LAST so explicit /healthz and /api/* routes win.
-    if _WEB_DIR.is_dir():
-        app.mount("/", StaticFiles(directory=str(_WEB_DIR), html=True), name="spa")
+    @app.get("/")
+    async def index():
+        if _INDEX_HTML.is_file():
+            return FileResponse(str(_INDEX_HTML), media_type="text/html")
+        return {"status": "ok", "ui": "unavailable"}
 
     return app
 

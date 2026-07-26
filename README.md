@@ -20,8 +20,10 @@ Single FastAPI process, single origin, single container.
   preview PNG. Untrusted-code-facing; the container is the isolation boundary.
 - `app/cad/preview.py` — PyVista offscreen render (xvfb/mesa).
 - `app/main.py` — `/healthz` (trivial, always 200), `/api/generate` (SSE), SPA.
-- `web/index.html` — vanilla SPA; **client holds conversation history** and
-  replays it to the stateless server; retries on 503 (cold start).
+- `index.html` — vanilla SPA at the repo root, served same-origin; **client holds
+  conversation history** and replays it to the stateless server; retries on 503
+  (cold start). Living at the root also makes the deploy scanner see one fullstack
+  service (not an undeployed standalone frontend).
 
 ### Why the client is the source of truth
 The platform injects no DB/object-storage and idle auto-pause scales the pod to

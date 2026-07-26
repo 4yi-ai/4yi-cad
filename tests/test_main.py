@@ -65,3 +65,11 @@ def test_generate_streams_sse_events():
 def test_generate_requires_prompt():
     resp = _client().post("/api/generate", json={})
     assert resp.status_code == 422
+
+
+def test_root_serves_the_spa():
+    # The single container serves the SPA same-origin (fullstack service).
+    resp = _client().get("/")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "<!doctype html>" in resp.text.lower()
