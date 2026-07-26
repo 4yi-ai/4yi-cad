@@ -442,6 +442,7 @@ const state = {
   history: [],
   artifacts: {},
   previewPng: null,
+  exportStatus: "not ready",
   viewMode: "iso",
   selectionMode: "object",
   measureMode: "distance",
@@ -744,15 +745,15 @@ function renderIsoSvg(p, enabled) {
       <rect x="${bossCx - bossR}" y="${bossCy}" width="${bossR * 2}" height="${bossH}" fill="url(#boss)" opacity=".85"/>
       <ellipse class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${bossCx}" cy="${bossCy}" rx="${bossR}" ry="${bossR * .38}" fill="#9bd3bd" stroke="#4e8b75"/>
       ${enabled.has("center_hole") ? `<ellipse class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${bossCx}" cy="${bossCy}" rx="${Math.max(18, p.center_hole_d * 2.2)}" ry="${Math.max(7, p.center_hole_d)}" fill="#111827" stroke="#05070c"/>` : ""}` : ""}
-    ${renderFeatureCallouts(p, enabled, {
-      base_plate: [top[2][0], top[2][1], top[2][0] + 36, top[2][1] - 42],
-      fillet_corners: [holeCenters[0][0] - 18, holeCenters[0][1] - 8, holeCenters[0][0] - 108, holeCenters[0][1] - 34],
-      hole_pattern: [holeCenters[1][0] + 10, holeCenters[1][1] - 8, holeCenters[1][0] + 54, holeCenters[1][1] - 34],
-      center_boss: [bossCx + bossR * .65, bossCy, bossCx + 86, bossCy - 38],
-      center_hole: [bossCx + 18, bossCy - 2, bossCx + 58, bossCy - 34],
-    })}
     ${state.showBBox ? `<polygon class="bbox" points="${points([[top[0][0]-10, top[0][1]-10], [top[1][0]+10, top[1][1]-10], [bottom[2][0]+10, bottom[2][1]+10], [bottom[3][0]-10, bottom[3][1]+10]])}"/>` : ""}
     ${state.showDims ? isoDims(p, top, bottom, bossCx, bossCy) : ""}
+    ${renderFeatureCallouts(p, enabled, {
+      base_plate: [top[0][0] + 14, top[0][1] + 10, top[0][0] - 110, top[0][1] - 32],
+      fillet_corners: [holeCenters[0][0] - 18, holeCenters[0][1] - 8, holeCenters[0][0] - 108, holeCenters[0][1] - 34],
+      hole_pattern: [holeCenters[1][0] + 10, holeCenters[1][1] - 8, holeCenters[1][0] + 56, holeCenters[1][1] - 42],
+      center_boss: [bossCx + bossR * .65, bossCy, bossCx + 84, bossCy - 44],
+      center_hole: [bossCx + 18, bossCy - 2, bossCx + 58, bossCy - 36],
+    })}
   </svg>`;
 }
 
@@ -767,6 +768,7 @@ function renderFeatureCallouts(p, enabled, anchors) {
 function featureCalloutText(p, featureId) {
   const mode = state.measureMode;
   if (featureId === "base_plate") {
+    if (mode === "distance" && state.showDims) return "";
     if (mode === "angle") return "datum angle 90 deg";
     if (mode === "diameter") return `diag ${formatNumber(Math.hypot(p.plate_length, p.plate_width))} mm`;
     return `${formatNumber(p.plate_length)} x ${formatNumber(p.plate_width)} x ${formatNumber(p.plate_thickness)} mm`;
@@ -789,7 +791,7 @@ function featureCalloutText(p, featureId) {
 function svgCallout(text, x, y, labelX, labelY) {
   const width = Math.max(78, Math.min(190, text.length * 7.2 + 18));
   return `
-    <line class="dim-line" x1="${x + 10}" y1="${y - 8}" x2="${labelX}" y2="${labelY + 5}"/>
+    <line class="dim-line" x1="${x}" y1="${y}" x2="${labelX}" y2="${labelY + 5}"/>
     <rect x="${labelX - 8}" y="${labelY - 18}" width="${width}" height="26" rx="6" fill="rgba(255,255,255,.94)" stroke="#cfe4ff"/>
     <text class="dim-label" x="${labelX}" y="${labelY}">${text}</text>
   `;
@@ -812,7 +814,6 @@ function isoDims(p, top, bottom, bossCx, bossCy) {
     <text class="dim-label" x="${bottom[2][0] + 34}" y="${(bottom[2][1] + bottom[1][1]) / 2}">${formatNumber(p.plate_width)} mm</text>
     <line class="dim-line" x1="${top[0][0] - 28}" y1="${top[0][1]}" x2="${bottom[0][0] - 28}" y2="${bottom[0][1]}"/>
     <text class="dim-label" x="${top[0][0] - 70}" y="${(top[0][1] + bottom[0][1]) / 2}">${formatNumber(p.plate_thickness)} mm</text>
-    <text class="dim-label" x="${bossCx + 46}" y="${bossCy + 6}">${formatNumber(p.center_hole_d)} mm</text>
   `;
 }
 
@@ -825,15 +826,15 @@ function renderTopSvg(p, enabled) {
     ${enabled.has("hole_pattern") ? holes.map(([hx, hy]) => `<circle class="${shapeClass("hole_pattern")}" ${onShape("hole_pattern")} cx="${hx}" cy="${hy}" r="${Math.max(7, p.hole_d * 2.8)}" fill="#39445a"/>`).join("") : ""}
     ${enabled.has("center_boss") ? `<circle class="${shapeClass("center_boss")}" ${onShape("center_boss")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(35, p.boss_d * 2.2)}" fill="#8bc6ad" stroke="#4e8b75"/>
       ${enabled.has("center_hole") ? `<circle class="${shapeClass("center_hole")}" ${onShape("center_hole")} cx="${x+plateW/2}" cy="${y+plateH/2}" r="${Math.max(12, p.center_hole_d * 2.2)}" fill="#111827"/>` : ""}` : ""}
+    ${state.showBBox ? `<rect class="bbox" x="${x-8}" y="${y-8}" width="${plateW+16}" height="${plateH+16}"/>` : ""}
+    ${state.showDims ? `<line class="dim-line" x1="${x}" y1="${y+plateH+34}" x2="${x+plateW}" y2="${y+plateH+34}"/><text class="dim-label" x="${x+plateW/2-22}" y="${y+plateH+57}">${formatNumber(p.plate_length)} mm</text><line class="dim-line" x1="${x+plateW+34}" y1="${y}" x2="${x+plateW+34}" y2="${y+plateH}"/><text class="dim-label" x="${x+plateW+48}" y="${y+plateH/2}">${formatNumber(p.plate_width)} mm</text>` : ""}
     ${renderFeatureCallouts(p, enabled, {
-      base_plate: [x + plateW, y + plateH, x + plateW - 116, y + plateH + 68],
+      base_plate: [x + 10, y + 10, x + 24, y - 28],
       fillet_corners: [x + 8, y + 8, x + 28, y - 28],
       hole_pattern: [holes[1][0], holes[1][1], holes[1][0] + 36, holes[1][1] - 32],
       center_boss: [x + plateW / 2 + Math.max(35, p.boss_d * 2.2), y + plateH / 2, x + plateW / 2 + 76, y + plateH / 2 - 56],
       center_hole: [x + plateW / 2 + 12, y + plateH / 2, x + plateW / 2 + 52, y + plateH / 2 + 62],
     })}
-    ${state.showBBox ? `<rect class="bbox" x="${x-8}" y="${y-8}" width="${plateW+16}" height="${plateH+16}"/>` : ""}
-    ${state.showDims ? `<line class="dim-line" x1="${x}" y1="${y+plateH+34}" x2="${x+plateW}" y2="${y+plateH+34}"/><text class="dim-label" x="${x+plateW/2-22}" y="${y+plateH+57}">${formatNumber(p.plate_length)} mm</text><line class="dim-line" x1="${x+plateW+34}" y1="${y}" x2="${x+plateW+34}" y2="${y+plateH}"/><text class="dim-label" x="${x+plateW+48}" y="${y+plateH/2}">${formatNumber(p.plate_width)} mm</text>` : ""}
   </svg>`;
 }
 
@@ -890,9 +891,9 @@ function renderProperties() {
     <section class="section">
       <h3>${icon("box")} Regeneration</h3>
       <div class="kv-list">
-        <div class="kv"><span>Preview mesh</span><strong>${state.previewPng ? "rendered" : "svg-preview"}</strong></div>
-        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? "ready" : "queued"}</strong></div>
-        <div class="kv"><span>Patch mode</span><strong>update_parameter</strong></div>
+        <div class="kv"><span>Viewport</span><strong>${state.previewPng ? "mesh render" : "svg preview"}</strong></div>
+        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? "ready" : state.exportStatus}</strong></div>
+        <div class="kv"><span>Patch mode</span><strong>${state.patch?.op || "none"}</strong></div>
       </div>
     </section>
   `;
@@ -1045,17 +1046,20 @@ async function applyPatches(patches, label, detail) {
 }
 
 async function renderDesign() {
-  setStatus("rendering preview + STEP/STL");
+  setStatus("updating preview/export");
+  state.exportStatus = "rendering";
   try {
     const rendered = await fetchJson("/api/design/render", { design_state: state.designState });
     state.script = rendered.script;
     if (rendered.preview_png_b64) state.previewPng = rendered.preview_png_b64;
     if (rendered.exports) state.artifacts = { ...state.artifacts, ...rendered.exports };
-    if (!rendered.ok) log(`Render failed: ${rendered.error || "unknown error"}`);
-    setStatus(rendered.ok ? "preview/export ready" : "render failed");
+    state.exportStatus = rendered.ok ? "ready" : "unavailable";
+    if (!rendered.ok) log(`Export unavailable: ${rendered.error || "unknown error"}`);
+    setStatus(rendered.ok ? "preview/export ready" : "preview updated");
   } catch (error) {
-    setStatus("render skipped");
-    log(`Render skipped: ${error.message}`);
+    state.exportStatus = "unavailable";
+    setStatus("preview updated");
+    log(`Export unavailable: ${error.message}`);
   }
 }
 
@@ -1165,6 +1169,7 @@ async function generateFromPrompt(prompt) {
   $("applyButton").disabled = true;
   state.previewPng = null;
   state.artifacts = {};
+  state.exportStatus = "not ready";
   state.patch = null;
   setBottomTab("logs");
   setStatus("submitting to CAD agent");
