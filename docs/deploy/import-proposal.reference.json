@@ -1,0 +1,92 @@
+{
+  "_comment": [
+    "REFERENCE target for the /admin/marketplace/ai-import wizard proposal.",
+    "The wizard SCANS this repo and auto-generates a proposal; use this file as",
+    "the reference for what the edited proposal should look like before Apply.",
+    "Do NOT paste raw — reconcile against the wizard's generated JSON. Values",
+    "marked CONFIRM must be verified against the live platform (model registry,",
+    "measured peak RSS, node pool)."
+  ],
+
+  "appSpec": {
+    "slug": "4yi-cad",
+    "name": "4yi CAD",
+    "display_name": "4yi CAD",
+    "deployment_type": "dedicated_app",
+
+    "source_provider": "public_git",
+    "source_repo_url": "https://github.com/4yi-ai/4yi-cad",
+    "source_branch": "main",
+    "source_directory": ".",
+    "dockerfile_path": "Dockerfile",
+
+    "runtime_port": 8080,
+    "health_path": "/healthz",
+    "architecture": "x86_64",
+
+    "cpu_request": 2,
+    "memory_request_mb": 4096,
+    "_resources_note": "CONFIRM: size memory_request_mb to MEASURED peak RSS of the worst-case model (memory limit == request => OOMKill if under-sized). Keep schedulable on one node (<= ~28 GB on t3a.2xlarge). Do NOT aim at the 262144 validation ceiling.",
+
+    "min_replicas": 1,
+    "max_replicas": 1,
+    "_replicas_note": "min_replicas=1 avoids scale-to-zero cold starts (large image); trade-off is always-on cost. Set to 0 to allow idle auto-pause if cost matters more than first-request latency.",
+
+    "auth_policy": "platform_sso",
+    "_auth_note": "platform_sso => only the installing org's SSO users reach the app. Never 'public'.",
+
+    "env_json": {},
+    "secret_env_json": {},
+    "_secrets_note": "No consumer secrets. The app reads ONLY the platform-injected gateway env; it reads no native LLM keys, so none should be classified as required secrets."
+  },
+
+  "manifest": {
+    "version": 1,
+    "services": [
+      {
+        "name": "web",
+        "type": "web",
+        "imageSource": "build",
+        "build": { "context": ".", "dockerfile": "Dockerfile" },
+        "port": 8080,
+        "route": "public",
+        "healthPath": "/healthz",
+        "resources": {
+          "cpu": 2,
+          "memoryMb": 4096,
+          "replicas": { "min": 1, "max": 1 }
+        },
+        "env": {},
+        "secrets": []
+      }
+    ],
+    "_manifest_note": [
+      "Single public service (single-container MVP: FastAPI serves the SPA + /api + the sandboxed CadQuery worker in one image).",
+      "CONFIRM at deploy: /tmp must be a WRITABLE tmpfs/emptyDir mount because the sandbox worker writes there and the pod should run read-only rootfs + non-root (tenant-isolation)."
+    ]
+  },
+
+  "platformRuntime": {
+    "gateway": {
+      "kind": "openai_compatible",
+      "apiBaseEnv": ["OPENAI_BASE_URL"],
+      "apiKeyEnv": ["OPENAI_API_KEY"]
+    },
+    "models": [
+      {
+        "env": "TEXT_MODEL",
+        "modelType": "text",
+        "required": true,
+        "defaultModel": "anthropic.claude-sonnet-4-6",
+        "allowedModels": ["anthropic.claude-sonnet-4-6"],
+        "_model_note": "CONFIRM: model id must exist in the platform registry and be TOOL-CALLING capable (the agent loop uses `tools`). NO forced vision capability — this is text-only. Do NOT register this slug in src/lib/app-platform/model-recommendations.ts (it hard-codes capability:'vision' and would reject text models); author defaultModel/allowedModels here in the proposal instead."
+      }
+    ]
+  },
+
+  "deploymentFit": {
+    "single_public_service": true,
+    "stateful": false,
+    "notes": "Stateless server (client-as-source-of-truth); exports stream inline as base64; no DB/EBS in MVP."
+  }
+}
