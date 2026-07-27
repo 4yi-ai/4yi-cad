@@ -95,6 +95,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .top-actions {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .lang-button {
+    min-height: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .lang-button:hover { background: var(--primary-soft); color: var(--primary); }
 
   .workspace {
     min-height: 0;
@@ -292,7 +311,7 @@
     flex: 0 0 42px;
     border-bottom: 1px solid var(--line);
     display: grid;
-    grid-template-columns: minmax(480px, 1fr) minmax(240px, 420px);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 360px);
     align-items: center;
     gap: 10px;
     padding: 0 10px;
@@ -381,7 +400,8 @@
     .workbench { min-height: 1100px; height: auto; }
     .topbar { grid-template-columns: minmax(150px, 1fr); align-items: start; padding: 9px 10px; }
     .toolbar { order: 2; }
-    .status-chip { order: 3; max-width: none; }
+    .top-actions { order: 3; justify-content: flex-start; width: 100%; }
+    .status-chip { max-width: none; flex: 1; }
     .workspace {
       grid-template-columns: 1fr;
       grid-template-rows: 250px 470px 390px 230px;
@@ -407,21 +427,24 @@
     <div class="brand">
       <div class="brand-mark">C</div>
       <div class="brand-title">
-        <strong>4yi-cad Workbench</strong>
+        <strong id="brandTitle">4yi-cad Workbench</strong>
         <span id="subtitle">DesignState v1</span>
       </div>
     </div>
     <nav class="toolbar" aria-label="CAD toolbar" id="toolbar"></nav>
-    <div class="status-chip" id="status">loading design state</div>
+    <div class="top-actions">
+      <div class="status-chip" id="status">loading design state</div>
+      <button class="lang-button" id="localeToggle" type="button" onclick="toggleLocale()">中文</button>
+    </div>
   </header>
 
   <main class="workspace">
     <aside class="panel left">
-      <div class="panel-title"><span data-icon="layers">Project / Model Tree</span></div>
+      <div class="panel-title"><span data-icon="layers"><span id="modelTreeTitle">Project / Model Tree</span></span></div>
       <div class="panel-body tree" id="featureTree"></div>
       <div class="tree-footer">
-        <div><span>Active feature</span><strong id="activeFeature">Base plate</strong></div>
-        <div><span>Latest patch</span><strong id="latestPatch">none</strong></div>
+        <div><span id="activeFeatureLabel">Active feature</span><strong id="activeFeature">Base plate</strong></div>
+        <div><span id="latestPatchLabel">Latest patch</span><strong id="latestPatch">none</strong></div>
       </div>
     </aside>
 
@@ -441,7 +464,7 @@
     </section>
 
     <aside class="panel right">
-      <div class="panel-title"><span data-icon="sliders">Properties / Parameters</span></div>
+      <div class="panel-title"><span data-icon="sliders"><span id="propertiesTitle">Properties / Parameters</span></span></div>
       <div id="properties"></div>
     </aside>
 
@@ -460,15 +483,492 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
+
+const I18N = {
+  en: {
+    appTitle: "4yi-cad Workbench",
+    loading: "loading design state",
+    toolbarLabel: "CAD toolbar",
+    designStateVersion: "DesignState v{version}",
+    projectTree: "Project / Model Tree",
+    activeFeature: "Active feature",
+    latestPatch: "Latest patch",
+    properties: "Properties / Parameters",
+    commandPlaceholder: "Chat / modify: change four holes to 6mm",
+    apply: "Apply",
+    langToggle: "中文",
+    none: "none",
+    off: "off",
+    unitMm: "mm",
+    featureFallback: "Feature",
+    generatedModel: "Generated model",
+    generatedDesign: "Generated design",
+    agentModel: "Agent model",
+    cadqueryScript: "CadQuery script",
+    generatedPreviewSubtitle: "Agent generated preview",
+    headPreview: "Head preview",
+    agentPreview: "Agent preview",
+    rollbackPreview: "Rollback preview",
+    preview: "Preview",
+    renderedFromCadQuery: "Rendered from CadQuery output",
+    waitingGeneratedPreview: "Waiting for generated preview",
+    generatedPreviewTitle: "Generated model preview",
+    generatedPreviewHint: "The CAD agent will replace the default DesignState viewport with its rendered PNG when generation succeeds.",
+    objectBadge: "{mode}: {name}",
+    axisReadout: "X {x} / Y {y} / Z {z} mm",
+    stepStlStatus: "STEP/STL {status}",
+    generatedSource: "Generated Source",
+    prompt: "Prompt",
+    saved: "saved",
+    artifacts: "Artifacts",
+    viewport: "Viewport",
+    featureTree: "Feature tree",
+    notAvailable: "not available",
+    parameters: "Parameters",
+    regeneration: "Regeneration",
+    patchMode: "Patch mode",
+    meshRender: "mesh render",
+    svgPreview: "svg preview",
+    previewReady: "preview ready",
+    readyValue: "ready",
+    waiting: "waiting",
+    enabled: "enabled",
+    inactive: "inactive",
+    agent: "agent",
+    noScript: "No script yet",
+    download: "Download",
+    backToDesignState: "Back to parametric DesignState",
+    actions: {
+      rename: "Rename",
+      suppress: "Suppress / enable",
+      rollback: "Rollback",
+      restoreHead: "Restore head",
+      deleteFeature: "Delete feature",
+    },
+    toolbar: {
+      fit: "Fit",
+      top: "Top",
+      front: "Front",
+      right: "Right",
+      iso: "Iso",
+      bbox: "BBox",
+      dims: "Dims",
+      explode: "Explode",
+      object: "Object",
+      face: "Face",
+      edge: "Edge",
+      distance: "Distance",
+      diameter: "Diameter",
+      angle: "Angle",
+    },
+    modes: {
+      object: "Object",
+      face: "Face",
+      edge: "Edge",
+      distance: "Distance",
+      diameter: "Diameter",
+      angle: "Angle",
+    },
+    kinds: {
+      document: "document",
+      body: "body",
+      solid: "solid",
+      operation: "operation",
+      pattern: "pattern",
+      cut: "cut",
+      agent: "agent",
+    },
+    features: {
+      design: "Design",
+      body: "Body",
+      base_plate: "Base plate",
+      fillet_corners: "Fillet corners",
+      hole_pattern: "Hole pattern",
+      center_boss: "Center boss",
+      center_hole: "Center hole",
+      generated_model: "Generated model",
+    },
+    params: {
+      plate_length: "Plate length",
+      plate_width: "Plate width",
+      plate_thickness: "Plate thickness",
+      corner_radius: "Corner radius",
+      hole_d: "Hole diameter",
+      boss_d: "Boss diameter",
+      boss_h: "Boss height",
+      center_hole_d: "Center hole diameter",
+    },
+    measure: {
+      holes: "4x holes: {value} mm",
+      bossOd: "Boss OD: {value} mm",
+      centerHole: "Center hole: {value} mm",
+      diagonal: "Envelope diagonal: {value} mm",
+      datumAngle: "Primary datum corner: 90 deg",
+      axisAngle: "Feature axis to plate face: 90 deg",
+      holeCenters: "Hole centers: {x} x {y} mm",
+      bossHeight: "Boss height: {value} mm",
+      plateEnvelope: "Plate envelope: {x} x {y} x {z} mm",
+    },
+    callout: {
+      datumAngle: "datum angle 90 deg",
+      diagonal: "diag {value} mm",
+      plate: "{x} x {y} x {z} mm",
+      fillet: "R {value} mm",
+      spacing: "spacing {x} x {y} mm",
+      holeAxes: "hole axes 90 deg",
+      holeDia: "4x dia {value} mm",
+      height: "height {value} mm",
+      axis: "axis 90 deg",
+      dia: "dia {value} mm",
+    },
+    tabs: {
+      chat: "Chat",
+      history: "History",
+      script: "Script",
+      logs: "Logs",
+      artifacts: "Files",
+    },
+    chat: {
+      you: "You",
+      agent: "CAD agent",
+      initial: "Ready for CAD changes. Parameter edits use CADPatch; new-part prompts use the CAD agent.",
+      appliedPatch: "Applied CADPatch: {name} = {value} mm.",
+      generationFailed: "Generation failed: {message}",
+      generationOk: "Generated a CAD script and available preview/artifacts.",
+      generationBad: "Generation failed. See Logs for details.",
+    },
+    artifact: {
+      stepTitle: "STEP solid",
+      stlTitle: "STL mesh",
+      featureTreeTitle: "Feature tree",
+      fcstdTitle: "FreeCAD document",
+      pdfTitle: "Engineering drawing",
+      svgTitle: "Vector drawing",
+      sandboxExport: "live export from sandbox",
+      liveJson: "live DesignState JSON",
+      plannedFreecad: "planned FreeCAD backend",
+      plannedTechdraw: "planned TechDraw backend",
+      plannedProjection: "planned 2D projection",
+      planned: "planned",
+      notReady: "not ready",
+      ready: "ready",
+    },
+    history: {
+      initialTitle: "Initial parametric body",
+      initialDetail: "Loaded base plate, fillets, hole pattern, boss, and center hole.",
+      parameterPanel: "Parameter panel: {name}",
+      conversation: "Conversation: {name}",
+      rename: "Rename: {name}",
+      renamed: "{id} renamed",
+      enable: "Enable: {name}",
+      suppress: "Suppress: {name}",
+      toggled: "{name} toggled",
+      rollback: "Rollback: {name}",
+      rollbackDetail: "Preview regenerated at {name}",
+      restoreHead: "Restore head",
+      restoreHeadDetail: "Feature history restored to latest operation",
+      delete: "Delete: {name}",
+      deleteDetail: "{name} and dependent features removed",
+      agentGeneration: "Agent generation",
+      agentGenerationFailed: "Agent generation failed",
+      agentDetail: "Generated preview and artifacts",
+      agentFailedDetail: "See logs for failure",
+    },
+    log: {
+      workbenchStarting: "Workbench starting",
+      selectedFeature: "Selected feature: {name}",
+      selectedMode: "Selected {mode}: {name}",
+      patchFailed: "Patch failed: {message}",
+      exportUnavailable: "Export unavailable: {message}",
+      initialFailed: "Initial state failed: {message}",
+      producedScript: "CAD agent produced script attempt {attempt}",
+      retry: "Retry {attempt}: {message}",
+      renderedPreview: "Rendered preview PNG",
+      artifactReady: "Artifact ready: {format}",
+      unknownError: "unknown error",
+    },
+    status: {
+      loading: "loading design state",
+      notReady: "not ready",
+      ready: "ready",
+      rendering: "rendering",
+      unavailable: "unavailable",
+      applyingPatch: "applying CADPatch",
+      patchFailed: "patch failed",
+      updatingPreview: "updating preview/export",
+      previewExportReady: "preview/export ready",
+      previewUpdated: "preview updated",
+      submitting: "submitting to CAD agent",
+      waking: "waking up ({attempt})",
+      generationFailed: "generation failed",
+      done: "done",
+      failed: "failed",
+      initialUnavailable: "initial state unavailable",
+      thinking: "thinking",
+    },
+  },
+  zh: {
+    appTitle: "4yi-cad 工作台",
+    loading: "正在加载设计状态",
+    toolbarLabel: "CAD 工具栏",
+    designStateVersion: "DesignState v{version}",
+    projectTree: "项目 / 模型树",
+    activeFeature: "当前特征",
+    latestPatch: "最新补丁",
+    properties: "属性 / 参数",
+    commandPlaceholder: "聊天 / 修改：把四个孔改成 6mm",
+    apply: "应用",
+    langToggle: "EN",
+    none: "无",
+    off: "关闭",
+    unitMm: "mm",
+    featureFallback: "特征",
+    generatedModel: "生成模型",
+    generatedDesign: "生成设计",
+    agentModel: "Agent 模型",
+    cadqueryScript: "CadQuery 脚本",
+    generatedPreviewSubtitle: "Agent 生成预览",
+    headPreview: "当前预览",
+    agentPreview: "Agent 预览",
+    rollbackPreview: "回滚预览",
+    preview: "预览",
+    renderedFromCadQuery: "来自 CadQuery 输出的渲染",
+    waitingGeneratedPreview: "等待生成模型预览",
+    generatedPreviewTitle: "生成模型预览",
+    generatedPreviewHint: "生成成功后，CAD agent 会用渲染 PNG 替换默认 DesignState 视图。",
+    objectBadge: "{mode}: {name}",
+    axisReadout: "X {x} / Y {y} / Z {z} mm",
+    stepStlStatus: "STEP/STL {status}",
+    generatedSource: "生成来源",
+    prompt: "提示词",
+    saved: "已保存",
+    artifacts: "产物",
+    viewport: "视图",
+    featureTree: "特征树",
+    notAvailable: "不可用",
+    parameters: "参数",
+    regeneration: "重新生成",
+    patchMode: "补丁模式",
+    meshRender: "网格渲染",
+    svgPreview: "SVG 预览",
+    previewReady: "预览就绪",
+    readyValue: "就绪",
+    waiting: "等待中",
+    enabled: "启用",
+    inactive: "未激活",
+    agent: "Agent",
+    noScript: "暂无脚本",
+    download: "下载",
+    backToDesignState: "返回参数化 DesignState",
+    actions: {
+      rename: "重命名",
+      suppress: "抑制 / 启用",
+      rollback: "回滚到此特征",
+      restoreHead: "恢复到最新",
+      deleteFeature: "删除特征",
+    },
+    toolbar: {
+      fit: "适配",
+      top: "顶视",
+      front: "前视",
+      right: "右视",
+      iso: "轴测",
+      bbox: "边框",
+      dims: "尺寸",
+      explode: "爆炸",
+      object: "对象",
+      face: "面",
+      edge: "边",
+      distance: "距离",
+      diameter: "直径",
+      angle: "角度",
+    },
+    modes: {
+      object: "对象",
+      face: "面",
+      edge: "边",
+      distance: "距离",
+      diameter: "直径",
+      angle: "角度",
+    },
+    kinds: {
+      document: "文档",
+      body: "实体",
+      solid: "实体",
+      operation: "操作",
+      pattern: "阵列",
+      cut: "切除",
+      agent: "Agent",
+    },
+    features: {
+      design: "设计",
+      body: "实体",
+      base_plate: "底板",
+      fillet_corners: "圆角",
+      hole_pattern: "孔阵列",
+      center_boss: "中心凸台",
+      center_hole: "中心孔",
+      generated_model: "生成模型",
+    },
+    params: {
+      plate_length: "板长 (plate_length)",
+      plate_width: "板宽 (plate_width)",
+      plate_thickness: "板厚 (plate_thickness)",
+      corner_radius: "圆角半径 (corner_radius)",
+      hole_d: "孔径 (hole_d)",
+      boss_d: "凸台直径 (boss_d)",
+      boss_h: "凸台高度 (boss_h)",
+      center_hole_d: "中心孔径 (center_hole_d)",
+    },
+    measure: {
+      holes: "4 个孔：{value} mm",
+      bossOd: "凸台外径：{value} mm",
+      centerHole: "中心孔：{value} mm",
+      diagonal: "包围盒对角线：{value} mm",
+      datumAngle: "主基准角：90 度",
+      axisAngle: "特征轴与板面：90 度",
+      holeCenters: "孔中心距：{x} x {y} mm",
+      bossHeight: "凸台高度：{value} mm",
+      plateEnvelope: "底板包围盒：{x} x {y} x {z} mm",
+    },
+    callout: {
+      datumAngle: "基准角 90 度",
+      diagonal: "对角线 {value} mm",
+      plate: "{x} x {y} x {z} mm",
+      fillet: "R {value} mm",
+      spacing: "中心距 {x} x {y} mm",
+      holeAxes: "孔轴 90 度",
+      holeDia: "4x 直径 {value} mm",
+      height: "高度 {value} mm",
+      axis: "轴线 90 度",
+      dia: "直径 {value} mm",
+    },
+    tabs: {
+      chat: "聊天",
+      history: "历史",
+      script: "脚本",
+      logs: "日志",
+      artifacts: "文件",
+    },
+    chat: {
+      you: "你",
+      agent: "CAD agent",
+      initial: "已准备好处理 CAD 修改。参数编辑使用 CADPatch；新零件提示词交给 CAD agent。",
+      appliedPatch: "已应用 CADPatch：{name} = {value} mm。",
+      generationFailed: "生成失败：{message}",
+      generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
+      generationBad: "生成失败。请查看日志。",
+    },
+    artifact: {
+      stepTitle: "STEP 实体",
+      stlTitle: "STL 网格",
+      featureTreeTitle: "特征树",
+      fcstdTitle: "FreeCAD 文档",
+      pdfTitle: "工程图",
+      svgTitle: "矢量图",
+      sandboxExport: "来自沙盒的实时导出",
+      liveJson: "实时 DesignState JSON",
+      plannedFreecad: "计划接入 FreeCAD 后端",
+      plannedTechdraw: "计划接入 TechDraw 后端",
+      plannedProjection: "计划接入 2D 投影视图",
+      planned: "计划中",
+      notReady: "未就绪",
+      ready: "就绪",
+    },
+    history: {
+      initialTitle: "初始参数化实体",
+      initialDetail: "已加载底板、圆角、孔阵列、凸台和中心孔。",
+      parameterPanel: "参数面板：{name}",
+      conversation: "对话修改：{name}",
+      rename: "重命名：{name}",
+      renamed: "{id} 已重命名",
+      enable: "启用：{name}",
+      suppress: "抑制：{name}",
+      toggled: "{name} 已切换",
+      rollback: "回滚：{name}",
+      rollbackDetail: "预览已回滚到 {name}",
+      restoreHead: "恢复到最新",
+      restoreHeadDetail: "特征历史已恢复到最新操作",
+      delete: "删除：{name}",
+      deleteDetail: "{name} 及其依赖特征已删除",
+      agentGeneration: "Agent 生成",
+      agentGenerationFailed: "Agent 生成失败",
+      agentDetail: "已生成预览和产物",
+      agentFailedDetail: "查看日志获取失败原因",
+    },
+    log: {
+      workbenchStarting: "工作台启动中",
+      selectedFeature: "已选择特征：{name}",
+      selectedMode: "已选择{mode}：{name}",
+      patchFailed: "补丁失败：{message}",
+      exportUnavailable: "导出不可用：{message}",
+      initialFailed: "初始状态失败：{message}",
+      producedScript: "CAD agent 已生成脚本，第 {attempt} 次尝试",
+      retry: "重试 {attempt}：{message}",
+      renderedPreview: "已渲染预览 PNG",
+      artifactReady: "产物就绪：{format}",
+      unknownError: "未知错误",
+    },
+    status: {
+      loading: "正在加载设计状态",
+      notReady: "未就绪",
+      ready: "就绪",
+      rendering: "渲染中",
+      unavailable: "不可用",
+      applyingPatch: "正在应用 CADPatch",
+      patchFailed: "补丁失败",
+      updatingPreview: "正在更新预览 / 导出",
+      previewExportReady: "预览 / 导出就绪",
+      previewUpdated: "预览已更新",
+      submitting: "正在提交给 CAD agent",
+      waking: "正在唤醒 ({attempt})",
+      generationFailed: "生成失败",
+      done: "完成",
+      failed: "失败",
+      initialUnavailable: "初始状态不可用",
+      thinking: "思考中",
+    },
+  },
+};
+
+const DEFAULT_FEATURE_NAMES = {
+  design: "Design",
+  body: "Body",
+  base_plate: "Base plate",
+  fillet_corners: "Fillet corners",
+  hole_pattern: "Hole pattern",
+  center_boss: "Center boss",
+  center_hole: "Center hole",
+  generated_model: "Generated model",
+};
+
+function initialLocale() {
+  const stored = localStorage.getItem("4yi-cad.locale");
+  if (stored === "en" || stored === "zh") return stored;
+  return navigator.language && navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+let currentLocale = initialLocale();
+
+function i18nPath(locale, key) {
+  return key.split(".").reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), I18N[locale]);
+}
+
+function t(key, vars = {}) {
+  const raw = i18nPath(currentLocale, key) ?? i18nPath("en", key) ?? key;
+  return String(raw).replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? "");
+}
+
 const state = {
   designState: null,
   script: "",
   patch: null,
-  logs: ["Workbench starting"],
+  logs: [t("log.workbenchStarting")],
   history: [],
   artifacts: {},
   previewPng: null,
-  exportStatus: "not ready",
+  exportStatus: "notReady",
+  statusKey: "loading",
   previewMode: "design_state",
   generatedPrompt: "",
   viewMode: "iso",
@@ -482,7 +982,7 @@ const state = {
   viewport: { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 },
   chatHistory: [],
   chatMessages: [
-    { role: "assistant", text: "Ready for CAD changes. Parameter edits use CADPatch; new-part prompts use the CAD agent." },
+    { role: "assistant", key: "chat.initial" },
   ],
 };
 
@@ -570,7 +1070,7 @@ function log(message) {
 
 function selectedFeature() {
   if (state.previewMode === "generated") {
-    return { id: "generated_model", name: "Generated model", kind: "agent", parameters: [], suppressible: false, suppressed: false };
+    return { id: "generated_model", name: DEFAULT_FEATURE_NAMES.generated_model, kind: "agent", parameters: [], suppressible: false, suppressed: false };
   }
   return (state.designState?.features || []).find((f) => f.id === state.selectedFeatureId);
 }
@@ -598,6 +1098,30 @@ function featureIcon(feature) {
   return icon("box");
 }
 
+function featureName(feature) {
+  if (!feature) return t("featureFallback");
+  const defaultName = DEFAULT_FEATURE_NAMES[feature.id];
+  if (!defaultName || feature.name !== defaultName) return feature.name;
+  return t(`features.${feature.id}`);
+}
+
+function featureKind(kind) {
+  return t(`kinds.${kind}`);
+}
+
+function parameterLabel(name) {
+  return t(`params.${name}`) || name;
+}
+
+function exportStatusLabel(status = state.exportStatus) {
+  const hasTranslation = i18nPath(currentLocale, `status.${status}`) || i18nPath("en", `status.${status}`);
+  return hasTranslation ? t(`status.${status}`) : status;
+}
+
+function chatText(item) {
+  return item.key ? t(item.key, item.vars || {}) : item.text;
+}
+
 function addHistory(label, detail) {
   const version = state.designState?.version || 1;
   state.history.unshift({
@@ -609,39 +1133,67 @@ function addHistory(label, detail) {
   state.history = state.history.slice(0, 60);
 }
 
-function setStatus(message) {
-  $("status").textContent = message;
+function setStatus(key, vars = {}) {
+  state.statusKey = key;
+  state.statusVars = vars;
+  const hasTranslation = i18nPath(currentLocale, `status.${key}`) || i18nPath("en", `status.${key}`);
+  $("status").textContent = hasTranslation ? t(`status.${key}`, vars) : key;
+}
+
+function renderStaticText() {
+  document.documentElement.lang = currentLocale === "zh" ? "zh-CN" : "en";
+  document.title = t("appTitle");
+  $("brandTitle").textContent = t("appTitle");
+  $("modelTreeTitle").textContent = t("projectTree");
+  $("activeFeatureLabel").textContent = t("activeFeature");
+  $("latestPatchLabel").textContent = t("latestPatch");
+  $("propertiesTitle").textContent = t("properties");
+  $("commandInput").placeholder = t("commandPlaceholder");
+  $("applyButton").textContent = t("apply");
+  $("localeToggle").textContent = t("langToggle");
+  $("toolbar").setAttribute("aria-label", t("toolbarLabel"));
+  setStatus(state.statusKey || "loading", state.statusVars || {});
+}
+
+function setLocale(locale) {
+  currentLocale = locale === "zh" ? "zh" : "en";
+  localStorage.setItem("4yi-cad.locale", currentLocale);
+  renderAll();
+}
+
+function toggleLocale() {
+  setLocale(currentLocale === "zh" ? "en" : "zh");
 }
 
 function renderToolbar() {
   const viewButtons = [
-    ["fit", "Fit", "ruler"],
-    ["top", "Top", "box"],
-    ["front", "Front", "ruler"],
-    ["right", "Right", "box"],
-    ["iso", "Iso", "ruler"],
+    ["fit", "toolbar.fit", "ruler"],
+    ["top", "toolbar.top", "box"],
+    ["front", "toolbar.front", "ruler"],
+    ["right", "toolbar.right", "box"],
+    ["iso", "toolbar.iso", "ruler"],
   ];
   const modes = [
-    ["object", "Object", "pointer"],
-    ["face", "Face", "box"],
-    ["edge", "Edge", "ruler"],
+    ["object", "toolbar.object", "pointer"],
+    ["face", "toolbar.face", "box"],
+    ["edge", "toolbar.edge", "ruler"],
   ];
   const measures = [
-    ["distance", "Distance", "ruler"],
-    ["diameter", "Diameter", "ruler"],
-    ["angle", "Angle", "ruler"],
+    ["distance", "toolbar.distance", "ruler"],
+    ["diameter", "toolbar.diameter", "ruler"],
+    ["angle", "toolbar.angle", "ruler"],
   ];
 
   $("toolbar").innerHTML = [
-    ...viewButtons.map(([value, label, iconName]) => toolButton(label, iconName, state.viewMode === value, `setView('${value}')`)),
+    ...viewButtons.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, state.viewMode === value, `setView('${value}')`)),
     "<span class='tool-separator'></span>",
-    toolButton("BBox", "box", state.showBBox, "toggleBBox()"),
-    toolButton("Dims", "ruler", state.showDims, "toggleDims()"),
-    toolButton("Explode", "layers", state.exploded, "toggleExplode()"),
+    toolButton(t("toolbar.bbox"), "box", state.showBBox, "toggleBBox()"),
+    toolButton(t("toolbar.dims"), "ruler", state.showDims, "toggleDims()"),
+    toolButton(t("toolbar.explode"), "layers", state.exploded, "toggleExplode()"),
     "<span class='tool-separator'></span>",
-    ...modes.map(([value, label, iconName]) => toolButton(label, iconName, state.selectionMode === value, `setSelectionMode('${value}')`)),
+    ...modes.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, state.selectionMode === value, `setSelectionMode('${value}')`)),
     "<span class='tool-separator'></span>",
-    ...measures.map(([value, label, iconName]) => toolButton(label, iconName, state.measureMode === value, `setMeasureMode('${value}')`)),
+    ...measures.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, state.measureMode === value, `setMeasureMode('${value}')`)),
   ].join("");
 }
 
@@ -655,16 +1207,16 @@ function renderTree() {
   if (state.previewMode === "generated") {
     $("featureTree").innerHTML = `
       <button class="tree-item active" style="padding-left:8px" type="button">
-        <span>⌄</span>${icon("code")}<span class="name">Generated design</span>
+        <span>⌄</span>${icon("code")}<span class="name">${escapeHtml(t("generatedDesign"))}</span>
       </button>
       <button class="tree-item active" style="padding-left:34px" type="button">
-        <span style="width:12px"></span>${icon("box")}<span class="name">${escapeHtml(state.generatedPrompt || "Agent model")}</span>
+        <span style="width:12px"></span>${icon("box")}<span class="name">${escapeHtml(state.generatedPrompt || t("agentModel"))}</span>
       </button>
       <button class="tree-item" style="padding-left:60px" type="button" onclick="setBottomTab('script')">
-        <span style="width:12px"></span>${icon("code")}<span class="name">CadQuery script</span>
+        <span style="width:12px"></span>${icon("code")}<span class="name">${escapeHtml(t("cadqueryScript"))}</span>
       </button>
     `;
-    $("activeFeature").textContent = "Generated model";
+    $("activeFeature").textContent = t("generatedModel");
     $("latestPatch").textContent = "agent_generation";
     return;
   }
@@ -678,30 +1230,30 @@ function renderTree() {
       <button class="tree-item ${active ? "active" : ""} ${inactive ? "inactive" : ""}" style="padding-left:${pad}px" type="button" onclick="selectFeature('${feature.id}')">
         ${depth < 2 ? "<span>⌄</span>" : "<span style='width:12px'></span>"}
         ${featureIcon(feature)}
-        <span class="name">${escapeHtml(feature.name)}</span>
-        ${feature.suppressed ? "<span title='suppressed'>off</span>" : ""}
+        <span class="name">${escapeHtml(featureName(feature))}</span>
+        ${feature.suppressed ? `<span title="suppressed">${escapeHtml(t("off"))}</span>` : ""}
       </button>
     `;
   }).join("");
-  $("activeFeature").textContent = selectedFeature()?.name || "Feature";
-  $("latestPatch").textContent = state.patch ? `${state.patch.op}:${state.patch.name || state.patch.feature_id}` : "none";
+  $("activeFeature").textContent = featureName(selectedFeature());
+  $("latestPatch").textContent = state.patch ? `${state.patch.op}:${state.patch.name || state.patch.feature_id}` : t("none");
 }
 
 function measurementText() {
   const p = state.designState.parameters;
   const featureId = state.selectedFeatureId;
   if (state.measureMode === "diameter") {
-    if (featureId === "hole_pattern") return `4x holes: ${formatNumber(p.hole_d)} mm`;
-    if (featureId === "center_boss") return `Boss OD: ${formatNumber(p.boss_d)} mm`;
-    if (featureId === "center_hole") return `Center hole: ${formatNumber(p.center_hole_d)} mm`;
-    return `Envelope diagonal: ${formatNumber(Math.hypot(p.plate_length, p.plate_width))} mm`;
+    if (featureId === "hole_pattern") return t("measure.holes", { value: formatNumber(p.hole_d) });
+    if (featureId === "center_boss") return t("measure.bossOd", { value: formatNumber(p.boss_d) });
+    if (featureId === "center_hole") return t("measure.centerHole", { value: formatNumber(p.center_hole_d) });
+    return t("measure.diagonal", { value: formatNumber(Math.hypot(p.plate_length, p.plate_width)) });
   }
   if (state.measureMode === "angle") {
-    return featureId === "base_plate" ? "Primary datum corner: 90 deg" : "Feature axis to plate face: 90 deg";
+    return featureId === "base_plate" ? t("measure.datumAngle") : t("measure.axisAngle");
   }
-  if (featureId === "hole_pattern") return `Hole centers: ${formatNumber(Math.max(0, p.plate_length - 24))} x ${formatNumber(Math.max(0, p.plate_width - 24))} mm`;
-  if (featureId === "center_boss") return `Boss height: ${formatNumber(p.boss_h)} mm`;
-  return `Plate envelope: ${formatNumber(p.plate_length)} x ${formatNumber(p.plate_width)} x ${formatNumber(p.plate_thickness)} mm`;
+  if (featureId === "hole_pattern") return t("measure.holeCenters", { x: formatNumber(Math.max(0, p.plate_length - 24)), y: formatNumber(Math.max(0, p.plate_width - 24)) });
+  if (featureId === "center_boss") return t("measure.bossHeight", { value: formatNumber(p.boss_h) });
+  return t("measure.plateEnvelope", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(p.plate_thickness) });
 }
 
 function renderViewport() {
@@ -710,13 +1262,13 @@ function renderViewport() {
   const p = ds.parameters;
   const feature = selectedFeature();
   const generated = state.previewMode === "generated";
-  $("subtitle").textContent = generated ? "Agent generated preview" : `DesignState v${ds.version}`;
-  $("selectionBadge").textContent = generated ? "Generated model" : `${state.selectionMode[0].toUpperCase() + state.selectionMode.slice(1)}: ${feature?.name || "Feature"}`;
-  $("headBadge").textContent = generated ? "Agent preview" : ds.rollback_feature_id ? "Rollback preview" : "Head preview";
-  $("measureTitle").textContent = generated ? "Preview" : state.measureMode[0].toUpperCase() + state.measureMode.slice(1);
-  $("measureText").textContent = generated ? (state.previewPng ? "Rendered from CadQuery output" : "Waiting for generated preview") : measurementText();
+  $("subtitle").textContent = generated ? t("generatedPreviewSubtitle") : t("designStateVersion", { version: ds.version });
+  $("selectionBadge").textContent = generated ? t("generatedModel") : t("objectBadge", { mode: t(`modes.${state.selectionMode}`), name: featureName(feature) });
+  $("headBadge").textContent = generated ? t("agentPreview") : ds.rollback_feature_id ? t("rollbackPreview") : t("headPreview");
+  $("measureTitle").textContent = generated ? t("preview") : t(`modes.${state.measureMode}`);
+  $("measureText").textContent = generated ? (state.previewPng ? t("renderedFromCadQuery") : t("waitingGeneratedPreview")) : measurementText();
   const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
-  $("axisReadout").textContent = generated ? `STEP/STL ${state.exportStatus}` : `X ${formatNumber(p.plate_length)} / Y ${formatNumber(p.plate_width)} / Z ${formatNumber(height)} mm`;
+  $("axisReadout").textContent = generated ? t("stepStlStatus", { status: exportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
   $("viewportContent").innerHTML = generated ? renderGeneratedPreview() : renderModelSvg();
   applyViewportTransform();
 }
@@ -726,8 +1278,8 @@ function renderGeneratedPreview() {
     return `<div class="generated-preview"><img src="${dataUrl("image/png", state.previewPng)}" alt="Generated CAD preview" /></div>`;
   }
   return `<div class="generated-preview"><div class="generated-placeholder">
-    <strong>Generated model preview</strong>
-    <span>The CAD agent will replace the default DesignState viewport with its rendered PNG when generation succeeds.</span>
+    <strong>${escapeHtml(t("generatedPreviewTitle"))}</strong>
+    <span>${escapeHtml(t("generatedPreviewHint"))}</span>
   </div></div>`;
 }
 
@@ -788,7 +1340,7 @@ function renderIsoSvg(p, enabled) {
   const bossCy = cy - 10;
   const showBoss = enabled.has("center_boss");
   const showHoles = enabled.has("hole_pattern");
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="CAD preview">
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t("preview"))}">
     ${svgDefs()}
     <rect width="100%" height="100%" fill="#f6f8fb"/>
     ${grid()}
@@ -827,22 +1379,22 @@ function featureCalloutText(p, featureId) {
   const mode = state.measureMode;
   if (featureId === "base_plate") {
     if (mode === "distance" && state.showDims) return "";
-    if (mode === "angle") return "datum angle 90 deg";
-    if (mode === "diameter") return `diag ${formatNumber(Math.hypot(p.plate_length, p.plate_width))} mm`;
-    return `${formatNumber(p.plate_length)} x ${formatNumber(p.plate_width)} x ${formatNumber(p.plate_thickness)} mm`;
+    if (mode === "angle") return t("callout.datumAngle");
+    if (mode === "diameter") return t("callout.diagonal", { value: formatNumber(Math.hypot(p.plate_length, p.plate_width)) });
+    return t("callout.plate", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(p.plate_thickness) });
   }
-  if (featureId === "fillet_corners") return `R ${formatNumber(p.corner_radius)} mm`;
+  if (featureId === "fillet_corners") return t("callout.fillet", { value: formatNumber(p.corner_radius) });
   if (featureId === "hole_pattern") {
-    if (mode === "distance") return `spacing ${formatNumber(Math.max(0, p.plate_length - 24))} x ${formatNumber(Math.max(0, p.plate_width - 24))} mm`;
-    if (mode === "angle") return "hole axes 90 deg";
-    return `4x dia ${formatNumber(p.hole_d)} mm`;
+    if (mode === "distance") return t("callout.spacing", { x: formatNumber(Math.max(0, p.plate_length - 24)), y: formatNumber(Math.max(0, p.plate_width - 24)) });
+    if (mode === "angle") return t("callout.holeAxes");
+    return t("callout.holeDia", { value: formatNumber(p.hole_d) });
   }
   if (featureId === "center_boss") {
-    if (mode === "distance") return `height ${formatNumber(p.boss_h)} mm`;
-    if (mode === "angle") return "axis 90 deg";
-    return `dia ${formatNumber(p.boss_d)} mm`;
+    if (mode === "distance") return t("callout.height", { value: formatNumber(p.boss_h) });
+    if (mode === "angle") return t("callout.axis");
+    return t("callout.dia", { value: formatNumber(p.boss_d) });
   }
-  if (featureId === "center_hole") return `dia ${formatNumber(p.center_hole_d)} mm`;
+  if (featureId === "center_hole") return t("callout.dia", { value: formatNumber(p.center_hole_d) });
   return "";
 }
 
@@ -927,27 +1479,27 @@ function renderProperties() {
     $("properties").innerHTML = `
       <div class="properties-head">
         <div class="feature-meta">
-          <div><strong>Generated model</strong><span>agent · ${state.previewPng ? "preview ready" : "waiting"}</span></div>
+          <div><strong>${escapeHtml(t("generatedModel"))}</strong><span>${escapeHtml(t("agent"))} · ${state.previewPng ? escapeHtml(t("previewReady")) : escapeHtml(t("waiting"))}</span></div>
           <div class="version-pill">AI</div>
         </div>
         <div class="rename-row">
-          <input class="text-input" value="${escapeHtml(state.generatedPrompt || "Agent model")}" disabled />
-          <button class="icon-button" type="button" title="Back to parametric DesignState" onclick="showParametricDesign()">${icon("undo")}</button>
+          <input class="text-input" value="${escapeHtml(state.generatedPrompt || t("agentModel"))}" disabled />
+          <button class="icon-button" type="button" title="${escapeHtml(t("backToDesignState"))}" onclick="showParametricDesign()">${icon("undo")}</button>
         </div>
       </div>
       <section class="section">
-        <h3>${icon("code")} Generated Source</h3>
+        <h3>${icon("code")} ${escapeHtml(t("generatedSource"))}</h3>
         <div class="kv-list">
-          <div class="kv"><span>Prompt</span><strong>${state.generatedPrompt ? "saved" : "none"}</strong></div>
-          <div class="kv"><span>CadQuery script</span><strong>${state.script ? "ready" : "waiting"}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("prompt"))}</span><strong>${state.generatedPrompt ? escapeHtml(t("saved")) : escapeHtml(t("none"))}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("cadqueryScript"))}</span><strong>${state.script ? escapeHtml(t("readyValue")) : escapeHtml(t("waiting"))}</strong></div>
         </div>
       </section>
       <section class="section">
-        <h3>${icon("box")} Artifacts</h3>
+        <h3>${icon("box")} ${escapeHtml(t("artifacts"))}</h3>
         <div class="kv-list">
-          <div class="kv"><span>Viewport</span><strong>${state.previewPng ? "mesh render" : "waiting"}</strong></div>
-          <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? "ready" : state.exportStatus}</strong></div>
-          <div class="kv"><span>Feature tree</span><strong>not available</strong></div>
+          <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("waiting"))}</strong></div>
+          <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? escapeHtml(t("readyValue")) : escapeHtml(exportStatusLabel())}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("featureTree"))}</span><strong>${escapeHtml(t("notAvailable"))}</strong></div>
         </div>
       </section>
     `;
@@ -958,30 +1510,30 @@ function renderProperties() {
   $("properties").innerHTML = `
     <div class="properties-head">
       <div class="feature-meta">
-        <div><strong>${escapeHtml(feature.name)}</strong><span>${escapeHtml(feature.kind)} · ${enabled ? "enabled" : "inactive"}</span></div>
+        <div><strong>${escapeHtml(featureName(feature))}</strong><span>${escapeHtml(featureKind(feature.kind))} · ${enabled ? escapeHtml(t("enabled")) : escapeHtml(t("inactive"))}</span></div>
         <div class="version-pill">v${ds.version}</div>
       </div>
       <div class="rename-row">
-        <input class="text-input" id="renameInput" value="${escapeHtml(feature.name)}" />
-        <button class="icon-button" type="button" title="Rename" onclick="renameFeature()">${icon("edit")}</button>
+        <input class="text-input" id="renameInput" value="${escapeHtml(featureName(feature))}" />
+        <button class="icon-button" type="button" title="${escapeHtml(t("actions.rename"))}" onclick="renameFeature()">${icon("edit")}</button>
       </div>
       <div class="feature-actions">
-        <button class="icon-button" type="button" title="Suppress / enable" onclick="toggleFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("eye")}</button>
-        <button class="icon-button" type="button" title="Rollback" onclick="rollbackFeature()">${icon("undo")}</button>
-        <button class="icon-button" type="button" title="Restore head" onclick="restoreHead()" ${ds.rollback_feature_id ? "" : "disabled"}>${icon("redo")}</button>
-        <button class="icon-button" type="button" title="Delete feature" onclick="deleteFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("trash")}</button>
+        <button class="icon-button" type="button" title="${escapeHtml(t("actions.suppress"))}" onclick="toggleFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("eye")}</button>
+        <button class="icon-button" type="button" title="${escapeHtml(t("actions.rollback"))}" onclick="rollbackFeature()">${icon("undo")}</button>
+        <button class="icon-button" type="button" title="${escapeHtml(t("actions.restoreHead"))}" onclick="restoreHead()" ${ds.rollback_feature_id ? "" : "disabled"}>${icon("redo")}</button>
+        <button class="icon-button" type="button" title="${escapeHtml(t("actions.deleteFeature"))}" onclick="deleteFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("trash")}</button>
       </div>
     </div>
     <section class="section">
-      <h3>${icon("ruler")} Parameters</h3>
+      <h3>${icon("ruler")} ${escapeHtml(t("parameters"))}</h3>
       ${params.map((name) => paramRow(name)).join("")}
     </section>
     <section class="section">
-      <h3>${icon("box")} Regeneration</h3>
+      <h3>${icon("box")} ${escapeHtml(t("regeneration"))}</h3>
       <div class="kv-list">
-        <div class="kv"><span>Viewport</span><strong>${state.previewPng ? "mesh render" : "svg preview"}</strong></div>
-        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? "ready" : state.exportStatus}</strong></div>
-        <div class="kv"><span>Patch mode</span><strong>${state.patch?.op || "none"}</strong></div>
+        <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("svgPreview"))}</strong></div>
+        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? escapeHtml(t("readyValue")) : escapeHtml(exportStatusLabel())}</strong></div>
+        <div class="kv"><span>${escapeHtml(t("patchMode"))}</span><strong>${state.patch?.op || escapeHtml(t("none"))}</strong></div>
       </div>
     </section>
   `;
@@ -993,22 +1545,22 @@ function renderProperties() {
 function paramRow(name) {
   const value = state.designState.parameters[name];
   return `<div class="param-row">
-    <label for="param-${name}">${escapeHtml(name)}</label>
+    <label for="param-${name}">${escapeHtml(parameterLabel(name))}</label>
     <input class="param-input" id="param-${name}" type="number" step="0.5" value="${escapeHtml(formatNumber(value))}" onchange="commitParameter('${name}', this.value)" />
-    <span class="unit">mm</span>
+    <span class="unit">${escapeHtml(t("unitMm"))}</span>
   </div>`;
 }
 
 function renderBottomTabs() {
   const tabs = [
-    ["chat", "Chat", "pointer"],
-    ["history", "History", "undo"],
-    ["script", "Script", "code"],
-    ["logs", "Logs", "code"],
-    ["artifacts", "Files", "download"],
+    ["chat", "tabs.chat", "pointer"],
+    ["history", "tabs.history", "undo"],
+    ["script", "tabs.script", "code"],
+    ["logs", "tabs.logs", "code"],
+    ["artifacts", "tabs.artifacts", "download"],
   ];
-  $("bottomTabs").innerHTML = tabs.map(([id, label, iconName]) =>
-    `<button class="tab-button ${state.bottomTab === id ? "active" : ""}" type="button" onclick="setBottomTab('${id}')">${icon(iconName)}${label}</button>`
+  $("bottomTabs").innerHTML = tabs.map(([id, labelKey, iconName]) =>
+    `<button class="tab-button ${state.bottomTab === id ? "active" : ""}" type="button" onclick="setBottomTab('${id}')">${icon(iconName)}${escapeHtml(t(labelKey))}</button>`
   ).join("");
 }
 
@@ -1017,8 +1569,8 @@ function renderBottom() {
   if (state.bottomTab === "chat") {
     $("bottomContent").innerHTML = `<div class="chat-panel"><div class="chat-list">${state.chatMessages.map((item) => `
       <article class="chat-message ${item.role === "user" ? "user" : ""}">
-        <strong>${item.role === "user" ? "You" : "CAD agent"}</strong>
-        <span>${escapeHtml(item.text)}</span>
+        <strong>${item.role === "user" ? escapeHtml(t("chat.you")) : escapeHtml(t("chat.agent"))}</strong>
+        <span>${escapeHtml(chatText(item))}</span>
       </article>
     `).join("")}</div></div>`;
     return;
@@ -1032,7 +1584,7 @@ function renderBottom() {
   if (state.bottomTab === "script") {
     $("bottomContent").innerHTML = `<div class="script-grid">
       <pre>${escapeHtml(JSON.stringify(state.patch || { op: "noop" }, null, 2))}</pre>
-      <pre>${escapeHtml(state.script || "No script yet")}</pre>
+      <pre>${escapeHtml(state.script || t("noScript"))}</pre>
     </div>`;
     return;
   }
@@ -1045,24 +1597,24 @@ function renderBottom() {
 
 function artifactCards() {
   const artifacts = [
-    ["step", "STEP solid", ".step", "live export from sandbox", "ready", true],
-    ["stl", "STL mesh", ".stl", "live export from sandbox", "ready", true],
-    ["feature_tree", "Feature tree", ".json", "live DesignState JSON", "ready", true],
-    ["fcstd", "FreeCAD document", ".FCStd", "planned FreeCAD backend", "planned", false],
-    ["pdf", "Engineering drawing", ".pdf", "planned TechDraw backend", "planned", false],
-    ["svg", "Vector drawing", ".svg", "planned 2D projection", "planned", false],
+    ["step", "artifact.stepTitle", ".step", "artifact.sandboxExport", "ready", true],
+    ["stl", "artifact.stlTitle", ".stl", "artifact.sandboxExport", "ready", true],
+    ["feature_tree", "artifact.featureTreeTitle", ".json", "artifact.liveJson", "ready", true],
+    ["fcstd", "artifact.fcstdTitle", ".FCStd", "artifact.plannedFreecad", "planned", false],
+    ["pdf", "artifact.pdfTitle", ".pdf", "artifact.plannedTechdraw", "planned", false],
+    ["svg", "artifact.svgTitle", ".svg", "artifact.plannedProjection", "planned", false],
   ];
-  return artifacts.map(([key, title, ext, detail, readyStatus, implemented]) => {
+  return artifacts.map(([key, titleKey, ext, detailKey, readyStatus, implemented]) => {
     const value = key === "feature_tree" ? btoa(unescape(encodeURIComponent(JSON.stringify(exportStateSnapshot(), null, 2)))) : state.artifacts[key];
-    const status = value ? readyStatus : (implemented ? "not ready" : "planned");
+    const status = value ? readyStatus : (implemented ? "notReady" : "planned");
     const href = value ? dataUrl(key === "stl" ? "model/stl" : key === "feature_tree" ? "application/json" : "application/step", value) : "";
     const download = key === "feature_tree" ? "feature-tree.json" : `model.${key}`;
     return `<article class="artifact-card">
       <div>
-        <div class="artifact-title"><span>${escapeHtml(title)}</span><span class="artifact-ext">${escapeHtml(ext)}</span></div>
-        <span class="artifact-detail">${escapeHtml(detail)}</span>
+        <div class="artifact-title"><span>${escapeHtml(t(titleKey))}</span><span class="artifact-ext">${escapeHtml(ext)}</span></div>
+        <span class="artifact-detail">${escapeHtml(t(detailKey))}</span>
       </div>
-      ${href ? `<a href="${href}" download="${download}">Download</a>` : `<span class="badge ${status === "planned" ? "planned" : "queued"}">${status}</span>`}
+      ${href ? `<a href="${href}" download="${download}">${escapeHtml(t("download"))}</a>` : `<span class="badge ${status === "planned" ? "planned" : "queued"}">${escapeHtml(t(`artifact.${status}`))}</span>`}
     </article>`;
   });
 }
@@ -1078,6 +1630,7 @@ function exportStateSnapshot() {
 }
 
 function renderAll() {
+  renderStaticText();
   renderToolbar();
   renderTree();
   renderViewport();
@@ -1089,7 +1642,7 @@ function renderAll() {
 function selectFeature(featureId) {
   state.selectedFeatureId = featureId;
   state.designState.selected_feature_id = featureId;
-  log(`Selected feature: ${selectedFeature()?.name || featureId}`);
+  log(t("log.selectedFeature", { name: featureName(selectedFeature()) || featureId }));
   renderAll();
 }
 
@@ -1097,7 +1650,7 @@ function selectGeometry(featureId) {
   state.selectedFeatureId = featureId;
   state.designState.selected_feature_id = featureId;
   const feature = selectedFeature();
-  log(`Selected ${state.selectionMode}: ${feature?.name || featureId}`);
+  log(t("log.selectedMode", { mode: t(`modes.${state.selectionMode}`), name: featureName(feature) || featureId }));
   renderAll();
 }
 
@@ -1120,13 +1673,17 @@ function setBottomTab(value) { state.bottomTab = value; renderBottom(); }
 
 async function commitParameter(name, value) {
   const patch = { op: "update_parameter", name, value: clampParameter(name, value) };
-  await applyPatches([patch], `Parameter panel: ${name}`, `${name} = ${formatNumber(patch.value)} mm`);
+  await applyPatches(
+    [patch],
+    t("history.parameterPanel", { name: parameterLabel(name) }),
+    `${parameterLabel(name)} = ${formatNumber(patch.value)} ${t("unitMm")}`
+  );
 }
 
 async function applyPatches(patches, label, detail) {
   state.previewMode = "design_state";
   state.generatedPrompt = "";
-  setStatus("applying CADPatch");
+  setStatus("applyingPatch");
   try {
     const patched = await fetchJson("/api/design/patch", {
       design_state: state.designState,
@@ -1139,14 +1696,14 @@ async function applyPatches(patches, label, detail) {
     addHistory(label, detail);
     await renderDesign();
   } catch (error) {
-    setStatus("patch failed");
-    log(`Patch failed: ${error.message}`);
+    setStatus("patchFailed");
+    log(t("log.patchFailed", { message: error.message }));
   }
   renderAll();
 }
 
 async function renderDesign() {
-  setStatus("updating preview/export");
+  setStatus("updatingPreview");
   state.exportStatus = "rendering";
   try {
     const rendered = await fetchJson("/api/design/render", { design_state: state.designState });
@@ -1154,12 +1711,12 @@ async function renderDesign() {
     if (rendered.preview_png_b64) state.previewPng = rendered.preview_png_b64;
     if (rendered.exports) state.artifacts = { ...state.artifacts, ...rendered.exports };
     state.exportStatus = rendered.ok ? "ready" : "unavailable";
-    if (!rendered.ok) log(`Export unavailable: ${rendered.error || "unknown error"}`);
-    setStatus(rendered.ok ? "preview/export ready" : "preview updated");
+    if (!rendered.ok) log(t("log.exportUnavailable", { message: rendered.error || t("log.unknownError") }));
+    setStatus(rendered.ok ? "previewExportReady" : "previewUpdated");
   } catch (error) {
     state.exportStatus = "unavailable";
-    setStatus("preview updated");
-    log(`Export unavailable: ${error.message}`);
+    setStatus("previewUpdated");
+    log(t("log.exportUnavailable", { message: error.message }));
   }
 }
 
@@ -1169,7 +1726,7 @@ function renameFeature() {
   if (!feature || !input.value.trim()) return;
   feature.name = input.value.trim();
   state.designState.version += 1;
-  addHistory(`Rename: ${feature.name}`, `${feature.id} renamed`);
+  addHistory(t("history.rename", { name: feature.name }), t("history.renamed", { id: feature.id }));
   renderAll();
 }
 
@@ -1183,20 +1740,30 @@ async function toggleFeature() {
   const feature = selectedFeature();
   if (!feature?.suppressible) return;
   const op = feature.suppressed ? "enable_feature" : "suppress_feature";
-  await applyPatches([{ op, feature_id: feature.id }], `${feature.suppressed ? "Enable" : "Suppress"}: ${feature.name}`, `${feature.name} toggled`);
+  const name = featureName(feature);
+  await applyPatches(
+    [{ op, feature_id: feature.id }],
+    feature.suppressed ? t("history.enable", { name }) : t("history.suppress", { name }),
+    t("history.toggled", { name })
+  );
 }
 
 async function rollbackFeature() {
   const feature = selectedFeature();
   if (!feature) return;
-  await applyPatches([{ op: "rollback_to_feature", feature_id: feature.id }], `Rollback: ${feature.name}`, `Preview regenerated at ${feature.name}`);
+  const name = featureName(feature);
+  await applyPatches(
+    [{ op: "rollback_to_feature", feature_id: feature.id }],
+    t("history.rollback", { name }),
+    t("history.rollbackDetail", { name })
+  );
 }
 
 function restoreHead() {
   state.designState.rollback_feature_id = null;
   state.designState.active_feature_id = state.designState.features[state.designState.features.length - 1]?.id || "body";
   state.designState.version += 1;
-  addHistory("Restore head", "Feature history restored to latest operation");
+  addHistory(t("history.restoreHead"), t("history.restoreHeadDetail"));
   renderDesign().finally(renderAll);
 }
 
@@ -1218,7 +1785,8 @@ function deleteFeature() {
   state.selectedFeatureId = state.designState.features[state.designState.features.length - 1]?.id || "body";
   state.designState.selected_feature_id = state.selectedFeatureId;
   state.designState.version += 1;
-  addHistory(`Delete: ${feature.name}`, `${feature.name} and dependent features removed`);
+  const name = featureName(feature);
+  addHistory(t("history.delete", { name }), t("history.deleteDetail", { name }));
   renderDesign().finally(renderAll);
 }
 
@@ -1263,8 +1831,12 @@ async function submitCommand(event) {
   state.chatMessages.unshift({ role: "user", text });
   setBottomTab("chat");
   if (patch) {
-    await applyPatches([patch], `Conversation: ${patch.name}`, `${patch.name} = ${formatNumber(patch.value)} mm`);
-    state.chatMessages.unshift({ role: "assistant", text: `Applied CADPatch: ${patch.name} = ${formatNumber(patch.value)} mm.` });
+    await applyPatches(
+      [patch],
+      t("history.conversation", { name: parameterLabel(patch.name) }),
+      `${parameterLabel(patch.name)} = ${formatNumber(patch.value)} ${t("unitMm")}`
+    );
+    state.chatMessages.unshift({ role: "assistant", key: "chat.appliedPatch", vars: { name: parameterLabel(patch.name), value: formatNumber(patch.value) } });
     setBottomTab("chat");
     return;
   }
@@ -1277,10 +1849,10 @@ async function generateFromPrompt(prompt) {
   state.generatedPrompt = prompt;
   state.previewPng = null;
   state.artifacts = {};
-  state.exportStatus = "not ready";
+  state.exportStatus = "notReady";
   state.patch = null;
   setBottomTab("logs");
-  setStatus("submitting to CAD agent");
+  setStatus("submitting");
   let resp;
   try {
     for (let attempt = 0; attempt < 20; attempt++) {
@@ -1290,15 +1862,15 @@ async function generateFromPrompt(prompt) {
         body: JSON.stringify({ prompt, history: state.chatHistory }),
       });
       if (resp.status !== 503) break;
-      setStatus(`waking up (${attempt + 1})`);
+      setStatus("waking", { attempt: attempt + 1 });
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     await readSse(resp, prompt);
   } catch (error) {
-    setStatus("generation failed");
-    log(`Generation failed: ${error.message}`);
-    state.chatMessages.unshift({ role: "assistant", text: `Generation failed: ${error.message}` });
+    setStatus("generationFailed");
+    log(t("chat.generationFailed", { message: error.message }));
+    state.chatMessages.unshift({ role: "assistant", key: "chat.generationFailed", vars: { message: error.message } });
     if (!state.previewPng) state.previewMode = "design_state";
   } finally {
     $("applyButton").disabled = false;
@@ -1335,26 +1907,26 @@ function handleAgentEvent(ev) {
   if (ev.type === "status") setStatus(ev.message);
   if (ev.type === "script") {
     state.script = ev.script;
-    log(`CAD agent produced script attempt ${ev.attempt || 1}`);
+    log(t("log.producedScript", { attempt: ev.attempt || 1 }));
   }
-  if (ev.type === "retry") log(`Retry ${ev.attempt}: ${ev.message}`);
+  if (ev.type === "retry") log(t("log.retry", { attempt: ev.attempt, message: ev.message }));
   if (ev.type === "preview" && ev.png_b64) {
     state.previewMode = "generated";
     state.previewPng = ev.png_b64;
-    log("Rendered preview PNG");
+    log(t("log.renderedPreview"));
     renderViewport();
   }
   if (ev.type === "artifact") {
     state.artifacts[ev.format] = ev.data_b64;
-    log(`Artifact ready: ${ev.format}`);
+    log(t("log.artifactReady", { format: ev.format }));
   }
   if (ev.type === "error") {
     log(ev.message);
   }
   if (ev.type === "done") {
     setStatus(ev.ok ? "done" : "failed");
-    addHistory(ev.ok ? "Agent generation" : "Agent generation failed", ev.ok ? "Generated preview and artifacts" : "See logs for failure");
-    state.chatMessages.unshift({ role: "assistant", text: ev.ok ? "Generated a CAD script and available preview/artifacts." : "Generation failed. See Logs for details." });
+    addHistory(ev.ok ? t("history.agentGeneration") : t("history.agentGenerationFailed"), ev.ok ? t("history.agentDetail") : t("history.agentFailedDetail"));
+    state.chatMessages.unshift({ role: "assistant", key: ev.ok ? "chat.generationOk" : "chat.generationBad" });
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
   }
   renderBottom();
@@ -1395,6 +1967,7 @@ function installViewportGestures() {
 }
 
 async function init() {
+  renderStaticText();
   $("commandForm").addEventListener("submit", submitCommand);
   installViewportGestures();
   try {
@@ -1402,11 +1975,11 @@ async function init() {
     state.designState = initial.design_state;
     state.script = initial.script;
     state.selectedFeatureId = state.designState.selected_feature_id;
-    addHistory("Initial parametric body", "Loaded base plate, fillets, hole pattern, boss, and center hole.");
+    addHistory(t("history.initialTitle"), t("history.initialDetail"));
     setStatus("ready");
   } catch (error) {
-    setStatus("initial state unavailable");
-    log(`Initial state failed: ${error.message}`);
+    setStatus("initialUnavailable");
+    log(t("log.initialFailed", { message: error.message }));
     state.designState = fallbackDesignState();
   }
   renderAll();
@@ -1451,6 +2024,7 @@ window.rollbackFeature = rollbackFeature;
 window.restoreHead = restoreHead;
 window.deleteFeature = deleteFeature;
 window.showParametricDesign = showParametricDesign;
+window.toggleLocale = toggleLocale;
 
 init();
 </script>
