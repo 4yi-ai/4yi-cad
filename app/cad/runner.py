@@ -53,6 +53,11 @@ def _safe_env(workdir: str) -> dict[str, str]:
 
 
 def _rlimit_preexec(cpu_seconds: int | None, address_space_mb: int | None):
+    # macOS exposes RLIMIT_AS but rejects setting it in this Python subprocess
+    # preexec path. Keep local development usable; Linux containers still apply it.
+    if sys.platform == "darwin":
+        address_space_mb = None
+
     if cpu_seconds is None and address_space_mb is None:
         return None
 

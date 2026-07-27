@@ -69,6 +69,15 @@ def test_cpu_rlimit_applied_to_child():
     assert res.result["cpu"] == 7
 
 
+def test_address_space_rlimit_does_not_break_subprocess_setup():
+    worker = [PY, "-c", "import json;print(json.dumps({'ok': True}))"]
+
+    res = run_sandboxed({}, timeout_s=5, address_space_mb=4096, worker_argv=worker)
+
+    assert res.success is True
+    assert res.result == {"ok": True}
+
+
 def test_worker_nonzero_exit_is_failure_not_hang():
     worker = [PY, "-c", "import sys;sys.exit(3)"]
 
