@@ -304,7 +304,7 @@
   }
   .text-input { height: 36px; padding: 0 10px; }
   .param-input { width: 92px; height: 32px; text-align: right; padding: 0 9px; }
-  .feature-actions { display: grid; grid-template-columns: repeat(4, 34px); gap: 10px; margin-top: 12px; }
+  .feature-actions { display: flex; gap: 10px; margin-top: 12px; }
 
   .section { padding: 14px; border-bottom: 1px solid var(--line); }
   .section h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
@@ -553,7 +553,7 @@ const I18N = {
     waitingGeneratedPreview: "Waiting for generated preview",
     generatedPreviewTitle: "Generated model preview",
     generatedPreviewHint: "The CAD agent will replace the default DesignState viewport with its rendered PNG when generation succeeds.",
-    objectBadge: "{mode}: {name}",
+    featureBadge: "Feature: {name}",
     axisReadout: "X {x} / Y {y} / Z {z} mm",
     stepStlStatus: "STEP/STL {status}",
     generatedSource: "Generated Source",
@@ -589,9 +589,6 @@ const I18N = {
     actions: {
       rename: "Rename",
       suppress: "Suppress / enable",
-      rollback: "Rollback",
-      restoreHead: "Restore head",
-      deleteFeature: "Delete feature",
     },
     toolbar: {
       fit: "Fit",
@@ -602,17 +599,13 @@ const I18N = {
       bbox: "BBox",
       dims: "Dims",
       explode: "Explode",
-      object: "Object",
-      face: "Face",
-      edge: "Edge",
+      feature: "Feature",
       distance: "Distance",
       diameter: "Diameter",
       angle: "Angle",
     },
     modes: {
-      object: "Object",
-      face: "Face",
-      edge: "Edge",
+      feature: "Feature",
       distance: "Distance",
       diameter: "Diameter",
       angle: "Angle",
@@ -652,7 +645,7 @@ const I18N = {
       centerHole: "Center hole: {value} mm",
       diagonal: "Envelope diagonal: {value} mm",
       datumAngle: "Primary datum corner: 90 deg",
-      axisAngle: "Feature axis to plate face: 90 deg",
+      axisAngle: "Feature axis to plate plane: 90 deg",
       holeCenters: "Hole centers: {x} x {y} mm",
       bossHeight: "Boss height: {value} mm",
       plateEnvelope: "Plate envelope: {x} x {y} x {z} mm",
@@ -712,12 +705,6 @@ const I18N = {
       enable: "Enable: {name}",
       suppress: "Suppress: {name}",
       toggled: "{name} toggled",
-      rollback: "Rollback: {name}",
-      rollbackDetail: "Preview regenerated at {name}",
-      restoreHead: "Restore head",
-      restoreHeadDetail: "Feature history restored to latest operation",
-      delete: "Delete: {name}",
-      deleteDetail: "{name} and dependent features removed",
       agentGeneration: "Agent generation",
       agentGenerationFailed: "Agent generation failed",
       agentDetail: "Generated preview and artifacts",
@@ -728,7 +715,6 @@ const I18N = {
     log: {
       workbenchStarting: "Workbench starting",
       selectedFeature: "Selected feature: {name}",
-      selectedMode: "Selected {mode}: {name}",
       patchFailed: "Patch failed: {message}",
       exportUnavailable: "Export unavailable: {message}",
       initialFailed: "Initial state failed: {message}",
@@ -790,7 +776,7 @@ const I18N = {
     waitingGeneratedPreview: "等待生成模型预览",
     generatedPreviewTitle: "生成模型预览",
     generatedPreviewHint: "生成成功后，CAD agent 会用渲染 PNG 替换默认 DesignState 视图。",
-    objectBadge: "{mode}: {name}",
+    featureBadge: "特征：{name}",
     axisReadout: "X {x} / Y {y} / Z {z} mm",
     stepStlStatus: "STEP/STL {status}",
     generatedSource: "生成来源",
@@ -826,9 +812,6 @@ const I18N = {
     actions: {
       rename: "重命名",
       suppress: "抑制 / 启用",
-      rollback: "回滚到此特征",
-      restoreHead: "恢复到最新",
-      deleteFeature: "删除特征",
     },
     toolbar: {
       fit: "适配",
@@ -839,17 +822,13 @@ const I18N = {
       bbox: "边框",
       dims: "尺寸",
       explode: "爆炸",
-      object: "对象",
-      face: "面",
-      edge: "边",
+      feature: "特征",
       distance: "距离",
       diameter: "直径",
       angle: "角度",
     },
     modes: {
-      object: "对象",
-      face: "面",
-      edge: "边",
+      feature: "特征",
       distance: "距离",
       diameter: "直径",
       angle: "角度",
@@ -889,7 +868,7 @@ const I18N = {
       centerHole: "中心孔：{value} mm",
       diagonal: "包围盒对角线：{value} mm",
       datumAngle: "主基准角：90 度",
-      axisAngle: "特征轴与板面：90 度",
+      axisAngle: "特征轴与基准面：90 度",
       holeCenters: "孔中心距：{x} x {y} mm",
       bossHeight: "凸台高度：{value} mm",
       plateEnvelope: "底板包围盒：{x} x {y} x {z} mm",
@@ -949,12 +928,6 @@ const I18N = {
       enable: "启用：{name}",
       suppress: "抑制：{name}",
       toggled: "{name} 已切换",
-      rollback: "回滚：{name}",
-      rollbackDetail: "预览已回滚到 {name}",
-      restoreHead: "恢复到最新",
-      restoreHeadDetail: "特征历史已恢复到最新操作",
-      delete: "删除：{name}",
-      deleteDetail: "{name} 及其依赖特征已删除",
       agentGeneration: "Agent 生成",
       agentGenerationFailed: "Agent 生成失败",
       agentDetail: "已生成预览和产物",
@@ -965,7 +938,6 @@ const I18N = {
     log: {
       workbenchStarting: "工作台启动中",
       selectedFeature: "已选择特征：{name}",
-      selectedMode: "已选择{mode}：{name}",
       patchFailed: "补丁失败：{message}",
       exportUnavailable: "导出不可用：{message}",
       initialFailed: "初始状态失败：{message}",
@@ -1043,7 +1015,7 @@ const state = {
   generatedParameters: [],
   selectedGeneratedParameterName: "",
   viewMode: "iso",
-  selectionMode: "object",
+  selectionMode: "feature",
   measureMode: "distance",
   showBBox: true,
   showDims: true,
@@ -1302,9 +1274,7 @@ function renderToolbar() {
     ["iso", "toolbar.iso", "ruler"],
   ];
   const modes = [
-    ["object", "toolbar.object", "pointer"],
-    ["face", "toolbar.face", "box"],
-    ["edge", "toolbar.edge", "ruler"],
+    ["feature", "toolbar.feature", "pointer"],
   ];
   const measures = [
     ["distance", "toolbar.distance", "ruler"],
@@ -1402,7 +1372,7 @@ function renderViewport() {
   const generated = state.previewMode === "generated";
   const generatedParam = generated ? selectedGeneratedParameter() : null;
   $("subtitle").textContent = generated ? t("generatedPreviewSubtitle") : t("designStateVersion", { version: ds.version });
-  $("selectionBadge").textContent = generated ? generatedSelectionLabel(generatedParam) : t("objectBadge", { mode: t(`modes.${state.selectionMode}`), name: featureName(feature) });
+  $("selectionBadge").textContent = generated ? generatedSelectionLabel(generatedParam) : t("featureBadge", { name: featureName(feature) });
   $("headBadge").textContent = generated ? t("agentPreview") : ds.rollback_feature_id ? t("rollbackPreview") : t("headPreview");
   $("measureTitle").textContent = generated ? (generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
   $("measureText").textContent = generated ? (generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromCadQuery") : t("waitingGeneratedPreview")) : measurementText();
@@ -1664,9 +1634,6 @@ function renderProperties() {
       </div>
       <div class="feature-actions">
         <button class="icon-button" type="button" title="${escapeHtml(t("actions.suppress"))}" onclick="toggleFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("eye")}</button>
-        <button class="icon-button" type="button" title="${escapeHtml(t("actions.rollback"))}" onclick="rollbackFeature()">${icon("undo")}</button>
-        <button class="icon-button" type="button" title="${escapeHtml(t("actions.restoreHead"))}" onclick="restoreHead()" ${ds.rollback_feature_id ? "" : "disabled"}>${icon("redo")}</button>
-        <button class="icon-button" type="button" title="${escapeHtml(t("actions.deleteFeature"))}" onclick="deleteFeature()" ${feature.suppressible ? "" : "disabled"}>${icon("trash")}</button>
       </div>
     </div>
     <section class="section">
@@ -1844,7 +1811,7 @@ function selectGeometry(featureId) {
   state.selectedFeatureId = featureId;
   state.designState.selected_feature_id = featureId;
   const feature = selectedFeature();
-  log(t("log.selectedMode", { mode: t(`modes.${state.selectionMode}`), name: featureName(feature) || featureId }));
+  log(t("log.selectedFeature", { name: featureName(feature) || featureId }));
   renderAll();
 }
 
@@ -1861,7 +1828,11 @@ function setView(value) {
 function toggleBBox() { state.showBBox = !state.showBBox; renderAll(); }
 function toggleDims() { state.showDims = !state.showDims; renderAll(); }
 function toggleExplode() { state.exploded = !state.exploded; renderAll(); }
-function setSelectionMode(value) { state.selectionMode = value; renderAll(); }
+function setSelectionMode(value) {
+  if (value !== "feature") return;
+  state.selectionMode = value;
+  renderAll();
+}
 function setMeasureMode(value) { state.measureMode = value; renderAll(); }
 function setBottomTab(value) { state.bottomTab = value; renderBottom(); }
 
@@ -2023,48 +1994,6 @@ async function toggleFeature() {
     feature.suppressed ? t("history.enable", { name }) : t("history.suppress", { name }),
     t("history.toggled", { name })
   );
-}
-
-async function rollbackFeature() {
-  const feature = selectedFeature();
-  if (!feature) return;
-  const name = featureName(feature);
-  await applyPatches(
-    [{ op: "rollback_to_feature", feature_id: feature.id }],
-    t("history.rollback", { name }),
-    t("history.rollbackDetail", { name })
-  );
-}
-
-function restoreHead() {
-  state.designState.rollback_feature_id = null;
-  state.designState.active_feature_id = state.designState.features[state.designState.features.length - 1]?.id || "body";
-  state.designState.version += 1;
-  addHistory(t("history.restoreHead"), t("history.restoreHeadDetail"));
-  renderDesign().finally(renderAll);
-}
-
-function deleteFeature() {
-  const feature = selectedFeature();
-  if (!feature?.suppressible) return;
-  const descendants = new Set([feature.id]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const item of state.designState.features) {
-      if (item.parent_id && descendants.has(item.parent_id) && !descendants.has(item.id)) {
-        descendants.add(item.id);
-        changed = true;
-      }
-    }
-  }
-  state.designState.features = state.designState.features.filter((item) => !descendants.has(item.id));
-  state.selectedFeatureId = state.designState.features[state.designState.features.length - 1]?.id || "body";
-  state.designState.selected_feature_id = state.selectedFeatureId;
-  state.designState.version += 1;
-  const name = featureName(feature);
-  addHistory(t("history.delete", { name }), t("history.deleteDetail", { name }));
-  renderDesign().finally(renderAll);
 }
 
 function parseConversationalPatch(text) {
@@ -2447,9 +2376,6 @@ window.commitParameter = commitParameter;
 window.commitGeneratedParameter = commitGeneratedParameter;
 window.renameFeature = renameFeature;
 window.toggleFeature = toggleFeature;
-window.rollbackFeature = rollbackFeature;
-window.restoreHead = restoreHead;
-window.deleteFeature = deleteFeature;
 window.showParametricDesign = showParametricDesign;
 window.showGeneratedModel = showGeneratedModel;
 window.showGeneratedParameters = showGeneratedParameters;
