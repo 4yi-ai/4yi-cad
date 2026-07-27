@@ -71,6 +71,20 @@ def test_generate_requires_prompt():
     assert resp.status_code == 422
 
 
+def test_generate_reports_missing_gateway_config_without_500(monkeypatch):
+    for name in ("OPENAI_BASE_URL", "OPENAI_API_BASE", "OPENAI_API_KEY", "TEXT_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+
+    client = TestClient(create_app())
+    resp = client.post("/api/generate", json={"prompt": "make a chair"})
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    assert "event: error" in resp.text
+    assert "Missing required environment variable" in resp.text
+    assert "event: done" in resp.text
+
+
 def test_design_initial_returns_state_and_script():
     resp = _client().get("/api/design/initial")
 

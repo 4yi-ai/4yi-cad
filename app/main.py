@@ -133,8 +133,21 @@ def create_app(*, gateway=None, execute=None) -> FastAPI:
 
     @app.post("/api/generate")
     async def generate(req: GenerateRequest):
-        gw = _get_gateway(app)
         execute = _get_execute(app)
+        try:
+            gw = _get_gateway(app)
+        except Exception as exc:  # noqa: BLE001 - report config/gateway setup as SSE, not 500
+            error_message = str(exc)
+
+            async def config_error_stream():
+                yield format_sse({"type": "error", "message": error_message})
+                yield format_sse({"type": "done", "ok": False})
+
+            return StreamingResponse(
+                config_error_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
         agen = run_generation(req.prompt, gateway=gw, execute=execute, history=req.history)
         return StreamingResponse(
             _sse_with_heartbeat(agen),
