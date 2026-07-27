@@ -10,8 +10,10 @@ import json
 from fastapi.testclient import TestClient
 
 from app.agent.loop import ExecResult
+from app.cad.design_state import default_design_state, render_cadquery_script
 from app.gateway import ChatCompletion
 from app.main import create_app
+from app.session_store import SqliteSessionStore
 
 
 class FakeGateway:
@@ -44,11 +46,66 @@ def _client(*, execute=_fake_execute):
     return TestClient(app)
 
 
+def _client_with_store(tmp_path, *, execute=_fake_execute):
+    store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
+    app = create_app(gateway=FakeGateway(), execute=execute, session_store=store)
+    return TestClient(app)
+
+
 def test_healthz_is_200_without_config():
     # No env set — must still be healthy.
     resp = _client().get("/healthz")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+def test_session_api_creates_reads_and_appends_versions(tmp_path):
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+
+    created = client.post("/api/sessions", json={"title": "Workbench"}).json()
+    session_id = created["session"]["id"]
+
+    resp = client.post(
+        f"/api/sessions/{session_id}/versions",
+        json={
+            "intent": "create",
+            "user_instruction": "initial",
+            "design_state": state.model_dump(),
+            "script": script,
+            "metadata": {"preview_mode": "design_state"},
+        },
+    )
+
+    assert resp.status_code == 200
+    version = resp.json()["version"]
+    assert version["version_number"] == 1
+    assert version["metadata"]["preview_mode"] == "design_state"
+
+    loaded = client.get(f"/api/sessions/{session_id}")
+    assert loaded.status_code == 200
+    body = loaded.json()
+    assert body["session"]["active_version_id"] == version["id"]
+    assert body["active_version"]["script"] == script
+    assert body["active_version"]["geometry_summary"]["bbox_mm"] == [60, 40, 14]
+    assert body["versions"][0]["intent"] == "create"
+
+
+def test_session_api_returns_404_for_missing_session(tmp_path):
+    client = _client_with_store(tmp_path)
+
+    assert client.get("/api/sessions/missing").status_code == 404
+    resp = client.post(
+        "/api/sessions/missing/versions",
+        json={
+            "intent": "create",
+            "design_state": default_design_state().model_dump(),
+            "script": "result = None\n",
+        },
+    )
+
+    assert resp.status_code == 404
 
 
 def test_generate_streams_sse_events():

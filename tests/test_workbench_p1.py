@@ -23,8 +23,13 @@ def test_p1_workbench_exposes_core_surfaces():
         "/api/generate",
         "WORKBENCH_SESSION_STORAGE_KEY",
         "4yi-cad.workbench.session.v1",
+        "SERVER_SESSION_ID_STORAGE_KEY",
+        "4yi-cad.server-session-id.v1",
         "persistWorkbenchSession",
         "restoreWorkbenchSession",
+        "recordServerVersion",
+        "restoreServerSession",
+        "/api/sessions",
         "commitParameter",
         "submitCommand",
         "4yi-cad Workbench",
@@ -37,8 +42,13 @@ def test_p1_workbench_restores_browser_session_before_fetching_initial_state():
     html = _html()
 
     assert "if (restoreWorkbenchSession())" in html
+    assert "if (await restoreServerSession())" in html
     assert "/api/design/initial" in html
     assert html.index("if (restoreWorkbenchSession())") < html.index("/api/design/initial")
+    assert html.index("if (restoreWorkbenchSession())") < html.index(
+        "if (await restoreServerSession())"
+    )
+    assert html.index("if (await restoreServerSession())") < html.index("/api/design/initial")
 
 
 def test_p1_workbench_does_not_expose_topology_or_arbitrary_feature_history_controls():

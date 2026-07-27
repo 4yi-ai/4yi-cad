@@ -20,16 +20,26 @@ Single FastAPI process, single origin, single container.
   preview PNG. Untrusted-code-facing; the container is the isolation boundary.
 - `app/cad/preview.py` — PyVista offscreen render (xvfb/mesa).
 - `app/main.py` — `/healthz` (trivial, always 200), `/api/generate` (SSE), SPA.
+- `app/session_store.py` — P1.5 SQLite session/version metadata store:
+  `DesignState` JSON, scripts, patches, geometry summaries, and version metadata.
+  Large STEP/STL/PNG artifacts are not stored in SQLite.
 - `index.html` — vanilla SPA at the repo root, served same-origin; **client holds
   conversation history** and replays it to the stateless server; retries on 503
   (cold start). Living at the root also makes the deploy scanner see one fullstack
   service (not an undeployed standalone frontend).
 
-### Why the client is the source of truth
+### Session storage boundary
 The platform injects no DB/object-storage and idle auto-pause scales the pod to
-zero, wiping pod-local state. So the browser keeps the authoritative script
-history; the server is stateless across pause/restart. Exports stream inline as
-base64 (no server storage).
+zero, wiping pod-local state unless a persistent volume is attached. The browser
+therefore still keeps a local session cache, and the server mirrors lightweight
+session/version facts into SQLite for reload/recovery. `CAD_SESSION_DB_PATH`
+controls the SQLite file location; without a persistent volume, the default
+`/tmp/4yi-cad/sessions.sqlite3` is a convenience cache, not durable production
+storage. Exports still stream inline as base64 and are not stored server-side.
+
+Do not store secrets or cross-session artifacts in SQLite until the CAD worker is
+isolated from the web process; model-generated Python currently runs in the same
+container/user boundary.
 
 ### Security (tenant-isolation)
 LLM-generated Python runs in `run_sandboxed`: **no gateway token or `XCLAW_*` in

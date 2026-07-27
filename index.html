@@ -986,6 +986,7 @@ const DEFAULT_FEATURE_NAMES = {
 };
 
 const WORKBENCH_SESSION_STORAGE_KEY = "4yi-cad.workbench.session.v1";
+const SERVER_SESSION_ID_STORAGE_KEY = "4yi-cad.server-session-id.v1";
 
 function initialLocale() {
   const stored = localStorage.getItem("4yi-cad.locale");
@@ -1027,6 +1028,8 @@ const state = {
   selectedFeatureId: "base_plate",
   bottomTab: "chat",
   viewport: { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 },
+  serverSessionId: localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY) || "",
+  lastServerVersionSignature: "",
   chatHistory: [],
   chatMessages: [
     { role: "assistant", key: "chat.initial" },
@@ -1122,6 +1125,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     exploded: state.exploded,
     selectedFeatureId: state.selectedFeatureId,
     bottomTab: state.bottomTab,
+    serverSessionId: state.serverSessionId,
     chatHistory: state.chatHistory,
     chatMessages: state.chatMessages,
   };
@@ -1179,6 +1183,10 @@ function restoreWorkbenchSession() {
     state.selectedFeatureId = saved.selectedFeatureId || state.designState.selected_feature_id || "base_plate";
     state.designState.selected_feature_id = state.selectedFeatureId;
     state.bottomTab = saved.bottomTab || "chat";
+    state.serverSessionId = saved.serverSessionId || localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY) || "";
+    if (state.serverSessionId) {
+      localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, state.serverSessionId);
+    }
     state.chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory : [];
     state.chatMessages = Array.isArray(saved.chatMessages) && saved.chatMessages.length
       ? saved.chatMessages
@@ -1188,6 +1196,108 @@ function restoreWorkbenchSession() {
   } catch (error) {
     localStorage.removeItem(WORKBENCH_SESSION_STORAGE_KEY);
     console.warn("Unable to restore 4yi-cad workbench session", error);
+    return false;
+  }
+}
+
+function versionMetadata() {
+  return {
+    preview_mode: state.previewMode,
+    generated_prompt: state.generatedPrompt,
+    generated_parameters: state.generatedParameters || [],
+  };
+}
+
+function versionPayload(intent, userInstruction = "", status = "ok", error = "") {
+  return {
+    intent,
+    user_instruction: userInstruction || null,
+    design_state: state.designState,
+    script: state.script,
+    geometry_summary: {},
+    patch: state.patch,
+    metadata: versionMetadata(),
+    status,
+    error: error || null,
+  };
+}
+
+function versionSignature(payload) {
+  return JSON.stringify({
+    intent: payload.intent,
+    user_instruction: payload.user_instruction,
+    design_state_version: payload.design_state?.version,
+    design_state_parameters: payload.design_state?.parameters,
+    design_state_features: payload.design_state?.features,
+    script: payload.script,
+    patch: payload.patch,
+    metadata: payload.metadata,
+    status: payload.status,
+    error: payload.error,
+  });
+}
+
+async function ensureServerSession() {
+  if (state.serverSessionId) return state.serverSessionId;
+  const res = await fetchJson("/api/sessions", { title: state.generatedPrompt || "4yi-cad session" });
+  state.serverSessionId = res.session.id;
+  localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, state.serverSessionId);
+  persistWorkbenchSession();
+  return state.serverSessionId;
+}
+
+async function recordServerVersion(intent, userInstruction = "", status = "ok", error = "") {
+  if (!state.designState || !state.script) return;
+  const payload = versionPayload(intent, userInstruction, status, error);
+  const signature = versionSignature(payload);
+  if (signature === state.lastServerVersionSignature) return;
+  state.lastServerVersionSignature = signature;
+  try {
+    const sessionId = await ensureServerSession();
+    await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/versions`, payload);
+  } catch (saveError) {
+    console.warn("Unable to persist 4yi-cad server session", saveError);
+  }
+}
+
+async function restoreServerSession() {
+  const sessionId = state.serverSessionId || localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY);
+  if (!sessionId) return false;
+  try {
+    const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const active = saved.active_version;
+    if (!active?.design_state || !active.script) return false;
+    const metadata = active.metadata || {};
+
+    state.serverSessionId = sessionId;
+    localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, sessionId);
+    state.designState = active.design_state;
+    state.script = active.script;
+    state.patch = active.patch || null;
+    state.history = (saved.versions || []).slice().reverse().map((version) => ({
+      id: version.id,
+      version: version.version_number,
+      label: version.intent || "version",
+      detail: version.user_instruction || version.status || "",
+    }));
+    state.artifacts = {};
+    state.previewPng = null;
+    state.exportStatus = "notReady";
+    state.previewMode = metadata.preview_mode === "generated" ? "generated" : "design_state";
+    state.generatedPrompt = metadata.generated_prompt || "";
+    state.generatedParameters = Array.isArray(metadata.generated_parameters) ? metadata.generated_parameters : [];
+    state.selectedGeneratedParameterName = "";
+    state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
+    state.bottomTab = "history";
+    state.chatMessages = [{ role: "assistant", key: "chat.initial" }];
+    state.chatHistory = [];
+    state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
+    state.lastServerVersionSignature = versionSignature(
+      versionPayload(active.intent || "modify", active.user_instruction || "", active.status || "ok", active.error || "")
+    );
+    return true;
+  } catch (error) {
+    console.warn("Unable to restore 4yi-cad server session", error);
     return false;
   }
 }
@@ -1989,6 +2099,7 @@ async function commitGeneratedParameter(name, rawValue) {
     );
     log(t("log.scriptParameterUpdated", { name, value: formatNumber(value), unit }));
     setStatus("previewExportReady");
+    void recordServerVersion("modify", t("history.scriptParameterDetail", { name, value: formatNumber(value), unit }));
     return true;
   } catch (error) {
     state.script = previous.script;
@@ -2022,6 +2133,7 @@ async function applyPatches(patches, label, detail) {
     state.patch = patches[patches.length - 1] || null;
     addHistory(label, detail);
     await renderDesign();
+    void recordServerVersion("modify", detail);
   } catch (error) {
     setStatus("patchFailed");
     log(t("log.patchFailed", { message: error.message }));
@@ -2054,6 +2166,7 @@ function renameFeature() {
   feature.name = input.value.trim();
   state.designState.version += 1;
   addHistory(t("history.rename", { name: feature.name }), t("history.renamed", { id: feature.id }));
+  void recordServerVersion("modify", t("history.renamed", { id: feature.id }));
   renderAll();
 }
 
@@ -2387,6 +2500,7 @@ function handleAgentEvent(ev) {
     addHistory(ev.ok ? t("history.agentGeneration") : t("history.agentGenerationFailed"), ev.ok ? t("history.agentDetail") : t("history.agentFailedDetail"));
     state.chatMessages.unshift({ role: "assistant", key: ev.ok ? "chat.generationOk" : "chat.generationBad" });
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
+    void recordServerVersion(ev.ok ? "create" : "repair", state.generatedPrompt, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
   }
   renderBottom();
   persistWorkbenchSession();
@@ -2433,6 +2547,12 @@ async function init() {
   if (restoreWorkbenchSession()) {
     setStatus("restored");
     renderAll();
+    void recordServerVersion("modify", "browser session restore");
+    return;
+  }
+  if (await restoreServerSession()) {
+    setStatus("restored");
+    renderAll();
     return;
   }
   try {
@@ -2442,6 +2562,7 @@ async function init() {
     state.selectedFeatureId = state.designState.selected_feature_id;
     addHistory(t("history.initialTitle"), t("history.initialDetail"));
     setStatus("ready");
+    void recordServerVersion("create", t("history.initialDetail"));
   } catch (error) {
     setStatus("initialUnavailable");
     log(t("log.initialFailed", { message: error.message }));

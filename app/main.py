@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -34,6 +35,7 @@ from app.cad.script_params import (
     extract_script_parameters,
 )
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
+from app.session_store import SessionStore, SqliteSessionStore
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
 # Living at the root (next to pyproject/Dockerfile) also makes the deployment
@@ -67,6 +69,22 @@ class ScriptPatchRequest(BaseModel):
     patches: list[ScriptPatchItem] = Field(default_factory=list)
 
 
+class CreateSessionRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=160)
+
+
+class SessionVersionRequest(BaseModel):
+    intent: Literal["create", "modify", "repair", "rollback"] = "modify"
+    user_instruction: str | None = Field(default=None, max_length=4000)
+    design_state: DesignState = Field(default_factory=default_design_state)
+    script: str = Field(..., min_length=1)
+    geometry_summary: dict = Field(default_factory=dict)
+    patch: dict | None = None
+    metadata: dict = Field(default_factory=dict)
+    status: Literal["ok", "failed"] = "ok"
+    error: str | None = Field(default=None, max_length=8000)
+
+
 def _get_gateway(app: FastAPI):
     gw = getattr(app.state, "gateway", None)
     if gw is None:
@@ -84,6 +102,14 @@ def _get_execute(app: FastAPI):
         execute = default_execute
         app.state.execute = execute
     return execute
+
+
+def _get_session_store(app: FastAPI) -> SessionStore:
+    store = getattr(app.state, "session_store", None)
+    if store is None:
+        store = SqliteSessionStore()
+        app.state.session_store = store
+    return store
 
 
 async def default_execute(script: str) -> ExecResult:
@@ -137,14 +163,58 @@ async def _sse_with_heartbeat(agen):
         task.cancel()
 
 
-def create_app(*, gateway=None, execute=None) -> FastAPI:
+def create_app(*, gateway=None, execute=None, session_store: SessionStore | None = None) -> FastAPI:
     app = FastAPI(title="4yi-cad")
     app.state.gateway = gateway
     app.state.execute = execute
+    app.state.session_store = session_store
 
     @app.get("/healthz")
     async def healthz():
         return {"status": "ok"}
+
+    @app.post("/api/sessions")
+    async def create_session(req: CreateSessionRequest | None = None):
+        store = _get_session_store(app)
+        try:
+            session = store.create_session(title=req.title if req else None)
+        except Exception as exc:  # noqa: BLE001 - storage setup can be env/volume dependent
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        return {"session": session.__dict__}
+
+    @app.get("/api/sessions/{session_id}")
+    async def get_session(session_id: str):
+        store = _get_session_store(app)
+        try:
+            session = store.get_session(session_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        return session
+
+    @app.post("/api/sessions/{session_id}/versions")
+    async def add_session_version(session_id: str, req: SessionVersionRequest):
+        store = _get_session_store(app)
+        summary = req.geometry_summary or geometry_summary(req.design_state)
+        try:
+            version = store.add_version(
+                session_id=session_id,
+                intent=req.intent,
+                user_instruction=req.user_instruction,
+                design_state=req.design_state.model_dump(),
+                script=req.script,
+                geometry_summary=summary,
+                patch=req.patch,
+                metadata=req.metadata,
+                status=req.status,
+                error=req.error,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        return {"version": version.__dict__}
 
     @app.post("/api/generate")
     async def generate(req: GenerateRequest):
