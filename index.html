@@ -731,6 +731,7 @@ const I18N = {
       loading: "loading design state",
       notReady: "not ready",
       ready: "ready",
+      restored: "restored",
       rendering: "rendering",
       unavailable: "unavailable",
       applyingPatch: "applying CADPatch",
@@ -954,6 +955,7 @@ const I18N = {
       loading: "正在加载设计状态",
       notReady: "未就绪",
       ready: "就绪",
+      restored: "已恢复",
       rendering: "渲染中",
       unavailable: "不可用",
       applyingPatch: "正在应用 CADPatch",
@@ -982,6 +984,8 @@ const DEFAULT_FEATURE_NAMES = {
   center_hole: "Center hole",
   generated_model: "Generated model",
 };
+
+const WORKBENCH_SESSION_STORAGE_KEY = "4yi-cad.workbench.session.v1";
 
 function initialLocale() {
   const stored = localStorage.getItem("4yi-cad.locale");
@@ -1094,6 +1098,100 @@ function dataUrl(mime, b64) {
   return `data:${mime};base64,${b64}`;
 }
 
+function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
+  return {
+    schema_version: "4yi-cad.workbench-session/v1",
+    saved_at: new Date().toISOString(),
+    designState: state.designState,
+    script: state.script,
+    patch: state.patch,
+    logs: state.logs,
+    history: state.history,
+    artifacts: includeHeavyArtifacts ? state.artifacts : {},
+    previewPng: includeHeavyArtifacts ? state.previewPng : null,
+    exportStatus: includeHeavyArtifacts ? state.exportStatus : "notReady",
+    previewMode: state.previewMode,
+    generatedPrompt: state.generatedPrompt,
+    generatedParameters: state.generatedParameters,
+    selectedGeneratedParameterName: state.selectedGeneratedParameterName,
+    viewMode: state.viewMode,
+    selectionMode: state.selectionMode,
+    measureMode: state.measureMode,
+    showBBox: state.showBBox,
+    showDims: state.showDims,
+    exploded: state.exploded,
+    selectedFeatureId: state.selectedFeatureId,
+    bottomTab: state.bottomTab,
+    chatHistory: state.chatHistory,
+    chatMessages: state.chatMessages,
+  };
+}
+
+function persistWorkbenchSession() {
+  if (!state.designState) return;
+  try {
+    localStorage.setItem(WORKBENCH_SESSION_STORAGE_KEY, JSON.stringify(sessionSnapshot()));
+  } catch (error) {
+    try {
+      localStorage.setItem(
+        WORKBENCH_SESSION_STORAGE_KEY,
+        JSON.stringify(sessionSnapshot({ includeHeavyArtifacts: false }))
+      );
+    } catch (innerError) {
+      console.warn("Unable to persist 4yi-cad workbench session", innerError || error);
+    }
+  }
+}
+
+function restoreWorkbenchSession() {
+  try {
+    const raw = localStorage.getItem(WORKBENCH_SESSION_STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (
+      !saved
+      || saved.schema_version !== "4yi-cad.workbench-session/v1"
+      || !saved.designState
+      || saved.designState.schema_version !== "4yi-cad.design/v1"
+    ) {
+      localStorage.removeItem(WORKBENCH_SESSION_STORAGE_KEY);
+      return false;
+    }
+
+    state.designState = saved.designState;
+    state.script = saved.script || "";
+    state.patch = saved.patch || null;
+    state.logs = Array.isArray(saved.logs) && saved.logs.length ? saved.logs : [t("log.workbenchStarting")];
+    state.history = Array.isArray(saved.history) ? saved.history : [];
+    state.artifacts = saved.artifacts && typeof saved.artifacts === "object" ? saved.artifacts : {};
+    state.previewPng = saved.previewPng || null;
+    state.exportStatus = saved.exportStatus || "notReady";
+    state.previewMode = saved.previewMode === "generated" ? "generated" : "design_state";
+    state.generatedPrompt = saved.generatedPrompt || "";
+    state.generatedParameters = Array.isArray(saved.generatedParameters) ? saved.generatedParameters : [];
+    state.selectedGeneratedParameterName = saved.selectedGeneratedParameterName || "";
+    state.viewMode = saved.viewMode || "iso";
+    state.selectionMode = "feature";
+    state.measureMode = saved.measureMode || "distance";
+    state.showBBox = saved.showBBox !== false;
+    state.showDims = saved.showDims !== false;
+    state.exploded = saved.exploded === true;
+    state.selectedFeatureId = saved.selectedFeatureId || state.designState.selected_feature_id || "base_plate";
+    state.designState.selected_feature_id = state.selectedFeatureId;
+    state.bottomTab = saved.bottomTab || "chat";
+    state.chatHistory = Array.isArray(saved.chatHistory) ? saved.chatHistory : [];
+    state.chatMessages = Array.isArray(saved.chatMessages) && saved.chatMessages.length
+      ? saved.chatMessages
+      : [{ role: "assistant", key: "chat.initial" }];
+    state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
+    return true;
+  } catch (error) {
+    localStorage.removeItem(WORKBENCH_SESSION_STORAGE_KEY);
+    console.warn("Unable to restore 4yi-cad workbench session", error);
+    return false;
+  }
+}
+
 async function fetchJson(url, body) {
   const res = await fetch(url, {
     method: body ? "POST" : "GET",
@@ -1109,6 +1207,7 @@ function log(message) {
   state.logs.unshift(message);
   state.logs = state.logs.slice(0, 40);
   renderBottom();
+  persistWorkbenchSession();
 }
 
 function selectedFeature() {
@@ -1798,6 +1897,7 @@ function renderAll() {
   renderProperties();
   renderBottom();
   withIcons();
+  persistWorkbenchSession();
 }
 
 function selectFeature(featureId) {
@@ -1834,7 +1934,11 @@ function setSelectionMode(value) {
   renderAll();
 }
 function setMeasureMode(value) { state.measureMode = value; renderAll(); }
-function setBottomTab(value) { state.bottomTab = value; renderBottom(); }
+function setBottomTab(value) {
+  state.bottomTab = value;
+  renderBottom();
+  persistWorkbenchSession();
+}
 
 async function commitParameter(name, value) {
   const patch = { op: "update_parameter", name, value: clampParameter(name, value) };
@@ -2285,6 +2389,7 @@ function handleAgentEvent(ev) {
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
   }
   renderBottom();
+  persistWorkbenchSession();
 }
 
 function applyViewportTransform() {
@@ -2325,6 +2430,11 @@ async function init() {
   renderStaticText();
   $("commandForm").addEventListener("submit", submitCommand);
   installViewportGestures();
+  if (restoreWorkbenchSession()) {
+    setStatus("restored");
+    renderAll();
+    return;
+  }
   try {
     const initial = await fetchJson("/api/design/initial");
     state.designState = initial.design_state;
