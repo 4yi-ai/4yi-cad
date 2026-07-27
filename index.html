@@ -1153,6 +1153,14 @@ function exportStatusLabel(status = state.exportStatus) {
   return hasTranslation ? t(`status.${status}`) : status;
 }
 
+function hasStepStlArtifacts() {
+  return Boolean(state.artifacts.step && state.artifacts.stl);
+}
+
+function artifactExportStatusLabel() {
+  return hasStepStlArtifacts() ? t("readyValue") : exportStatusLabel();
+}
+
 function chatText(item) {
   return item.key ? t(item.key, item.vars || {}) : item.text;
 }
@@ -1312,7 +1320,7 @@ function renderViewport() {
   $("measureTitle").textContent = generated ? t("preview") : t(`modes.${state.measureMode}`);
   $("measureText").textContent = generated ? (state.previewPng ? t("renderedFromCadQuery") : t("waitingGeneratedPreview")) : measurementText();
   const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
-  $("axisReadout").textContent = generated ? t("stepStlStatus", { status: exportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
+  $("axisReadout").textContent = generated ? t("stepStlStatus", { status: artifactExportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
   $("viewportContent").innerHTML = generated ? renderGeneratedPreview() : renderModelSvg();
   applyViewportTransform();
 }
@@ -1543,7 +1551,7 @@ function renderProperties() {
         <h3>${icon("box")} ${escapeHtml(t("artifacts"))}</h3>
         <div class="kv-list">
           <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("waiting"))}</strong></div>
-          <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? escapeHtml(t("readyValue")) : escapeHtml(exportStatusLabel())}</strong></div>
+          <div class="kv"><span>STEP / STL</span><strong>${escapeHtml(artifactExportStatusLabel())}</strong></div>
           <div class="kv"><span>${escapeHtml(t("featureTree"))}</span><strong>${escapeHtml(t("notAvailable"))}</strong></div>
         </div>
       </section>
@@ -1577,7 +1585,7 @@ function renderProperties() {
       <h3>${icon("box")} ${escapeHtml(t("regeneration"))}</h3>
       <div class="kv-list">
         <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("svgPreview"))}</strong></div>
-        <div class="kv"><span>STEP / STL</span><strong>${state.artifacts.step && state.artifacts.stl ? escapeHtml(t("readyValue")) : escapeHtml(exportStatusLabel())}</strong></div>
+        <div class="kv"><span>STEP / STL</span><strong>${escapeHtml(artifactExportStatusLabel())}</strong></div>
         <div class="kv"><span>${escapeHtml(t("patchMode"))}</span><strong>${state.patch?.op || escapeHtml(t("none"))}</strong></div>
       </div>
     </section>
@@ -2076,12 +2084,14 @@ function handleAgentEvent(ev) {
   }
   if (ev.type === "artifact") {
     state.artifacts[ev.format] = ev.data_b64;
+    if (hasStepStlArtifacts()) state.exportStatus = "ready";
     log(t("log.artifactReady", { format: ev.format }));
   }
   if (ev.type === "error") {
     log(ev.message);
   }
   if (ev.type === "done") {
+    if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
     setStatus(ev.ok ? "done" : "failed");
     addHistory(ev.ok ? t("history.agentGeneration") : t("history.agentGenerationFailed"), ev.ok ? t("history.agentDetail") : t("history.agentFailedDetail"));
     state.chatMessages.unshift({ role: "assistant", key: ev.ok ? "chat.generationOk" : "chat.generationBad" });
