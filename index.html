@@ -2297,6 +2297,15 @@ function parseConversationalPatch(text) {
   return { op: "update_parameter", name: found[0], value: clampParameter(found[0], value) };
 }
 
+function shouldRouteToAgent(text) {
+  const normalized = text.toLowerCase();
+  if (/\b(freecad|fcstd|techdraw)\b/.test(normalized)) return true;
+  if (/\b(step|stl|iges|brep|obj|gltf)\b|导出|输出|导入/.test(normalized)) return true;
+  if (/生成|创建|新建|建模|制作|做一个|画一个|\b(create|generate|make|model|export|import)\b/.test(normalized)) return true;
+  if (/\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?/.test(normalized)) return true;
+  return false;
+}
+
 function parseGeneratedParameterPatch(text) {
   const params = state.generatedParameters || [];
   if (!params.length) return null;
@@ -2419,8 +2428,9 @@ async function submitCommand(event) {
   const input = $("commandInput");
   const text = input.value.trim();
   if (!text) return;
-  const generatedPatch = state.previewMode === "generated" ? parseGeneratedParameterPatch(text) : null;
-  const patch = state.previewMode === "generated" ? null : parseConversationalPatch(text);
+  const useAgent = shouldRouteToAgent(text);
+  const generatedPatch = !useAgent && state.previewMode === "generated" ? parseGeneratedParameterPatch(text) : null;
+  const patch = !useAgent && state.previewMode !== "generated" ? parseConversationalPatch(text) : null;
   input.value = "";
   state.chatMessages.unshift({ role: "user", text });
   setBottomTab("chat");
