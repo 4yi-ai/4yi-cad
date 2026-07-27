@@ -638,6 +638,7 @@ const I18N = {
       agent: "CAD agent",
       initial: "Ready for CAD changes. Parameter edits use CADPatch; new-part prompts use the CAD agent.",
       appliedPatch: "Applied CADPatch: {name} = {value} mm.",
+      appliedGeneratedParameter: "Updated generated parameter: {name} = {value} {unit}.",
       generationFailed: "Generation failed: {message}",
       generationOk: "Generated a CAD script and available preview/artifacts.",
       generationBad: "Generation failed. See Logs for details.",
@@ -868,6 +869,7 @@ const I18N = {
       agent: "CAD agent",
       initial: "已准备好处理 CAD 修改。参数编辑使用 CADPatch；新零件提示词交给 CAD agent。",
       appliedPatch: "已应用 CADPatch：{name} = {value} mm。",
+      appliedGeneratedParameter: "已更新生成模型参数：{name} = {value} {unit}。",
       generationFailed: "生成失败：{message}",
       generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
       generationBad: "生成失败。请查看日志。",
@@ -1756,7 +1758,7 @@ async function commitParameter(name, value) {
 
 async function commitGeneratedParameter(name, rawValue) {
   const value = Number(rawValue);
-  if (!Number.isFinite(value) || !state.script) return;
+  if (!Number.isFinite(value) || !state.script) return false;
   const param = (state.generatedParameters || []).find((item) => item.name === name);
   const unit = param ? generatedParameterUnit(param) : t("unitMm");
   const previous = {
@@ -1793,6 +1795,7 @@ async function commitGeneratedParameter(name, rawValue) {
     );
     log(t("log.scriptParameterUpdated", { name, value: formatNumber(value), unit }));
     setStatus("previewExportReady");
+    return true;
   } catch (error) {
     state.script = previous.script;
     state.previewPng = previous.previewPng;
@@ -1802,6 +1805,7 @@ async function commitGeneratedParameter(name, rawValue) {
     state.patch = previous.patch;
     setStatus("patchFailed");
     log(t("log.scriptPatchFailed", { message: error.message }));
+    return false;
   } finally {
     $("applyButton").disabled = false;
     renderAll();
@@ -1961,6 +1965,113 @@ function parseConversationalPatch(text) {
   return { op: "update_parameter", name: found[0], value: clampParameter(found[0], value) };
 }
 
+function parseGeneratedParameterPatch(text) {
+  const params = state.generatedParameters || [];
+  if (!params.length) return null;
+  const exact = text.match(/\b([A-Za-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (exact) {
+    const target = params.find((param) => param.name.toLowerCase() === exact[1].toLowerCase());
+    if (target) return { name: target.name, value: Number(exact[2]) };
+  }
+
+  const value = extractCommandValue(text);
+  if (value === null) return null;
+  const target = bestGeneratedParameterMatch(text, params);
+  return target ? { name: target.name, value } : null;
+}
+
+function bestGeneratedParameterMatch(text, params) {
+  const normalized = text.toLowerCase();
+  const compactText = normalized.replace(/[\s_-]+/g, "");
+  const dimension = requestedDimension(normalized);
+  let best = null;
+  for (const param of params) {
+    const name = String(param.name || "");
+    const lowerName = name.toLowerCase();
+    const label = generatedParameterLabel(param).toLowerCase();
+    const compactName = lowerName.replace(/[\s_-]+/g, "");
+    let score = 0;
+
+    if (normalized.includes(lowerName) || compactText.includes(compactName)) score += 120;
+    score += componentScore(normalized, lowerName);
+    if (dimension) score += dimensionScore(lowerName, label, dimension);
+    if (dimension === "length" || dimension === "width" || dimension === "depth") {
+      score += primarySizeBonus(param, params);
+    }
+    if (dimension === "height") score += verticalSizeBonus(param, params);
+
+    if (!best || score > best.score) best = { param, score };
+  }
+  return best && best.score >= 30 ? best.param : null;
+}
+
+function requestedDimension(normalized) {
+  const checks = [
+    ["diameter", /直径|孔径|diam|diameter/],
+    ["radius", /半径|圆角|radius|rad/],
+    ["thickness", /厚度|厚|thick|thickness/],
+    ["height", /高度|高|height/],
+    ["depth", /深度|进深|depth|deep/],
+    ["gap", /间隙|间距|缝|gap|spacing|space/],
+    ["count", /数量|个数|几个|count|number|qty|num/],
+    ["length", /长度|长|length|long/],
+    ["width", /宽度|宽|width|wide/],
+  ];
+  return checks.find(([, pattern]) => pattern.test(normalized))?.[0] || null;
+}
+
+function componentScore(normalized, name) {
+  const checks = [
+    [/沙发|sofa/, /(^|_)sofa($|_)/],
+    [/座|坐垫|座垫|seat/, /seat|cushion/],
+    [/靠背|背|back/, /back/],
+    [/扶手|arm/, /arm/],
+    [/腿|脚|leg/, /leg/],
+    [/垫|cushion/, /cushion/],
+  ];
+  return checks.reduce((total, [textPattern, namePattern]) => {
+    return total + (textPattern.test(normalized) && namePattern.test(name) ? 35 : 0);
+  }, 0);
+}
+
+function dimensionScore(name, label, dimension) {
+  const haystack = `${name} ${label}`;
+  const byDimension = {
+    length: [/length|len|long|(?:^|_)l(?:$|_|\b)|\bl\b/, 65, /width|(?:^|_)w(?:$|_|\b)|\bw\b/, 35],
+    width: [/width|wide|(?:^|_)w(?:$|_|\b)|\bw\b/, 65, /length|len|(?:^|_)l(?:$|_|\b)|\bl\b/, 25],
+    depth: [/depth|deep|(?:^|_)d(?:$|_|\b)|\bd\b/, 65],
+    height: [/height|(?:^|_)h(?:$|_|\b)|\bh\b/, 65],
+    thickness: [/thick|thickness|(?:^|_)t(?:$|_|\b)|\bt\b/, 65],
+    diameter: [/diam|dia|hole|(?:^|_)d(?:$|_|\b)|\bd\b/, 65],
+    radius: [/radius|rad|(?:^|_)r(?:$|_|\b)|\br\b/, 65],
+    gap: [/gap|spacing|space/, 65],
+    count: [/count|num|qty|(?:^|_)n(?:$|_|\b)|\bn\b/, 65],
+  };
+  const rules = byDimension[dimension] || [];
+  let score = 0;
+  for (let i = 0; i < rules.length; i += 2) {
+    if (rules[i].test(haystack)) score += rules[i + 1];
+  }
+  return score;
+}
+
+function primarySizeBonus(param, params) {
+  const values = params.map((item) => Number(item.value)).filter(Number.isFinite);
+  const max = Math.max(...values, 1);
+  const value = Number(param.value);
+  return Number.isFinite(value) ? Math.min(25, (value / max) * 25) : 0;
+}
+
+function verticalSizeBonus(param, params) {
+  const heights = params
+    .filter((item) => /height|(^|_)h($|_)/.test(String(item.name || "").toLowerCase()))
+    .map((item) => Number(item.value))
+    .filter(Number.isFinite);
+  const max = Math.max(...heights, 1);
+  const value = Number(param.value);
+  return Number.isFinite(value) ? Math.min(20, (value / max) * 20) : 0;
+}
+
 function extractCommandValue(text) {
   const unitMatches = [...text.matchAll(/(-?\d+(?:\.\d+)?)\s*(?:mm|毫米)/gi)];
   if (unitMatches.length) return Number(unitMatches[unitMatches.length - 1][1]);
@@ -1976,10 +2087,30 @@ async function submitCommand(event) {
   const input = $("commandInput");
   const text = input.value.trim();
   if (!text) return;
-  const patch = parseConversationalPatch(text);
+  const generatedPatch = state.previewMode === "generated" ? parseGeneratedParameterPatch(text) : null;
+  const patch = state.previewMode === "generated" ? null : parseConversationalPatch(text);
   input.value = "";
   state.chatMessages.unshift({ role: "user", text });
   setBottomTab("chat");
+  if (generatedPatch) {
+    const ok = await commitGeneratedParameter(generatedPatch.name, generatedPatch.value);
+    if (ok) {
+      const param = (state.generatedParameters || []).find((item) => item.name === generatedPatch.name);
+      const unit = param ? generatedParameterUnit(param) : t("unitMm");
+      state.chatMessages.unshift({
+        role: "assistant",
+        key: "chat.appliedGeneratedParameter",
+        vars: {
+          name: generatedPatch.name,
+          value: formatNumber(generatedPatch.value),
+          unit,
+        },
+      });
+      setBottomTab("chat");
+      renderAll();
+    }
+    return;
+  }
   if (patch) {
     await applyPatches(
       [patch],
