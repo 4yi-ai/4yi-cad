@@ -22,6 +22,10 @@ from app.cad.worker import _b64_file, render_preview_isolated
 
 FREECAD_RESULT_PREFIX = "__4YI_FREECAD_RESULT__"
 FREECADCMD_CANDIDATES = ("FreeCADCmd", "freecadcmd")
+FREECADCMD_MACOS_CANDIDATES = (
+    "/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd",
+    "/Applications/FreeCAD.app/Contents/MacOS/FreeCADCmd",
+)
 
 
 HARNESS = r'''
@@ -135,6 +139,9 @@ def resolve_freecadcmd() -> str | None:
         resolved = shutil.which(candidate)
         if resolved:
             return resolved
+    for candidate in FREECADCMD_MACOS_CANDIDATES:
+        if Path(candidate).is_file():
+            return candidate
     return None
 
 

@@ -1,4 +1,3 @@
-import shutil
 import sys
 
 import pytest
@@ -12,6 +11,7 @@ PY = sys.executable
 def test_run_freecad_script_reports_missing_binary(monkeypatch):
     monkeypatch.delenv("FREECADCMD_BINARY", raising=False)
     monkeypatch.setattr("app.cad.freecad_worker.shutil.which", lambda name: None)
+    monkeypatch.setattr("app.cad.freecad_worker.FREECADCMD_MACOS_CANDIDATES", ())
 
     result = run_freecad_script("result = None")
 
@@ -64,7 +64,7 @@ def test_resolve_freecadcmd_prefers_explicit_env(monkeypatch):
 
 
 @pytest.mark.skipif(
-    not (shutil.which("FreeCADCmd") or shutil.which("freecadcmd")),
+    resolve_freecadcmd() is None,
     reason="FreeCADCmd is not installed locally",
 )
 def test_local_freecadcmd_smoke_exports_step_and_stl():
