@@ -18,8 +18,12 @@ Single FastAPI process, single origin, single container.
   rlimits, wall-clock deadline. Runs the worker in an isolated subprocess.
 - `app/cad/worker.py` — execs the CadQuery script, exports STEP+STL, renders a
   preview PNG. Untrusted-code-facing; the container is the isolation boundary.
+- `app/cad/freecad.py` + `app/cad/freecad_worker.py` — P2.0 headless FreeCADCmd
+  smoke path, still single-container: FastAPI invokes a sandboxed Python worker,
+  which invokes `FreeCADCmd` to run FreeCAD Python and export STEP/STL.
 - `app/cad/preview.py` — PyVista offscreen render (xvfb/mesa).
-- `app/main.py` — `/healthz` (trivial, always 200), `/api/generate` (SSE), SPA.
+- `app/main.py` — `/healthz` (trivial, always 200), `/api/generate` (SSE),
+  `/api/freecad/smoke` (diagnostic), SPA.
 - `app/session_store.py` — P1.5 SQLite session/version metadata store:
   `DesignState` JSON, scripts, patches, geometry summaries, and version metadata.
   Large STEP/STL/PNG artifacts are not stored in SQLite.
@@ -47,11 +51,23 @@ the child env**, CPU/address-space rlimits, wall-clock deadline. Network egress
 blocking, non-root, read-only rootfs and seccomp are applied by the container /
 k8s securityContext (TMPDIR must be a writable tmpfs/emptyDir).
 
+P2.0 keeps FreeCAD in the same container for import simplicity. This is not a
+multi-service worker split yet; generated FreeCAD Python still runs behind the
+same scrubbed-env sandbox path.
+
 ## Develop
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/pytest            # unit tests (no cadquery/network needed)
+```
+
+Local FreeCAD smoke is optional. If `FreeCADCmd` is installed locally (or
+`FREECADCMD_BINARY=/path/to/FreeCADCmd` is set), the skipped smoke test exercises
+real STEP/STL export:
+
+```bash
+.venv/bin/pytest tests/test_freecad_worker.py -q
 ```
 
 ## Local container smoke (end-to-end, needs Docker)
@@ -67,6 +83,7 @@ docker run --rm -p 8080:8080 \
   4yi-cad
 # then open http://localhost:8080 and generate a model
 curl -s localhost:8080/healthz     # {"status":"ok"}
+curl -s localhost:8080/api/freecad/smoke
 ```
 
 ## Install as a 4yi app

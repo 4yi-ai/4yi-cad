@@ -42,7 +42,7 @@ class SandboxResult:
 
 def _safe_env(workdir: str) -> dict[str, str]:
     """Allowlisted environment — inherits NOTHING that isn't listed here."""
-    return {
+    env = {
         "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
         "HOME": workdir,
         "TMPDIR": workdir,
@@ -50,6 +50,10 @@ def _safe_env(workdir: str) -> dict[str, str]:
         "PYTHONPATH": _REPO_ROOT,
         "PYTHONUNBUFFERED": "1",
     }
+    freecadcmd = os.environ.get("FREECADCMD_BINARY")
+    if freecadcmd:
+        env["FREECADCMD_BINARY"] = freecadcmd
+    return env
 
 
 def _rlimit_preexec(cpu_seconds: int | None, address_space_mb: int | None):

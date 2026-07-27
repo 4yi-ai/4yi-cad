@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.agent.loop import ExecResult
 from app.cad.design_state import default_design_state, render_cadquery_script
+from app.cad.runner import SandboxResult
 from app.gateway import ChatCompletion
 from app.main import create_app
 from app.session_store import SqliteSessionStore
@@ -106,6 +107,48 @@ def test_session_api_returns_404_for_missing_session(tmp_path):
     )
 
     assert resp.status_code == 404
+
+
+def test_freecad_smoke_endpoint_reports_sandbox_result(monkeypatch):
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.0.0",
+                "exports": {"step": "STEP", "stl": "STL"},
+                "preview_png_b64": None,
+            },
+        )
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+
+    resp = _client().get("/api/freecad/smoke")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "ok": True,
+        "freecad_version": "1.0.0",
+        "exports": ["step", "stl"],
+        "preview": False,
+        "error": None,
+    }
+
+
+def test_freecad_smoke_endpoint_reports_missing_runtime(monkeypatch):
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(success=False, error="FreeCADCmd unavailable")
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+
+    resp = _client().get("/api/freecad/smoke")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "ok": False,
+        "error": "FreeCADCmd unavailable",
+        "timed_out": False,
+    }
 
 
 def test_generate_streams_sse_events():

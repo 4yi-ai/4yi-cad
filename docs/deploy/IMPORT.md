@@ -30,6 +30,8 @@ the edited wizard proposal should match.
 ## Pre-publish checklist
 
 - [ ] `/healthz` returns 200 fast, independent of any render (liveness safe)
+- [ ] `/api/freecad/smoke` returns `ok:true` in the built container (single-container
+      FreeCADCmd path is installed and can export STEP/STL)
 - [ ] gateway calls hit `${OPENAI_BASE_URL}/chat/completions` (not `/responses`, not `api.openai.com`)
 - [ ] self-correction (V1) uses multiple <290s calls, never one long call
 - [ ] `/tmp` is a writable tmpfs; rootfs read-only; runs as non-root

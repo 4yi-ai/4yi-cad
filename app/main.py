@@ -29,6 +29,7 @@ from app.cad.design_state import (
     geometry_summary,
     render_cadquery_script,
 )
+from app.cad.freecad import MINIMAL_FREECAD_SMOKE_SCRIPT, run_freecad_sandboxed
 from app.cad.script_params import (
     ScriptParameterPatch,
     apply_script_parameter_patches,
@@ -215,6 +216,30 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
         return {"version": version.__dict__}
+
+    @app.get("/api/freecad/smoke")
+    async def freecad_smoke():
+        res = await asyncio.to_thread(
+            run_freecad_sandboxed,
+            MINIMAL_FREECAD_SMOKE_SCRIPT,
+            timeout_s=120,
+            cpu_seconds=90,
+            address_space_mb=4096,
+        )
+        if not res.success or not isinstance(res.result, dict):
+            return {
+                "ok": False,
+                "error": res.error or "FreeCAD sandbox execution failed",
+                "timed_out": res.timed_out,
+            }
+        result = res.result
+        return {
+            "ok": bool(result.get("ok")),
+            "freecad_version": result.get("freecad_version"),
+            "exports": sorted((result.get("exports") or {}).keys()),
+            "preview": bool(result.get("preview_png_b64")),
+            "error": result.get("error"),
+        }
 
     @app.post("/api/generate")
     async def generate(req: GenerateRequest):

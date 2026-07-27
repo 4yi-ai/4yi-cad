@@ -1,9 +1,13 @@
-# 4yi-cad — single container: FastAPI + CadQuery + PyVista (offscreen), served on $PORT.
+# 4yi-cad — single container: FastAPI + CadQuery + FreeCADCmd + PyVista
+# (offscreen), served on $PORT.
 # Built by 4yi CodeBuild -> ECR from the public repo; deployed per-consumer-org.
 FROM python:3.11-slim
 
-# System libs for VTK/PyVista offscreen rendering and OpenCASCADE (cadquery-ocp).
+# System libs for VTK/PyVista offscreen rendering, OpenCASCADE (cadquery-ocp),
+# and P2.0 headless FreeCAD smoke. This stays single-container for now; the
+# FastAPI service invokes FreeCADCmd through the existing sandbox subprocess path.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      freecad \
       libgl1 \
       libgl1-mesa-dri \
       libglu1-mesa \

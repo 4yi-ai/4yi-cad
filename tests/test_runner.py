@@ -47,6 +47,27 @@ def test_gateway_token_and_xclaw_env_are_scrubbed(monkeypatch):
     }
 
 
+def test_freecadcmd_binary_env_is_allowlisted_but_secrets_still_scrubbed(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "xclaw-bsl-secret")
+    monkeypatch.setenv("FREECADCMD_BINARY", "/opt/freecad/bin/FreeCADCmd")
+
+    worker = [
+        PY,
+        "-c",
+        "import os,json;print(json.dumps({"
+        "'freecadcmd':os.environ.get('FREECADCMD_BINARY'),"
+        "'has_key':'OPENAI_API_KEY' in os.environ}))",
+    ]
+
+    res = run_sandboxed({}, timeout_s=5, worker_argv=worker)
+
+    assert res.success is True
+    assert res.result == {
+        "freecadcmd": "/opt/freecad/bin/FreeCADCmd",
+        "has_key": False,
+    }
+
+
 def test_wall_clock_timeout_kills_runaway_worker():
     worker = [PY, "-c", "import time;time.sleep(30)"]
 
