@@ -281,6 +281,7 @@
 
   .section { padding: 14px; border-bottom: 1px solid var(--line); }
   .section h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .section-note { margin: -4px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.35; }
   .param-row {
     min-height: 42px;
     display: grid;
@@ -291,6 +292,7 @@
   }
   .param-row:first-of-type { border-top: 0; }
   .param-row label { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .param-row label span { color: var(--muted); font-weight: 550; }
   .unit { font-size: 12px; color: var(--muted); }
   .kv-list { display: grid; gap: 8px; }
   .kv {
@@ -525,6 +527,9 @@ const I18N = {
     featureTree: "Feature tree",
     notAvailable: "not available",
     parameters: "Parameters",
+    scriptParameters: "Script parameters",
+    scriptParametersHint: "Editable numeric variables extracted from the generated CadQuery script.",
+    noScriptParameters: "No editable numeric variables found in this generated script.",
     regeneration: "Regeneration",
     patchMode: "Patch mode",
     meshRender: "mesh render",
@@ -673,6 +678,8 @@ const I18N = {
       agentGenerationFailed: "Agent generation failed",
       agentDetail: "Generated preview and artifacts",
       agentFailedDetail: "See logs for failure",
+      scriptParameter: "Script parameter: {name}",
+      scriptParameterDetail: "{name} = {value} {unit}",
     },
     log: {
       workbenchStarting: "Workbench starting",
@@ -685,6 +692,9 @@ const I18N = {
       retry: "Retry {attempt}: {message}",
       renderedPreview: "Rendered preview PNG",
       artifactReady: "Artifact ready: {format}",
+      scriptParameterUpdated: "Updated script parameter: {name} = {value} {unit}",
+      scriptPatchFailed: "Script parameter update failed: {message}",
+      streamEndedWithoutDone: "Generation stream ended before a final done event",
       unknownError: "unknown error",
     },
     status: {
@@ -747,6 +757,9 @@ const I18N = {
     featureTree: "特征树",
     notAvailable: "不可用",
     parameters: "参数",
+    scriptParameters: "脚本参数",
+    scriptParametersHint: "从生成的 CadQuery 脚本中提取出的可编辑数值变量。",
+    noScriptParameters: "这个生成脚本里没有找到可编辑的数值变量。",
     regeneration: "重新生成",
     patchMode: "补丁模式",
     meshRender: "网格渲染",
@@ -895,6 +908,8 @@ const I18N = {
       agentGenerationFailed: "Agent 生成失败",
       agentDetail: "已生成预览和产物",
       agentFailedDetail: "查看日志获取失败原因",
+      scriptParameter: "脚本参数：{name}",
+      scriptParameterDetail: "{name} = {value} {unit}",
     },
     log: {
       workbenchStarting: "工作台启动中",
@@ -907,6 +922,9 @@ const I18N = {
       retry: "重试 {attempt}：{message}",
       renderedPreview: "已渲染预览 PNG",
       artifactReady: "产物就绪：{format}",
+      scriptParameterUpdated: "已更新脚本参数：{name} = {value} {unit}",
+      scriptPatchFailed: "脚本参数更新失败：{message}",
+      streamEndedWithoutDone: "生成流结束但没有收到最终 done 事件",
       unknownError: "未知错误",
     },
     status: {
@@ -971,6 +989,7 @@ const state = {
   statusKey: "loading",
   previewMode: "design_state",
   generatedPrompt: "",
+  generatedParameters: [],
   viewMode: "iso",
   selectionMode: "object",
   measureMode: "distance",
@@ -1113,6 +1132,22 @@ function parameterLabel(name) {
   return t(`params.${name}`) || name;
 }
 
+function generatedParameterLabel(param) {
+  return param.label || String(param.name || "").replace(/_/g, " ");
+}
+
+function generatedParameterUnit(param) {
+  return param.unit || "";
+}
+
+function safeDomId(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function jsString(value) {
+  return JSON.stringify(String(value || ""));
+}
+
 function exportStatusLabel(status = state.exportStatus) {
   const hasTranslation = i18nPath(currentLocale, `status.${status}`) || i18nPath("en", `status.${status}`);
   return hasTranslation ? t(`status.${status}`) : status;
@@ -1205,19 +1240,28 @@ function renderTree() {
   const ds = state.designState;
   if (!ds) return;
   if (state.previewMode === "generated") {
+    const params = state.generatedParameters || [];
     $("featureTree").innerHTML = `
-      <button class="tree-item active" style="padding-left:8px" type="button">
+      <button class="tree-item active" style="padding-left:8px" type="button" onclick="showGeneratedModel()">
         <span>⌄</span>${icon("code")}<span class="name">${escapeHtml(t("generatedDesign"))}</span>
       </button>
-      <button class="tree-item active" style="padding-left:34px" type="button">
+      <button class="tree-item active" style="padding-left:34px" type="button" onclick="showGeneratedModel()">
         <span style="width:12px"></span>${icon("box")}<span class="name">${escapeHtml(state.generatedPrompt || t("agentModel"))}</span>
       </button>
+      <button class="tree-item" style="padding-left:60px" type="button" onclick="showGeneratedParameters()">
+        <span style="width:12px"></span>${icon("ruler")}<span class="name">${escapeHtml(t("scriptParameters"))}</span><span>${params.length}</span>
+      </button>
+      ${params.slice(0, 18).map((param) => `
+        <button class="tree-item" style="padding-left:84px" type="button" onclick="focusGeneratedParameter(${escapeHtml(jsString(param.name))})">
+          <span style="width:12px"></span>${icon("ruler")}<span class="name">${escapeHtml(param.name)}</span>
+        </button>
+      `).join("")}
       <button class="tree-item" style="padding-left:60px" type="button" onclick="setBottomTab('script')">
         <span style="width:12px"></span>${icon("code")}<span class="name">${escapeHtml(t("cadqueryScript"))}</span>
       </button>
     `;
     $("activeFeature").textContent = t("generatedModel");
-    $("latestPatch").textContent = "agent_generation";
+    $("latestPatch").textContent = params.length ? `script_parameters:${params.length}` : "agent_generation";
     return;
   }
   const enabled = enabledFeatureIds();
@@ -1487,6 +1531,7 @@ function renderProperties() {
           <button class="icon-button" type="button" title="${escapeHtml(t("backToDesignState"))}" onclick="showParametricDesign()">${icon("undo")}</button>
         </div>
       </div>
+      ${renderGeneratedParameterSection()}
       <section class="section">
         <h3>${icon("code")} ${escapeHtml(t("generatedSource"))}</h3>
         <div class="kv-list">
@@ -1540,6 +1585,27 @@ function renderProperties() {
   $("renameInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") renameFeature();
   });
+}
+
+function renderGeneratedParameterSection() {
+  const params = state.generatedParameters || [];
+  return `<section class="section">
+    <h3>${icon("ruler")} ${escapeHtml(t("scriptParameters"))}</h3>
+    <p class="section-note">${escapeHtml(params.length ? t("scriptParametersHint") : t("noScriptParameters"))}</p>
+    ${params.map((param) => generatedParamRow(param)).join("")}
+  </section>`;
+}
+
+function generatedParamRow(param) {
+  const name = String(param.name || "");
+  const value = Number(param.value);
+  const unit = generatedParameterUnit(param);
+  const id = `generated-param-${safeDomId(name)}`;
+  return `<div class="param-row">
+    <label for="${escapeHtml(id)}" title="${escapeHtml(name)}">${escapeHtml(generatedParameterLabel(param))} <span>${escapeHtml(name)}</span></label>
+    <input class="param-input" id="${escapeHtml(id)}" type="number" step="0.5" value="${escapeHtml(formatNumber(value))}" onchange="commitGeneratedParameter(${escapeHtml(jsString(name))}, this.value)" />
+    <span class="unit">${escapeHtml(unit)}</span>
+  </div>`;
 }
 
 function paramRow(name) {
@@ -1680,6 +1746,60 @@ async function commitParameter(name, value) {
   );
 }
 
+async function commitGeneratedParameter(name, rawValue) {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || !state.script) return;
+  const param = (state.generatedParameters || []).find((item) => item.name === name);
+  const unit = param ? generatedParameterUnit(param) : t("unitMm");
+  const previous = {
+    script: state.script,
+    previewPng: state.previewPng,
+    artifacts: { ...state.artifacts },
+    generatedParameters: [...(state.generatedParameters || [])],
+    exportStatus: state.exportStatus,
+    patch: state.patch,
+  };
+
+  $("applyButton").disabled = true;
+  state.patch = { op: "update_script_parameter", name, value };
+  state.exportStatus = "rendering";
+  state.previewPng = null;
+  setStatus("updatingPreview");
+  renderAll();
+
+  try {
+    const rendered = await fetchJson("/api/script/patch", {
+      script: previous.script,
+      patches: [{ name, value }],
+    });
+    if (!rendered.ok) throw new Error(rendered.error || t("log.unknownError"));
+    state.previewMode = "generated";
+    state.script = rendered.script;
+    state.generatedParameters = rendered.parameters || [];
+    state.previewPng = rendered.preview_png_b64 || null;
+    state.artifacts = rendered.exports || {};
+    state.exportStatus = "ready";
+    addHistory(
+      t("history.scriptParameter", { name }),
+      t("history.scriptParameterDetail", { name, value: formatNumber(value), unit })
+    );
+    log(t("log.scriptParameterUpdated", { name, value: formatNumber(value), unit }));
+    setStatus("previewExportReady");
+  } catch (error) {
+    state.script = previous.script;
+    state.previewPng = previous.previewPng;
+    state.artifacts = previous.artifacts;
+    state.generatedParameters = previous.generatedParameters;
+    state.exportStatus = previous.exportStatus;
+    state.patch = previous.patch;
+    setStatus("patchFailed");
+    log(t("log.scriptPatchFailed", { message: error.message }));
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
+}
+
 async function applyPatches(patches, label, detail) {
   state.previewMode = "design_state";
   state.generatedPrompt = "";
@@ -1734,6 +1854,28 @@ function showParametricDesign() {
   state.previewMode = "design_state";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   renderAll();
+}
+
+function showGeneratedModel() {
+  state.previewMode = "generated";
+  renderAll();
+}
+
+function showGeneratedParameters() {
+  state.previewMode = "generated";
+  renderAll();
+  const first = state.generatedParameters?.[0];
+  if (first) focusGeneratedParameter(first.name);
+}
+
+function focusGeneratedParameter(name) {
+  state.previewMode = "generated";
+  renderProperties();
+  const input = $(`generated-param-${safeDomId(name)}`);
+  if (input) {
+    input.focus();
+    input.select();
+  }
 }
 
 async function toggleFeature() {
@@ -1847,6 +1989,7 @@ async function generateFromPrompt(prompt) {
   $("applyButton").disabled = true;
   state.previewMode = "generated";
   state.generatedPrompt = prompt;
+  state.generatedParameters = [];
   state.previewPng = null;
   state.artifacts = {};
   state.exportStatus = "notReady";
@@ -1866,7 +2009,13 @@ async function generateFromPrompt(prompt) {
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    await readSse(resp, prompt);
+    const sawDone = await readSse(resp, prompt);
+    if (!sawDone) {
+      setStatus("failed");
+      log(t("log.streamEndedWithoutDone"));
+      state.chatMessages.unshift({ role: "assistant", key: "chat.generationBad" });
+      if (!state.previewPng) state.previewMode = "design_state";
+    }
   } catch (error) {
     setStatus("generationFailed");
     log(t("chat.generationFailed", { message: error.message }));
@@ -1883,6 +2032,15 @@ async function readSse(resp, prompt) {
   const decoder = new TextDecoder();
   let buffer = "";
   let lastScript = null;
+  let sawDone = false;
+  const processFrame = (frame) => {
+    const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
+    if (!dataLine) return;
+    const ev = JSON.parse(dataLine.slice(6));
+    handleAgentEvent(ev);
+    if (ev.type === "script") lastScript = ev.script;
+    if (ev.type === "done") sawDone = true;
+  };
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -1890,23 +2048,23 @@ async function readSse(resp, prompt) {
     const frames = buffer.split("\n\n");
     buffer = frames.pop();
     for (const frame of frames) {
-      const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
-      if (!dataLine) continue;
-      const ev = JSON.parse(dataLine.slice(6));
-      handleAgentEvent(ev);
-      if (ev.type === "script") lastScript = ev.script;
+      processFrame(frame);
     }
   }
+  buffer += decoder.decode();
+  if (buffer.trim()) processFrame(buffer);
   state.chatHistory.push({ role: "user", content: prompt });
   if (lastScript) {
     state.chatHistory.push({ role: "assistant", content: "```python\n" + lastScript + "\n```" });
   }
+  return sawDone;
 }
 
 function handleAgentEvent(ev) {
   if (ev.type === "status") setStatus(ev.message);
   if (ev.type === "script") {
     state.script = ev.script;
+    state.generatedParameters = Array.isArray(ev.parameters) ? ev.parameters : [];
     log(t("log.producedScript", { attempt: ev.attempt || 1 }));
   }
   if (ev.type === "retry") log(t("log.retry", { attempt: ev.attempt, message: ev.message }));
@@ -2018,12 +2176,16 @@ window.setSelectionMode = setSelectionMode;
 window.setMeasureMode = setMeasureMode;
 window.setBottomTab = setBottomTab;
 window.commitParameter = commitParameter;
+window.commitGeneratedParameter = commitGeneratedParameter;
 window.renameFeature = renameFeature;
 window.toggleFeature = toggleFeature;
 window.rollbackFeature = rollbackFeature;
 window.restoreHead = restoreHead;
 window.deleteFeature = deleteFeature;
 window.showParametricDesign = showParametricDesign;
+window.showGeneratedModel = showGeneratedModel;
+window.showGeneratedParameters = showGeneratedParameters;
+window.focusGeneratedParameter = focusGeneratedParameter;
 window.toggleLocale = toggleLocale;
 
 init();

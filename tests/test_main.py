@@ -64,6 +64,7 @@ def test_generate_streams_sse_events():
     assert "event: done" in body
     # the injected script should appear in the streamed script event
     assert "result = box(1,1,1)" in body
+    assert '"parameters"' in body
 
 
 def test_generate_requires_prompt():
@@ -148,6 +149,47 @@ def test_design_render_reports_executor_failure_without_500():
     assert body["ok"] is False
     assert body["exports"] == {}
     assert "sandbox unavailable" in body["error"]
+
+
+def test_script_patch_updates_generated_script_parameter_and_renders():
+    executed = []
+
+    async def execute(script):
+        executed.append(script)
+        return ExecResult(ok=True, preview_png_b64="UE5H", exports={"stl": "mesh"})
+
+    script = (
+        "import cadquery as cq\n"
+        "sofa_length, sofa_depth = 200, 80\n"
+        "seat_height = 38\n"
+        "result = cq.Workplane('XY').box(sofa_length, sofa_depth, seat_height)\n"
+    )
+
+    resp = _client(execute=execute).post(
+        "/api/script/patch",
+        json={"script": script, "patches": [{"name": "sofa_depth", "value": 95}]},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert "sofa_length, sofa_depth = 200, 95" in body["script"]
+    assert executed == [body["script"]]
+    assert {param["name"]: param["value"] for param in body["parameters"]}["sofa_depth"] == 95
+    assert body["exports"] == {"stl": "mesh"}
+
+
+def test_script_patch_rejects_non_editable_parameter():
+    resp = _client().post(
+        "/api/script/patch",
+        json={
+            "script": "length = 10\nresult = None\n",
+            "patches": [{"name": "width", "value": 20}],
+        },
+    )
+
+    assert resp.status_code == 422
+    assert "unknown or non-editable" in resp.json()["detail"]
 
 
 def test_root_serves_the_spa():

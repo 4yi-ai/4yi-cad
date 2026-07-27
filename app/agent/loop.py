@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import AsyncIterator, Awaitable, Callable
 
 from app.agent.tools import MVP_TOOLS, SYSTEM_PROMPT
+from app.cad.script_params import extract_script_parameters
 
 DEFAULT_MAX_ATTEMPTS = 3
 
@@ -90,7 +91,12 @@ async def run_generation(
                 continue
             break
 
-        yield {"type": "script", "script": script, "attempt": attempt}
+        yield {
+            "type": "script",
+            "script": script,
+            "attempt": attempt,
+            "parameters": extract_script_parameters(script),
+        }
 
         result = await execute(script)
 

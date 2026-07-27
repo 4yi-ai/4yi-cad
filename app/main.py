@@ -28,6 +28,11 @@ from app.cad.design_state import (
     geometry_summary,
     render_cadquery_script,
 )
+from app.cad.script_params import (
+    ScriptParameterPatch,
+    apply_script_parameter_patches,
+    extract_script_parameters,
+)
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
@@ -50,6 +55,16 @@ class DesignPatchRequest(BaseModel):
 
 class DesignRenderRequest(BaseModel):
     design_state: DesignState = Field(default_factory=default_design_state)
+
+
+class ScriptPatchItem(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    value: float
+
+
+class ScriptPatchRequest(BaseModel):
+    script: str = Field(..., min_length=1)
+    patches: list[ScriptPatchItem] = Field(default_factory=list)
 
 
 def _get_gateway(app: FastAPI):
@@ -191,6 +206,34 @@ def create_app(*, gateway=None, execute=None) -> FastAPI:
             "preview_png_b64": result.preview_png_b64,
             "exports": result.exports,
             "geometry_summary": geometry_summary(req.design_state),
+            "error": result.error,
+        }
+
+    @app.post("/api/script/patch")
+    async def script_patch(req: ScriptPatchRequest):
+        execute = _get_execute(app)
+        try:
+            script = apply_script_parameter_patches(
+                req.script,
+                [
+                    ScriptParameterPatch(name=patch.name, value=patch.value)
+                    for patch in req.patches
+                ],
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        try:
+            result = await execute(script)
+        except Exception as exc:  # noqa: BLE001 - script render must not 500 the UI
+            result = ExecResult(ok=False, error=f"sandbox execution failed: {exc}")
+
+        return {
+            "ok": result.ok,
+            "script": script,
+            "parameters": extract_script_parameters(script),
+            "preview_png_b64": result.preview_png_b64,
+            "exports": result.exports,
             "error": result.error,
         }
 
