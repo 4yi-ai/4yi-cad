@@ -1,10 +1,9 @@
 """LLM tool schemas + the domain system prompt.
 
-MVP keeps the tool surface deliberately small — a single CadQuery codegen tool does
-most of the work for regular parametric parts (screws, brackets, enclosures,
-flanges). The system prompt carries a compact CadQuery cookbook + few-shot examples,
-which is the biggest lever on first-shot success since models don't know the API
-deeply. Breadth (assemblies, drawings, FreeCAD import/export) is V2, not MVP.
+The product is AI-first CAD: the model chooses a geometry engine, writes a script,
+and the service executes it headlessly. CadQuery remains the default for compact
+parametric solids; FreeCAD is available for workflows that need FreeCAD's document
+model or import/export surface.
 """
 
 RUN_CADQUERY_TOOL = {
@@ -31,18 +30,55 @@ RUN_CADQUERY_TOOL = {
     },
 }
 
-MVP_TOOLS = [RUN_CADQUERY_TOOL]
+RUN_FREECAD_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "run_freecad",
+        "description": (
+            "Generate or modify a CAD model by writing a headless FreeCAD Python script. "
+            "Use this when the request explicitly needs FreeCAD, FreeCAD documents, "
+            "STEP import/export behavior, TechDraw-style workflows, or FreeCAD APIs. "
+            "The script must create a FreeCAD document/object or assign the final object "
+            "or shape to `result`. It runs headless in a sandbox with no network access."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "script": {
+                    "type": "string",
+                    "description": (
+                        "Complete FreeCAD Python script creating a solid document object "
+                        "or assigning the final object/shape to `result`."
+                    ),
+                }
+            },
+            "required": ["script"],
+        },
+    },
+}
+
+MVP_TOOLS = [RUN_CADQUERY_TOOL, RUN_FREECAD_TOOL]
 
 SYSTEM_PROMPT = """You are a mechanical CAD engineer. Turn the user's request into a
-parametric 3D solid by calling the run_cadquery tool with a complete CadQuery script.
-Do not explain in prose — call the tool.
+parametric 3D solid by calling exactly one CAD execution tool. Do not explain in
+prose - call either run_cadquery or run_freecad.
+
+Engine choice:
+- Prefer run_cadquery for ordinary single-part parametric solids: brackets,
+  plates, enclosures, flanges, furniture blocks, and direct dimension edits.
+- Use run_freecad when the user explicitly asks for FreeCAD, FCStd, TechDraw,
+  import/export behavior, document objects, constraints, or a workflow that is
+  naturally expressed with FreeCAD APIs.
 
 Hard rules:
 - All dimensions are in millimetres.
-- `import cadquery as cq` at the top; assign the FINAL solid to a variable `result`.
+- For CadQuery: `import cadquery as cq` at the top; assign the FINAL solid to a
+  variable named `result`.
+- For FreeCAD: import `FreeCAD` and `Part`; create/recompute a document and assign
+  the final document object or shape to `result`.
 - `result` must be a single, valid solid with positive volume (not an empty sketch).
 - Define dimensions as named variables at the top so the part is parametric.
-- No file I/O, no network, no printing — just build `result`.
+- No file I/O, no network, no printing - just build `result`.
 
 Quick reference:
 - Primitives: cq.Workplane("XY").box(l,w,h) | .circle(r).extrude(h) | .sphere(r)
@@ -53,7 +89,7 @@ Quick reference:
   or .rect(x,y,forConstruction=True).vertices().hole(d) for rectangular hole patterns.
 - Sketch->solid: .polyline([...]).close().extrude(h) | .revolve(angleDegrees)
 
-Example — a bolted flange:
+Example - a bolted flange:
 import cadquery as cq
 od, thickness, bore, bolt_circle, n_holes, hole_d = 80, 10, 30, 60, 6, 8
 result = (
@@ -65,7 +101,7 @@ result = (
     .hole(hole_d)
 )
 
-Example — a mounting plate with four corner holes:
+Example - a mounting plate with four corner holes:
 import cadquery as cq
 L, W, t, hole_d, margin = 60, 40, 5, 5, 8
 result = (

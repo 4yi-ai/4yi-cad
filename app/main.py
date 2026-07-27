@@ -67,6 +67,7 @@ class ScriptPatchItem(BaseModel):
 
 class ScriptPatchRequest(BaseModel):
     script: str = Field(..., min_length=1)
+    engine: Literal["cadquery", "freecad"] = "cadquery"
     patches: list[ScriptPatchItem] = Field(default_factory=list)
 
 
@@ -105,6 +106,14 @@ def _get_execute(app: FastAPI):
     return execute
 
 
+def _get_freecad_execute(app: FastAPI):
+    execute = getattr(app.state, "freecad_execute", None)
+    if execute is None:
+        execute = default_freecad_execute
+        app.state.freecad_execute = execute
+    return execute
+
+
 def _get_session_store(app: FastAPI) -> SessionStore:
     store = getattr(app.state, "session_store", None)
     if store is None:
@@ -133,6 +142,34 @@ async def default_execute(script: str) -> ExecResult:
         preview_png_b64=r.get("preview_png_b64"),
         exports=r.get("exports") or {},
         error=r.get("error"),
+        engine="cadquery",
+    )
+
+
+async def default_freecad_execute(script: str) -> ExecResult:
+    """Production FreeCAD executor: run FreeCADCmd through the sandbox worker."""
+    res = await asyncio.to_thread(
+        run_freecad_sandboxed,
+        script,
+        timeout_s=180,
+        cpu_seconds=120,
+        address_space_mb=4096,
+    )
+    if not res.success or not isinstance(res.result, dict):
+        return ExecResult(
+            ok=False,
+            engine="freecad",
+            error=res.error or "FreeCAD sandbox execution failed",
+        )
+
+    r = res.result
+    return ExecResult(
+        ok=bool(r.get("ok")),
+        preview_png_b64=r.get("preview_png_b64"),
+        exports=r.get("exports") or {},
+        error=r.get("error"),
+        engine="freecad",
+        freecad_version=r.get("freecad_version"),
     )
 
 
@@ -164,10 +201,17 @@ async def _sse_with_heartbeat(agen):
         task.cancel()
 
 
-def create_app(*, gateway=None, execute=None, session_store: SessionStore | None = None) -> FastAPI:
+def create_app(
+    *,
+    gateway=None,
+    execute=None,
+    freecad_execute=None,
+    session_store: SessionStore | None = None,
+) -> FastAPI:
     app = FastAPI(title="4yi-cad")
     app.state.gateway = gateway
     app.state.execute = execute
+    app.state.freecad_execute = freecad_execute
     app.state.session_store = session_store
 
     @app.get("/healthz")
@@ -244,6 +288,7 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
     @app.post("/api/generate")
     async def generate(req: GenerateRequest):
         execute = _get_execute(app)
+        freecad_execute = _get_freecad_execute(app)
         try:
             gw = _get_gateway(app)
         except Exception as exc:  # noqa: BLE001 - report config/gateway setup as SSE, not 500
@@ -258,7 +303,13 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
-        agen = run_generation(req.prompt, gateway=gw, execute=execute, history=req.history)
+        agen = run_generation(
+            req.prompt,
+            gateway=gw,
+            execute=execute,
+            execute_freecad=freecad_execute,
+            history=req.history,
+        )
         return StreamingResponse(
             _sse_with_heartbeat(agen),
             media_type="text/event-stream",
@@ -271,6 +322,7 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
         return {
             "design_state": state.model_dump(),
             "script": render_cadquery_script(state),
+            "engine": "cadquery",
             "geometry_summary": geometry_summary(state),
         }
 
@@ -283,6 +335,7 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
         return {
             "design_state": state.model_dump(),
             "script": render_cadquery_script(state),
+            "engine": "cadquery",
             "geometry_summary": geometry_summary(state),
         }
 
@@ -298,6 +351,8 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
             "ok": result.ok,
             "design_state": req.design_state.model_dump(),
             "script": script,
+            "engine": result.engine,
+            "freecad_version": result.freecad_version,
             "preview_png_b64": result.preview_png_b64,
             "exports": result.exports,
             "geometry_summary": geometry_summary(req.design_state),
@@ -306,7 +361,7 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
 
     @app.post("/api/script/patch")
     async def script_patch(req: ScriptPatchRequest):
-        execute = _get_execute(app)
+        execute = _get_freecad_execute(app) if req.engine == "freecad" else _get_execute(app)
         try:
             script = apply_script_parameter_patches(
                 req.script,
@@ -321,11 +376,17 @@ def create_app(*, gateway=None, execute=None, session_store: SessionStore | None
         try:
             result = await execute(script)
         except Exception as exc:  # noqa: BLE001 - script render must not 500 the UI
-            result = ExecResult(ok=False, error=f"sandbox execution failed: {exc}")
+            result = ExecResult(
+                ok=False,
+                engine=req.engine,
+                error=f"sandbox execution failed: {exc}",
+            )
 
         return {
             "ok": result.ok,
             "script": script,
+            "engine": result.engine,
+            "freecad_version": result.freecad_version,
             "parameters": extract_script_parameters(script),
             "preview_png_b64": result.preview_png_b64,
             "exports": result.exports,

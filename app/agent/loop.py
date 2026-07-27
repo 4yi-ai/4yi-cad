@@ -1,14 +1,14 @@
 """V1 self-correcting generation loop.
 
-A real tool-calling agent loop: ask the model for a run_cadquery script, execute it
-in the sandbox, and if execution fails feed the error back as a tool result and ask
-for a fix. Bounded to `max_attempts`, each a SEPARATE gateway call (<290s) — the
-self-correction is multiple calls, never one long call.
+A real tool-calling agent loop: ask the model for a CAD script, execute it in the
+selected engine sandbox, and if execution fails feed the error back as a tool
+result and ask for a fix. Bounded to `max_attempts`, each a SEPARATE gateway call
+(<290s) - the self-correction is multiple calls, never one long call.
 
 The loop is an async generator of plain-dict domain events (formatted into SSE by
 app/events.py) and is dependency-injected with a `gateway` (async chat_completion)
-and an async `execute(script) -> ExecResult`, so it is fully unit-testable with
-fakes — no network, no cadquery.
+and async executor functions, so it is fully unit-testable with fakes - no network
+or CAD runtime required.
 
 Events: status | script | retry | preview | artifact | error | done.
 """
@@ -31,18 +31,30 @@ class ExecResult:
     preview_png_b64: str | None = None
     exports: dict[str, str] = field(default_factory=dict)  # format -> base64
     error: str | None = None
+    engine: str = "cadquery"
+    freecad_version: str | None = None
 
 
 Executor = Callable[[str], Awaitable[ExecResult]]
 
-_FORCE_RUN = {"type": "function", "function": {"name": "run_cadquery"}}
+_CAD_TOOL_NAMES = {"run_cadquery": "cadquery", "run_freecad": "freecad"}
+_REQUIRE_CAD_TOOL = "required"
 
 
 def _first_run_call(completion):
     for call in completion.tool_calls or []:
-        if call.get("function", {}).get("name") == "run_cadquery":
+        if call.get("function", {}).get("name") in _CAD_TOOL_NAMES:
             return call
     return None
+
+
+def _engine_of(call) -> str:
+    name = call.get("function", {}).get("name")
+    return _CAD_TOOL_NAMES.get(name, "cadquery")
+
+
+def _tool_name_for(engine: str) -> str:
+    return "run_freecad" if engine == "freecad" else "run_cadquery"
 
 
 def _script_of(call) -> str | None:
@@ -59,12 +71,15 @@ async def run_generation(
     *,
     gateway,
     execute: Executor,
+    execute_freecad: Executor | None = None,
     history: list[dict] | None = None,
     system_prompt: str = SYSTEM_PROMPT,
     tools: list[dict] | None = None,
+    tool_choice=None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> AsyncIterator[dict]:
     tools = tools if tools is not None else MVP_TOOLS
+    tool_choice = _REQUIRE_CAD_TOOL if tool_choice is None else tool_choice
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
@@ -75,15 +90,15 @@ async def run_generation(
 
     for attempt in range(1, max_attempts + 1):
         completion = await gateway.chat_completion(
-            messages, tools=tools, tool_choice=_FORCE_RUN
+            messages, tools=tools, tool_choice=tool_choice
         )
 
         call = _first_run_call(completion)
         script = _script_of(call) if call else None
 
         if script is None:
-            # Model replied without a usable tool call — nudge and retry.
-            last_error = "you must call run_cadquery with a complete script"
+            # Model replied without a usable tool call; nudge and retry.
+            last_error = "you must call run_cadquery or run_freecad with a complete script"
             if attempt < max_attempts:
                 yield {"type": "retry", "attempt": attempt, "message": last_error}
                 messages.append({"role": "assistant", "content": completion.content or ""})
@@ -91,24 +106,54 @@ async def run_generation(
                 continue
             break
 
+        engine = _engine_of(call)
+        tool_name = _tool_name_for(engine)
         yield {
             "type": "script",
             "script": script,
+            "engine": engine,
             "attempt": attempt,
             "parameters": extract_script_parameters(script),
         }
 
-        result = await execute(script)
+        if engine == "freecad":
+            if execute_freecad is None:
+                result = ExecResult(
+                    ok=False,
+                    engine="freecad",
+                    error="FreeCAD executor unavailable",
+                )
+            else:
+                result = await execute_freecad(script)
+        else:
+            result = await execute(script)
+        result.engine = engine
 
         if result.ok:
             if result.preview_png_b64:
-                yield {"type": "preview", "png_b64": result.preview_png_b64}
+                yield {
+                    "type": "preview",
+                    "png_b64": result.preview_png_b64,
+                    "engine": engine,
+                    "freecad_version": result.freecad_version,
+                }
             for fmt, data_b64 in result.exports.items():
-                yield {"type": "artifact", "format": fmt, "data_b64": data_b64}
-            yield {"type": "done", "ok": True}
+                yield {
+                    "type": "artifact",
+                    "format": fmt,
+                    "data_b64": data_b64,
+                    "engine": engine,
+                    "freecad_version": result.freecad_version,
+                }
+            yield {
+                "type": "done",
+                "ok": True,
+                "engine": engine,
+                "freecad_version": result.freecad_version,
+            }
             return
 
-        # Recoverable execution failure — feed the error back and try again.
+        # Recoverable execution failure; feed the error back and try again.
         last_error = result.error or "execution failed"
         if attempt < max_attempts:
             yield {"type": "retry", "attempt": attempt, "message": last_error}
@@ -119,7 +164,7 @@ async def run_generation(
                 {
                     "role": "tool",
                     "tool_call_id": call.get("id"),
-                    "content": f"Execution failed:\n{last_error}\nFix the script and call run_cadquery again.",
+                    "content": f"Execution failed:\n{last_error}\nFix the script and call {tool_name} again.",
                 }
             )
             continue

@@ -28,7 +28,12 @@ class FakeGateway:
         return self._completions[idx]
 
 
-def _tool_call(script: str, call_id: str = "call_1") -> ChatCompletion:
+def _tool_call(
+    script: str,
+    call_id: str = "call_1",
+    *,
+    name: str = "run_cadquery",
+) -> ChatCompletion:
     return ChatCompletion(
         content=None,
         tool_calls=[
@@ -36,7 +41,7 @@ def _tool_call(script: str, call_id: str = "call_1") -> ChatCompletion:
                 "id": call_id,
                 "type": "function",
                 "function": {
-                    "name": "run_cadquery",
+                    "name": name,
                     "arguments": json.dumps({"script": script}),
                 },
             }
@@ -67,9 +72,50 @@ async def test_happy_path_first_attempt_succeeds():
 
     assert executed == ["result = box(10,10,10)"]
     assert types == ["status", "script", "preview", "artifact", "artifact", "done"]
+    assert events[1]["engine"] == "cadquery"
     arts = {e["format"]: e["data_b64"] for e in events if e["type"] == "artifact"}
     assert arts == {"step": "S", "stl": "L"}
     assert events[-1]["ok"] is True
+    assert events[-1]["engine"] == "cadquery"
+    assert gw.calls[0]["tool_choice"] == "required"
+
+
+async def test_freecad_tool_uses_freecad_executor_and_emits_engine_metadata():
+    script = "import FreeCAD\nresult = object()\n"
+    gw = FakeGateway(_tool_call(script, name="run_freecad"))
+    cadquery_calls = []
+    freecad_calls = []
+
+    async def execute(script):
+        cadquery_calls.append(script)
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            freecad_version="1.1.3",
+            preview_png_b64="UE5H",
+            exports={"step": "S", "stl": "L"},
+        )
+
+    events = await _collect(
+        run_generation(
+            "make this in FreeCAD",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+        )
+    )
+
+    assert cadquery_calls == []
+    assert freecad_calls == [script]
+    assert events[1]["engine"] == "freecad"
+    assert events[-1]["ok"] is True
+    assert events[-1]["engine"] == "freecad"
+    assert events[-1]["freecad_version"] == "1.1.3"
+    assert any(e["type"] == "preview" and e["engine"] == "freecad" for e in events)
 
 
 async def test_self_corrects_after_a_failed_attempt():
@@ -87,7 +133,8 @@ async def test_self_corrects_after_a_failed_attempt():
 
     assert executed == ["broken", "fixed"]           # retried with a new script
     assert "retry" in types                            # a recoverable failure was surfaced
-    assert events[-1] == {"type": "done", "ok": True}
+    assert events[-1]["ok"] is True
+    assert events[-1]["engine"] == "cadquery"
     assert any(e["type"] == "artifact" for e in events)
     # the error was fed back to the model on the second call as a tool result
     second_msgs = gw.calls[1]["messages"]
@@ -123,4 +170,5 @@ async def test_no_tool_call_is_nudged_then_can_succeed():
 
     assert executed == ["good"]                        # only the real script ran
     assert len(gw.calls) == 2                           # nudged once, then succeeded
-    assert events[-1] == {"type": "done", "ok": True}
+    assert events[-1]["ok"] is True
+    assert events[-1]["engine"] == "cadquery"

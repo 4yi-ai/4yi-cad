@@ -18,6 +18,10 @@ from app.session_store import SqliteSessionStore
 
 
 class FakeGateway:
+    def __init__(self, *, tool_name: str = "run_cadquery", script: str = "result = box(1,1,1)"):
+        self.tool_name = tool_name
+        self.script = script
+
     async def chat_completion(self, messages, *, tools=None, tool_choice=None):
         return ChatCompletion(
             content=None,
@@ -26,8 +30,8 @@ class FakeGateway:
                     "id": "c1",
                     "type": "function",
                     "function": {
-                        "name": "run_cadquery",
-                        "arguments": json.dumps({"script": "result = box(1,1,1)"}),
+                        "name": self.tool_name,
+                        "arguments": json.dumps({"script": self.script}),
                     },
                 }
             ],
@@ -42,8 +46,22 @@ async def _raising_execute(script):
     raise RuntimeError("sandbox unavailable")
 
 
-def _client(*, execute=_fake_execute):
-    app = create_app(gateway=FakeGateway(), execute=execute)
+async def _fake_freecad_execute(script):
+    return ExecResult(
+        ok=True,
+        engine="freecad",
+        freecad_version="1.1.3",
+        preview_png_b64="RlBORw==",
+        exports={"step": "STEP", "stl": "STL"},
+    )
+
+
+def _client(*, execute=_fake_execute, freecad_execute=_fake_freecad_execute, gateway=None):
+    app = create_app(
+        gateway=gateway or FakeGateway(),
+        execute=execute,
+        freecad_execute=freecad_execute,
+    )
     return TestClient(app)
 
 
@@ -165,6 +183,41 @@ def test_generate_streams_sse_events():
     # the injected script should appear in the streamed script event
     assert "result = box(1,1,1)" in body
     assert '"parameters"' in body
+    assert '"engine": "cadquery"' in body
+
+
+def test_generate_can_route_to_freecad_tool():
+    cadquery_calls = []
+    freecad_calls = []
+    script = "import FreeCAD\nresult = object()\n"
+
+    async def execute(script):
+        cadquery_calls.append(script)
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            freecad_version="1.1.3",
+            preview_png_b64="RlBORw==",
+            exports={"step": "STEP", "stl": "STL"},
+        )
+
+    client = _client(
+        gateway=FakeGateway(tool_name="run_freecad", script=script),
+        execute=execute,
+        freecad_execute=execute_freecad,
+    )
+
+    resp = client.post("/api/generate", json={"prompt": "make this in FreeCAD"})
+
+    assert resp.status_code == 200
+    assert cadquery_calls == []
+    assert freecad_calls == [script]
+    assert '"engine": "freecad"' in resp.text
+    assert '"freecad_version": "1.1.3"' in resp.text
 
 
 def test_generate_requires_prompt():

@@ -543,13 +543,20 @@ const I18N = {
     generatedModel: "Generated model",
     generatedDesign: "Generated design",
     agentModel: "Agent model",
+    cadScript: "CAD script",
     cadqueryScript: "CadQuery script",
+    freecadScript: "FreeCAD script",
+    engine: "Engine",
+    engineCadQuery: "CadQuery",
+    engineFreeCAD: "FreeCAD",
+    freecadVersion: "FreeCAD version",
     generatedPreviewSubtitle: "Agent generated preview",
     headPreview: "Head preview",
     agentPreview: "Agent preview",
     rollbackPreview: "Rollback preview",
     preview: "Preview",
     renderedFromCadQuery: "Rendered from CadQuery output",
+    renderedFromEngine: "Rendered from {engine} output",
     waitingGeneratedPreview: "Waiting for generated preview",
     generatedPreviewTitle: "Generated model preview",
     generatedPreviewHint: "The CAD agent will replace the default DesignState viewport with its rendered PNG when generation succeeds.",
@@ -569,7 +576,7 @@ const I18N = {
     allScriptParameters: "All script parameters",
     inferredGroup: "Inferred group",
     scriptParameters: "Script parameters",
-    scriptParametersHint: "Editable numeric variables extracted from the generated CadQuery script.",
+    scriptParametersHint: "Editable numeric variables extracted from the generated CAD script.",
     noScriptParameters: "No editable numeric variables found in this generated script.",
     generatedParameterSelected: "{name} = {value} {unit}",
     generatedParameterGroup: "{group} group",
@@ -718,7 +725,7 @@ const I18N = {
       patchFailed: "Patch failed: {message}",
       exportUnavailable: "Export unavailable: {message}",
       initialFailed: "Initial state failed: {message}",
-      producedScript: "CAD agent produced script attempt {attempt}",
+      producedScript: "CAD agent produced {engine} script attempt {attempt}",
       retry: "Retry {attempt}: {message}",
       renderedPreview: "Rendered preview PNG",
       artifactReady: "Artifact ready: {format}",
@@ -767,13 +774,20 @@ const I18N = {
     generatedModel: "生成模型",
     generatedDesign: "生成设计",
     agentModel: "Agent 模型",
+    cadScript: "CAD 脚本",
     cadqueryScript: "CadQuery 脚本",
+    freecadScript: "FreeCAD 脚本",
+    engine: "引擎",
+    engineCadQuery: "CadQuery",
+    engineFreeCAD: "FreeCAD",
+    freecadVersion: "FreeCAD 版本",
     generatedPreviewSubtitle: "Agent 生成预览",
     headPreview: "当前预览",
     agentPreview: "Agent 预览",
     rollbackPreview: "回滚预览",
     preview: "预览",
     renderedFromCadQuery: "来自 CadQuery 输出的渲染",
+    renderedFromEngine: "来自 {engine} 输出的渲染",
     waitingGeneratedPreview: "等待生成模型预览",
     generatedPreviewTitle: "生成模型预览",
     generatedPreviewHint: "生成成功后，CAD agent 会用渲染 PNG 替换默认 DesignState 视图。",
@@ -793,7 +807,7 @@ const I18N = {
     allScriptParameters: "全部脚本参数",
     inferredGroup: "推断分组",
     scriptParameters: "脚本参数",
-    scriptParametersHint: "从生成的 CadQuery 脚本中提取出的可编辑数值变量。",
+    scriptParametersHint: "从生成的 CAD 脚本中提取出的可编辑数值变量。",
     noScriptParameters: "这个生成脚本里没有找到可编辑的数值变量。",
     generatedParameterSelected: "{name} = {value} {unit}",
     generatedParameterGroup: "{group} 分组",
@@ -942,7 +956,7 @@ const I18N = {
       patchFailed: "补丁失败：{message}",
       exportUnavailable: "导出不可用：{message}",
       initialFailed: "初始状态失败：{message}",
-      producedScript: "CAD agent 已生成脚本，第 {attempt} 次尝试",
+      producedScript: "CAD agent 已生成 {engine} 脚本，第 {attempt} 次尝试",
       retry: "重试 {attempt}：{message}",
       renderedPreview: "已渲染预览 PNG",
       artifactReady: "产物就绪：{format}",
@@ -1013,6 +1027,8 @@ const state = {
   history: [],
   artifacts: {},
   previewPng: null,
+  engine: "cadquery",
+  freecadVersion: "",
   exportStatus: "notReady",
   statusKey: "loading",
   previewMode: "design_state",
@@ -1092,6 +1108,18 @@ function formatNumber(value) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+function normalizeEngine(value) {
+  return value === "freecad" ? "freecad" : "cadquery";
+}
+
+function engineLabel(engine = state.engine) {
+  return normalizeEngine(engine) === "freecad" ? t("engineFreeCAD") : t("engineCadQuery");
+}
+
+function scriptTitle(engine = state.engine) {
+  return normalizeEngine(engine) === "freecad" ? t("freecadScript") : t("cadqueryScript");
+}
+
 function clampParameter(name, value) {
   const [min, max] = parameterLimits[name] || [-Infinity, Infinity];
   return Math.min(max, Math.max(min, Number(value)));
@@ -1112,6 +1140,8 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     history: state.history,
     artifacts: includeHeavyArtifacts ? state.artifacts : {},
     previewPng: includeHeavyArtifacts ? state.previewPng : null,
+    engine: state.engine,
+    freecadVersion: state.freecadVersion,
     exportStatus: includeHeavyArtifacts ? state.exportStatus : "notReady",
     previewMode: state.previewMode,
     generatedPrompt: state.generatedPrompt,
@@ -1169,6 +1199,8 @@ function restoreWorkbenchSession() {
     state.history = Array.isArray(saved.history) ? saved.history : [];
     state.artifacts = saved.artifacts && typeof saved.artifacts === "object" ? saved.artifacts : {};
     state.previewPng = saved.previewPng || null;
+    state.engine = normalizeEngine(saved.engine);
+    state.freecadVersion = saved.freecadVersion || "";
     state.exportStatus = saved.exportStatus || "notReady";
     state.previewMode = saved.previewMode === "generated" ? "generated" : "design_state";
     state.generatedPrompt = saved.generatedPrompt || "";
@@ -1203,6 +1235,8 @@ function restoreWorkbenchSession() {
 function versionMetadata() {
   return {
     preview_mode: state.previewMode,
+    engine: state.engine,
+    freecad_version: state.freecadVersion || null,
     generated_prompt: state.generatedPrompt,
     generated_parameters: state.generatedParameters || [],
   };
@@ -1232,6 +1266,8 @@ function versionSignature(payload) {
     script: payload.script,
     patch: payload.patch,
     metadata: payload.metadata,
+    engine: payload.metadata?.engine,
+    freecad_version: payload.metadata?.freecad_version,
     status: payload.status,
     error: payload.error,
   });
@@ -1282,6 +1318,8 @@ async function restoreServerSession() {
     }));
     state.artifacts = {};
     state.previewPng = null;
+    state.engine = normalizeEngine(metadata.engine);
+    state.freecadVersion = metadata.freecad_version || "";
     state.exportStatus = "notReady";
     state.previewMode = metadata.preview_mode === "generated" ? "generated" : "design_state";
     state.generatedPrompt = metadata.generated_prompt || "";
@@ -1530,7 +1568,7 @@ function renderTree() {
         </button>
       `).join("")}
       <button class="tree-item" style="padding-left:60px" type="button" onclick="setBottomTab('script')">
-        <span style="width:12px"></span>${icon("code")}<span class="name">${escapeHtml(t("cadqueryScript"))}</span>
+        <span style="width:12px"></span>${icon("code")}<span class="name">${escapeHtml(scriptTitle())}</span>
       </button>
     `;
     $("activeFeature").textContent = t("generatedModel");
@@ -1584,7 +1622,7 @@ function renderViewport() {
   $("selectionBadge").textContent = generated ? generatedSelectionLabel(generatedParam) : t("featureBadge", { name: featureName(feature) });
   $("headBadge").textContent = generated ? t("agentPreview") : ds.rollback_feature_id ? t("rollbackPreview") : t("headPreview");
   $("measureTitle").textContent = generated ? (generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
-  $("measureText").textContent = generated ? (generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromCadQuery") : t("waitingGeneratedPreview")) : measurementText();
+  $("measureText").textContent = generated ? (generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromEngine", { engine: engineLabel() }) : t("waitingGeneratedPreview")) : measurementText();
   const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
   $("axisReadout").textContent = generated ? t("stepStlStatus", { status: artifactExportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
   $("viewportContent").innerHTML = generated ? renderGeneratedPreview() : renderModelSvg();
@@ -1802,7 +1840,7 @@ function renderProperties() {
     $("properties").innerHTML = `
       <div class="properties-head">
         <div class="feature-meta">
-          <div><strong>${escapeHtml(t("generatedModel"))}</strong><span>${escapeHtml(t("agent"))} · ${state.previewPng ? escapeHtml(t("previewReady")) : escapeHtml(t("waiting"))}</span></div>
+          <div><strong>${escapeHtml(t("generatedModel"))}</strong><span>${escapeHtml(t("agent"))} · ${escapeHtml(engineLabel())} · ${state.previewPng ? escapeHtml(t("previewReady")) : escapeHtml(t("waiting"))}</span></div>
           <div class="version-pill">AI</div>
         </div>
         <div class="rename-row">
@@ -1815,7 +1853,9 @@ function renderProperties() {
         <h3>${icon("code")} ${escapeHtml(t("generatedSource"))}</h3>
         <div class="kv-list">
           <div class="kv"><span>${escapeHtml(t("prompt"))}</span><strong>${state.generatedPrompt ? escapeHtml(t("saved")) : escapeHtml(t("none"))}</strong></div>
-          <div class="kv"><span>${escapeHtml(t("cadqueryScript"))}</span><strong>${state.script ? escapeHtml(t("readyValue")) : escapeHtml(t("waiting"))}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("engine"))}</span><strong>${escapeHtml(engineLabel())}</strong></div>
+          ${state.engine === "freecad" ? `<div class="kv"><span>${escapeHtml(t("freecadVersion"))}</span><strong>${state.freecadVersion ? escapeHtml(state.freecadVersion) : escapeHtml(t("waiting"))}</strong></div>` : ""}
+          <div class="kv"><span>${escapeHtml(scriptTitle())}</span><strong>${state.script ? escapeHtml(t("readyValue")) : escapeHtml(t("waiting"))}</strong></div>
         </div>
       </section>
       <section class="section">
@@ -1852,6 +1892,7 @@ function renderProperties() {
     <section class="section">
       <h3>${icon("box")} ${escapeHtml(t("regeneration"))}</h3>
       <div class="kv-list">
+        <div class="kv"><span>${escapeHtml(t("engine"))}</span><strong>${escapeHtml(t("engineCadQuery"))}</strong></div>
         <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("svgPreview"))}</strong></div>
         <div class="kv"><span>STEP / STL</span><strong>${escapeHtml(artifactExportStatusLabel())}</strong></div>
         <div class="kv"><span>${escapeHtml(t("patchMode"))}</span><strong>${state.patch?.op || escapeHtml(t("none"))}</strong></div>
@@ -1952,8 +1993,13 @@ function renderBottom() {
     return;
   }
   if (state.bottomTab === "script") {
+    const scriptMeta = {
+      engine: state.engine,
+      freecad_version: state.freecadVersion || null,
+      patch: state.patch || { op: "noop" },
+    };
     $("bottomContent").innerHTML = `<div class="script-grid">
-      <pre>${escapeHtml(JSON.stringify(state.patch || { op: "noop" }, null, 2))}</pre>
+      <pre>${escapeHtml(JSON.stringify(scriptMeta, null, 2))}</pre>
       <pre>${escapeHtml(state.script || t("noScript"))}</pre>
     </div>`;
     return;
@@ -1992,6 +2038,8 @@ function artifactCards() {
 function exportStateSnapshot() {
   return {
     mode: state.previewMode,
+    engine: state.engine,
+    freecad_version: state.freecadVersion || null,
     design_state: state.previewMode === "design_state" ? state.designState : null,
     generated_prompt: state.previewMode === "generated" ? state.generatedPrompt : null,
     script: state.script,
@@ -2068,6 +2116,8 @@ async function commitGeneratedParameter(name, rawValue) {
     script: state.script,
     previewPng: state.previewPng,
     artifacts: { ...state.artifacts },
+    engine: state.engine,
+    freecadVersion: state.freecadVersion,
     generatedParameters: [...(state.generatedParameters || [])],
     exportStatus: state.exportStatus,
     patch: state.patch,
@@ -2083,11 +2133,14 @@ async function commitGeneratedParameter(name, rawValue) {
   try {
     const rendered = await fetchJson("/api/script/patch", {
       script: previous.script,
+      engine: previous.engine,
       patches: [{ name, value }],
     });
     if (!rendered.ok) throw new Error(rendered.error || t("log.unknownError"));
     state.previewMode = "generated";
     state.script = rendered.script;
+    state.engine = normalizeEngine(rendered.engine);
+    state.freecadVersion = rendered.freecad_version || "";
     state.generatedParameters = rendered.parameters || [];
     state.selectedGeneratedParameterName = name;
     state.previewPng = rendered.preview_png_b64 || null;
@@ -2105,6 +2158,8 @@ async function commitGeneratedParameter(name, rawValue) {
     state.script = previous.script;
     state.previewPng = previous.previewPng;
     state.artifacts = previous.artifacts;
+    state.engine = previous.engine;
+    state.freecadVersion = previous.freecadVersion;
     state.generatedParameters = previous.generatedParameters;
     state.exportStatus = previous.exportStatus;
     state.patch = previous.patch;
@@ -2119,6 +2174,8 @@ async function commitGeneratedParameter(name, rawValue) {
 
 async function applyPatches(patches, label, detail) {
   state.previewMode = "design_state";
+  state.engine = "cadquery";
+  state.freecadVersion = "";
   state.generatedPrompt = "";
   state.selectedGeneratedParameterName = "";
   setStatus("applyingPatch");
@@ -2130,6 +2187,8 @@ async function applyPatches(patches, label, detail) {
     state.designState = patched.design_state;
     state.selectedFeatureId = state.designState.selected_feature_id;
     state.script = patched.script;
+    state.engine = normalizeEngine(patched.engine);
+    state.freecadVersion = "";
     state.patch = patches[patches.length - 1] || null;
     addHistory(label, detail);
     await renderDesign();
@@ -2147,6 +2206,8 @@ async function renderDesign() {
   try {
     const rendered = await fetchJson("/api/design/render", { design_state: state.designState });
     state.script = rendered.script;
+    state.engine = normalizeEngine(rendered.engine);
+    state.freecadVersion = rendered.freecad_version || "";
     if (rendered.preview_png_b64) state.previewPng = rendered.preview_png_b64;
     if (rendered.exports) state.artifacts = { ...state.artifacts, ...rendered.exports };
     state.exportStatus = rendered.ok ? "ready" : "unavailable";
@@ -2172,6 +2233,8 @@ function renameFeature() {
 
 function showParametricDesign() {
   state.previewMode = "design_state";
+  state.engine = "cadquery";
+  state.freecadVersion = "";
   state.selectedGeneratedParameterName = "";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   renderAll();
@@ -2401,6 +2464,8 @@ async function generateFromPrompt(prompt) {
   state.selectedGeneratedParameterName = "";
   state.previewPng = null;
   state.artifacts = {};
+  state.engine = "cadquery";
+  state.freecadVersion = "";
   state.exportStatus = "notReady";
   state.patch = null;
   setBottomTab("logs");
@@ -2473,20 +2538,26 @@ function handleAgentEvent(ev) {
   if (ev.type === "status") setStatus(ev.message);
   if (ev.type === "script") {
     state.script = ev.script;
+    state.engine = normalizeEngine(ev.engine);
+    state.freecadVersion = ev.freecad_version || "";
     state.generatedParameters = Array.isArray(ev.parameters) ? ev.parameters : [];
     if (!state.generatedParameters.some((param) => param.name === state.selectedGeneratedParameterName)) {
       state.selectedGeneratedParameterName = "";
     }
-    log(t("log.producedScript", { attempt: ev.attempt || 1 }));
+    log(t("log.producedScript", { attempt: ev.attempt || 1, engine: engineLabel() }));
   }
   if (ev.type === "retry") log(t("log.retry", { attempt: ev.attempt, message: ev.message }));
   if (ev.type === "preview" && ev.png_b64) {
     state.previewMode = "generated";
+    state.engine = normalizeEngine(ev.engine || state.engine);
+    if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     state.previewPng = ev.png_b64;
     log(t("log.renderedPreview"));
     renderViewport();
   }
   if (ev.type === "artifact") {
+    state.engine = normalizeEngine(ev.engine || state.engine);
+    if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     state.artifacts[ev.format] = ev.data_b64;
     if (hasStepStlArtifacts()) state.exportStatus = "ready";
     log(t("log.artifactReady", { format: ev.format }));
@@ -2495,6 +2566,8 @@ function handleAgentEvent(ev) {
     log(ev.message);
   }
   if (ev.type === "done") {
+    state.engine = normalizeEngine(ev.engine || state.engine);
+    if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
     setStatus(ev.ok ? "done" : "failed");
     addHistory(ev.ok ? t("history.agentGeneration") : t("history.agentGenerationFailed"), ev.ok ? t("history.agentDetail") : t("history.agentFailedDetail"));
@@ -2559,6 +2632,8 @@ async function init() {
     const initial = await fetchJson("/api/design/initial");
     state.designState = initial.design_state;
     state.script = initial.script;
+    state.engine = normalizeEngine(initial.engine);
+    state.freecadVersion = "";
     state.selectedFeatureId = state.designState.selected_feature_id;
     addHistory(t("history.initialTitle"), t("history.initialDetail"));
     setStatus("ready");
@@ -2567,6 +2642,8 @@ async function init() {
     setStatus("initialUnavailable");
     log(t("log.initialFailed", { message: error.message }));
     state.designState = fallbackDesignState();
+    state.engine = "cadquery";
+    state.freecadVersion = "";
   }
   renderAll();
 }
