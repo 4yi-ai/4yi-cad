@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -38,16 +39,19 @@ def render_preview_isolated(
     VTK can segfault headless; running it in-process would take down the whole
     worker and lose the already-exported STEP/STL. Isolating it means any
     failure/crash/timeout degrades to preview=None while exports survive.
-    `xvfb-run` provides a virtual X display for mesa software rendering.
+    `xvfb-run` provides a virtual X display for mesa software rendering in Linux
+    containers. Local macOS development can render directly when xvfb-run is not
+    available.
     """
-    argv = preview_argv or [
-        "xvfb-run",
-        "-a",
-        sys.executable,
-        "-m",
-        "app.cad.preview",
-        stl_path,
-    ]
+    if preview_argv is not None:
+        argv = preview_argv
+    else:
+        xvfb_run = shutil.which("xvfb-run")
+        argv = (
+            [xvfb_run, "-a", sys.executable, "-m", "app.cad.preview", stl_path]
+            if xvfb_run
+            else [sys.executable, "-m", "app.cad.preview", stl_path]
+        )
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError):

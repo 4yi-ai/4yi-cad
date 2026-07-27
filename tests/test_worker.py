@@ -8,6 +8,7 @@ survive. Tested with injected commands — no cadquery/VTK needed.
 """
 
 import sys
+from types import SimpleNamespace
 
 from app.cad.worker import render_preview_isolated
 
@@ -32,3 +33,17 @@ def test_timeout_yields_none():
 def test_empty_output_yields_none():
     argv = [PY, "-c", "pass"]
     assert render_preview_isolated("/ignored.stl", preview_argv=argv) is None
+
+
+def test_default_preview_runs_directly_when_xvfb_is_missing(monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return SimpleNamespace(returncode=0, stdout="QUJD\n", stderr="")
+
+    monkeypatch.setattr("app.cad.worker.shutil.which", lambda name: None)
+    monkeypatch.setattr("app.cad.worker.subprocess.run", fake_run)
+
+    assert render_preview_isolated("/mesh.stl") == "QUJD"
+    assert seen["argv"] == [PY, "-m", "app.cad.preview", "/mesh.stl"]
