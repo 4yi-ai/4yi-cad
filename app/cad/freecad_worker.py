@@ -1295,6 +1295,83 @@ def is_techdraw_dimension(obj):
     return safe_text(getattr(obj, "TypeId", "")) == TECHDRAW_DIMENSION_TYPE
 
 
+def is_runtime_helper_object(obj):
+    type_id = safe_text(getattr(obj, "TypeId", ""))
+    name = safe_text(getattr(obj, "Name", ""))
+    if type_id in {
+        ASSEMBLY_TYPE,
+        ASSEMBLY_JOINT_GROUP_TYPE,
+        TECHDRAW_PAGE_TYPE,
+        TECHDRAW_TEMPLATE_TYPE,
+        TECHDRAW_VIEW_PART_TYPE,
+        TECHDRAW_PROJECTION_GROUP_TYPE,
+        TECHDRAW_PROJECTION_GROUP_ITEM_TYPE,
+        TECHDRAW_SECTION_VIEW_TYPE,
+        TECHDRAW_DETAIL_VIEW_TYPE,
+        TECHDRAW_DIMENSION_TYPE,
+        "App::Origin",
+        "App::Line",
+        "App::Plane",
+        "App::DocumentObjectGroup",
+        "App::DocumentObjectGroupPython",
+        "PartDesign::CoordinateSystem",
+    }:
+        return True
+    if is_assembly_joint(obj) or type_id.startswith("TechDraw::"):
+        return True
+    if name in {
+        FEATURE_FALLBACK_STATE_OBJECT,
+        ASSEMBLY_FALLBACK_STATE_OBJECT,
+        TECHDRAW_FALLBACK_STATE_OBJECT,
+    }:
+        return True
+    return False
+
+
+def shape_has_exportable_geometry(shape):
+    if shape is None:
+        return False
+    try:
+        safe_text(getattr(shape, "ShapeType", ""))
+    except Exception:
+        return False
+    for attr in ["Solids", "Shells", "Faces", "Edges", "Vertexes"]:
+        try:
+            if len(list(getattr(shape, attr) or [])) > 0:
+                return True
+        except Exception:
+            continue
+    try:
+        return bool(safe_text(getattr(shape, "ShapeType", "")))
+    except Exception:
+        return False
+
+
+def is_exportable_shape_object(obj):
+    if obj is None:
+        return False
+    if hasattr(obj, "exportStep") and hasattr(obj, "exportStl"):
+        return True
+    if is_runtime_helper_object(obj):
+        return False
+    shape = getattr(obj, "Shape", obj)
+    return shape_has_exportable_geometry(shape)
+
+
+def exportable_shape_objects(values):
+    objects = []
+    seen = set()
+    for obj in list(values or []):
+        if not is_exportable_shape_object(obj):
+            continue
+        identity = id(obj)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        objects.append(obj)
+    return objects
+
+
 def object_identity(obj):
     try:
         return obj.Name
@@ -2134,6 +2211,16 @@ def techdraw_fallback_pages(doc):
 
 def techdraw_dimension_summary(dimension):
     item = techdraw_view_summary(dimension)
+    try:
+        raw_meta = getattr(dimension, "FourYiTechDrawDimensionMeta", "")
+        if raw_meta:
+            meta = json.loads(raw_meta)
+            if isinstance(meta, dict):
+                for key in ["dimension_mode", "origin", "chain_offsets", "coordinate_axis", "reference_diagnostics"]:
+                    if key in meta:
+                        item[key] = meta[key]
+    except Exception:
+        pass
     for prop in ["Type", "MeasureType", "FormatSpec"]:
         if hasattr(dimension, prop):
             try:
@@ -2187,6 +2274,64 @@ def techdraw_page_summary(page):
     return item
 
 
+def merge_named_techdraw_items(native_items, fallback_items):
+    merged = {
+        safe_text(item.get("name"), 80): dict(item)
+        for item in list(native_items or [])
+        if isinstance(item, dict) and item.get("name")
+    }
+    for item in list(fallback_items or []):
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        name = safe_text(item.get("name"), 80)
+        current = merged.get(name, {})
+        replacement = dict(current)
+        replacement.update(item)
+        if current.get("source") and not item.get("source"):
+            replacement["source"] = current.get("source")
+        if current.get("kind") and not item.get("kind"):
+            replacement["kind"] = current.get("kind")
+        merged[name] = replacement
+    unnamed = [item for item in list(native_items or []) + list(fallback_items or []) if isinstance(item, dict) and not item.get("name")]
+    return unnamed + list(merged.values())
+
+
+def merge_techdraw_page_summaries(native_pages, fallback_pages):
+    by_name = {
+        safe_text(page.get("name"), 80): dict(page)
+        for page in list(native_pages or [])
+        if isinstance(page, dict) and page.get("name")
+    }
+    consumed = set()
+    for fallback in list(fallback_pages or []):
+        if not isinstance(fallback, dict) or not fallback.get("name"):
+            continue
+        name = safe_text(fallback.get("name"), 80)
+        native = by_name.get(name)
+        if native is None:
+            by_name[name] = fallback
+            continue
+        consumed.add(name)
+        native["views"] = merge_named_techdraw_items(native.get("views"), fallback.get("views"))
+        native["dimensions"] = merge_named_techdraw_items(native.get("dimensions"), fallback.get("dimensions"))
+        native["view_count"] = len(native.get("views") or [])
+        native["dimension_count"] = len(native.get("dimensions") or [])
+        native["supplemental_typed_fallback"] = True
+        native["fallback_reason"] = "native TechDraw page has supplemental typed decorations"
+        native["layout_diagnostics"] = techdraw_layout_diagnostics(
+            native,
+            native.get("views") or [],
+            native.get("dimensions") or [],
+            fallback=False,
+        )
+    result = list(by_name.values())
+    for fallback in list(fallback_pages or []):
+        name = safe_text(fallback.get("name"), 80) if isinstance(fallback, dict) else ""
+        if name and name not in by_name and name not in consumed:
+            result.append(fallback)
+    return sorted(result, key=lambda item: safe_text(item.get("name", "")))
+
+
 def merge_bbox(current, bbox):
     if not bbox:
         return current
@@ -2213,6 +2358,123 @@ def sorted_refs_by_name(values):
     return sorted(list(values or []), key=lambda item: (safe_text(ref_name(item) or ""), safe_text(item)))
 
 
+def document_topological_lineage(doc):
+    refs = []
+    if doc is None:
+        return {
+            "schema": "freecad.topological_lineage.v1",
+            "object_count": 0,
+            "ref_count": 0,
+            "refs": [],
+        }
+    for obj in exportable_shape_objects(getattr(doc, "Objects", [])):
+        shape = getattr(obj, "Shape", None)
+        if shape is None:
+            continue
+        for attr, prefix in [("Faces", "Face"), ("Edges", "Edge"), ("Vertexes", "Vertex")]:
+            try:
+                subshapes = list(getattr(shape, attr) or [])
+            except Exception:
+                subshapes = []
+            for index, subshape in enumerate(subshapes[:240]):
+                fields = subshape_stable_fields(subshape, prefix, index)
+                item = {
+                    "object": object_ref(obj),
+                    "kind": prefix,
+                    "reference": fields.get("topological_reference"),
+                    "stable_id": fields.get("stable_id"),
+                    "legacy_stable_id": fields.get("legacy_stable_id"),
+                    "stable_reference": fields.get("stable_reference"),
+                    "signature": fields.get("signature"),
+                    "provenance": fields.get("provenance"),
+                    "ref_history": fields.get("ref_history"),
+                }
+                refs.append(item)
+    return {
+        "schema": "freecad.topological_lineage.v1",
+        "object_count": len(exportable_shape_objects(getattr(doc, "Objects", []))),
+        "ref_count": len(refs),
+        "refs": refs[:800],
+    }
+
+
+def topological_lineage_digest(lineage):
+    refs = []
+    for item in list((lineage or {}).get("refs") or []):
+        refs.append([
+            safe_text(item.get("stable_id"), 120),
+            safe_text((item.get("object") or {}).get("name"), 120),
+            safe_text(item.get("reference"), 80),
+        ])
+    return subshape_stable_digest({"refs": refs})
+
+
+def topological_lineage_migration(before, after):
+    before_refs = {
+        item.get("stable_id"): item
+        for item in list((before or {}).get("refs") or [])
+        if item.get("stable_id")
+    }
+    after_refs = {
+        item.get("stable_id"): item
+        for item in list((after or {}).get("refs") or [])
+        if item.get("stable_id")
+    }
+    migrated = []
+    unchanged = 0
+    for stable_id, old in before_refs.items():
+        new = after_refs.get(stable_id)
+        if not new:
+            continue
+        old_ref = safe_text(old.get("reference"), 80)
+        new_ref = safe_text(new.get("reference"), 80)
+        old_obj = safe_text((old.get("object") or {}).get("name"), 80)
+        new_obj = safe_text((new.get("object") or {}).get("name"), 80)
+        if old_ref == new_ref and old_obj == new_obj:
+            unchanged += 1
+            continue
+        migrated.append({
+            "stable_id": stable_id,
+            "before": {"object": old.get("object"), "reference": old_ref},
+            "after": {"object": new.get("object"), "reference": new_ref},
+            "ref_history": list(new.get("ref_history") or old.get("ref_history") or []),
+        })
+    missing = [
+        {
+            "stable_id": stable_id,
+            "object": item.get("object"),
+            "reference": item.get("reference"),
+            "provenance": item.get("provenance"),
+        }
+        for stable_id, item in before_refs.items()
+        if stable_id not in after_refs
+    ]
+    added = [
+        {
+            "stable_id": stable_id,
+            "object": item.get("object"),
+            "reference": item.get("reference"),
+            "provenance": item.get("provenance"),
+        }
+        for stable_id, item in after_refs.items()
+        if stable_id not in before_refs
+    ]
+    return {
+        "schema": "freecad.topological_ref_migration.v1",
+        "before_digest": topological_lineage_digest(before),
+        "after_digest": topological_lineage_digest(after),
+        "before_ref_count": len(before_refs),
+        "after_ref_count": len(after_refs),
+        "unchanged_ref_count": unchanged,
+        "migrated_ref_count": len(migrated),
+        "missing_ref_count": len(missing),
+        "added_ref_count": len(added),
+        "migrated_refs": migrated[:80],
+        "missing_refs": missing[:80],
+        "added_refs": added[:80],
+    }
+
+
 def properties_by_name(properties):
     result = {}
     for prop in list(properties or []):
@@ -2227,7 +2489,7 @@ def properties_by_name(properties):
     return result
 
 
-def typed_document_state(document, summaries, geometry, feature_tree, sketches, assemblies, techdraw):
+def typed_document_state(document, summaries, geometry, feature_tree, sketches, assemblies, techdraw, topological_lineage=None):
     nodes_by_name = {}
     for node in list(feature_tree.get("nodes", []) or []):
         name = ref_name(node.get("object"))
@@ -2331,6 +2593,12 @@ def typed_document_state(document, summaries, geometry, feature_tree, sketches, 
         "sketches": sketches_by_name,
         "assemblies": assemblies_by_name,
         "techdraw": {"pages": pages_by_name},
+        "topological_lineage": topological_lineage or {
+            "schema": "freecad.topological_lineage.v1",
+            "object_count": 0,
+            "ref_count": 0,
+            "refs": [],
+        },
     }
 
 
@@ -2370,7 +2638,7 @@ def document_summary(doc):
             "techdraw": [],
             "assembly_capabilities": assembly_runtime_capabilities(),
             "techdraw_capabilities": techdraw_runtime_capabilities(),
-            "typed_state": typed_document_state(document, [], geometry, {"roots": [], "nodes": []}, [], [], []),
+            "typed_state": typed_document_state(document, [], geometry, {"roots": [], "nodes": []}, [], [], [], document_topological_lineage(None)),
         }
     try:
         doc.recompute()
@@ -2383,8 +2651,10 @@ def document_summary(doc):
     sketches = [item["sketch"] for item in summaries if item.get("sketch")]
     assemblies = [assembly_summary(obj) for obj in objects if is_assembly_object(obj)]
     assemblies.extend(assembly_fallback_summaries(doc))
-    techdraw = [techdraw_page_summary(obj) for obj in objects if is_techdraw_page(obj)]
-    techdraw.extend(techdraw_fallback_pages(doc))
+    techdraw = merge_techdraw_page_summaries(
+        [techdraw_page_summary(obj) for obj in objects if is_techdraw_page(obj)],
+        techdraw_fallback_pages(doc),
+    )
 
     valid = True
     saw_validity = False
@@ -2450,6 +2720,7 @@ def document_summary(doc):
     fallback_assembly_tree = fallback_assembly_feature_tree_nodes(doc)
     feature_tree["roots"].extend(fallback_assembly_tree["roots"])
     feature_tree["nodes"].extend(fallback_assembly_tree["nodes"])
+    topological_lineage = document_topological_lineage(doc)
     return {
         "schema": "freecad.document_summary.v6",
         "document": document,
@@ -2461,7 +2732,8 @@ def document_summary(doc):
         "techdraw": techdraw,
         "assembly_capabilities": assembly_runtime_capabilities(),
         "techdraw_capabilities": techdraw_runtime_capabilities(),
-        "typed_state": typed_document_state(document, summaries, geometry, feature_tree, sketches, assemblies, techdraw),
+        "topological_lineage": topological_lineage,
+        "typed_state": typed_document_state(document, summaries, geometry, feature_tree, sketches, assemblies, techdraw, topological_lineage),
     }
 
 
@@ -3613,12 +3885,51 @@ def connector_payloads_from_patch(patch):
     return [connector1, connector2]
 
 
+def env_bool(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return bool(default)
+    return raw.lower() in {"1", "true", "yes", "on"}
+
+
 def truthy_env(name):
-    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+    return env_bool(name, False)
+
+
+def native_assembly_persistence_enabled():
+    if truthy_env("FOURYI_FREECAD_DISABLE_NATIVE_ASSEMBLY"):
+        return False
+    return env_bool("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY", True)
+
+
+def freecad_version_tuple():
+    try:
+        return tuple(int(part) for part in FreeCAD.Version()[:3])
+    except Exception:
+        return (0, 0, 0)
+
+
+def native_assembly_reload_safe():
+    if truthy_env("FOURYI_FREECAD_FORCE_NATIVE_ASSEMBLY"):
+        return True
+    if truthy_env("FOURYI_FREECAD_ASSUME_NATIVE_ASSEMBLY_RELOAD_SAFE"):
+        return True
+    # FreeCAD 1.1.x on macOS can segfault in FreeCADCmd when re-opening FCStd
+    # files that contain persistent Assembly objects. Keep generated FCStd
+    # reloadable unless the deployment explicitly marks the runtime safe.
+    return freecad_version_tuple() >= (1, 2, 0)
+
+
+def native_techdraw_creation_enabled():
+    if truthy_env("FOURYI_FREECAD_DISABLE_NATIVE_TECHDRAW"):
+        return False
+    return env_bool("FOURYI_FREECAD_NATIVE_TECHDRAW", True)
 
 
 def native_assembly_available(*, require_joints=False):
-    if not truthy_env("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY"):
+    if not native_assembly_persistence_enabled():
+        return False
+    if not native_assembly_reload_safe():
         return False
     if Assembly is None:
         return False
@@ -3634,22 +3945,26 @@ def native_assembly_solver_available():
 def assembly_runtime_capabilities():
     module_available = Assembly is not None
     joint_object_available = JointObject is not None
-    persist_enabled = truthy_env("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY")
+    persist_enabled = native_assembly_persistence_enabled()
+    reload_safe = native_assembly_reload_safe()
     return {
         "schema": "freecad.assembly_capabilities.v1",
         "assembly_module_available": module_available,
         "joint_object_available": joint_object_available,
         "persistent_native_enabled": persist_enabled,
-        "persistent_native_available": bool(persist_enabled and module_available),
+        "persistent_native_reload_safe": reload_safe,
+        "persistent_native_available": bool(persist_enabled and reload_safe and module_available),
         "native_solver_available": bool(module_available and joint_object_available),
         "default_backend": "native_persistent" if native_assembly_available() else "typed_state_native_solver",
         "supported_joint_types": sorted(SUPPORTED_ASSEMBLY_JOINT_TYPES),
-        "requires_env": "FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY=1",
+        "opt_out_env": "FOURYI_FREECAD_DISABLE_NATIVE_ASSEMBLY=1",
+        "force_env": "FOURYI_FREECAD_FORCE_NATIVE_ASSEMBLY=1",
+        "legacy_opt_in_env": "FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY",
     }
 
 
 def native_techdraw_available():
-    return TechDraw is not None and truthy_env("FOURYI_FREECAD_NATIVE_TECHDRAW")
+    return TechDraw is not None and native_techdraw_creation_enabled()
 
 
 def techdraw_runtime_capabilities():
@@ -3673,7 +3988,9 @@ def techdraw_runtime_capabilities():
             "native SVG/DXF export",
             "PDF converter",
         ],
-        "requires_env": "FOURYI_FREECAD_NATIVE_TECHDRAW=1",
+        "default_backend": "native_techdraw" if native_techdraw_available() else "typed_vector_fallback",
+        "opt_out_env": "FOURYI_FREECAD_DISABLE_NATIVE_TECHDRAW=1",
+        "legacy_opt_in_env": "FOURYI_FREECAD_NATIVE_TECHDRAW",
     }
 
 
@@ -3685,6 +4002,66 @@ def native_assembly_detail(detail):
         "status": "native_assembly",
     })
     return detail
+
+
+def set_json_property(obj, name, value, description="4yi typed metadata"):
+    try:
+        if name not in list(getattr(obj, "PropertiesList", [])):
+            obj.addProperty("App::PropertyString", name, "4yi", description)
+        setattr(obj, name, json.dumps(value, ensure_ascii=False))
+        return True
+    except Exception:
+        return False
+
+
+def ensure_assembly_connector_lcs(doc, joint, obj, subelements, index):
+    frame = assembly_connector_frame_summary(obj, subelements)
+    lcs = frame.get("lcs") or {}
+    origin = lcs.get("origin") or frame.get("origin")
+    name = safe_feature_name(
+        "{}_Connector{}_LCS".format(safe_text(getattr(joint, "Name", "Joint"), 60), index + 1),
+        "ConnectorLCS",
+    )
+    detail = {
+        "connector": index + 1,
+        "object": object_ref(obj),
+        "subelements": [safe_text(value, 160) for value in list(subelements or [])],
+        "connector_frame": frame,
+        "lcs": lcs,
+        "created": False,
+        "native_type": "PartDesign::CoordinateSystem",
+    }
+    if not origin:
+        detail["error"] = "connector LCS has no origin"
+        return detail
+    try:
+        existing = None
+        for candidate in list(getattr(doc, "Objects", []) or []):
+            if safe_text(getattr(candidate, "Name", "")) == name:
+                existing = candidate
+                break
+        lcs_obj = existing or doc.addObject("PartDesign::CoordinateSystem", name)
+        try:
+            lcs_obj.Label = name
+        except Exception:
+            pass
+        try:
+            lcs_obj.Placement = FreeCAD.Placement(
+                FreeCAD.Vector(float(origin[0]), float(origin[1]), float(origin[2])),
+                FreeCAD.Rotation(),
+            )
+        except Exception as exc:
+            detail["placement_error"] = safe_text(exc, 220)
+        set_json_property(lcs_obj, "FourYiConnectorFrame", frame, "4yi Assembly connector frame/LCS")
+        set_json_property(lcs_obj, "FourYiRefHistory", frame.get("ref_history") or [], "4yi connector topological ref history")
+        detail["created"] = existing is None
+        detail["lcs_object"] = object_ref(lcs_obj)
+        detail["status"] = "native_datum_lcs"
+        return detail
+    except Exception as exc:
+        detail["error"] = safe_text(exc, 300)
+        detail["status"] = "native_datum_lcs_failed"
+        return detail
 
 
 def assembly_fallback_or_raise(fallback_func, doc, patch, exc):
@@ -3707,9 +4084,14 @@ def set_assembly_joint_connectors(doc, joint, patch):
     if not hasattr(joint, "Proxy") or not hasattr(joint.Proxy, "setJointConnectors"):
         raise ValueError("selected joint cannot set Assembly connectors")
     joint.Proxy.setJointConnectors(joint, refs)
+    connector_lcs = [
+        ensure_assembly_connector_lcs(doc, joint, refs[index][0], refs[index][1], index)
+        for index in range(2)
+    ]
     return {
         "reference1": assembly_reference_summary(getattr(joint, "Reference1", None)),
         "reference2": assembly_reference_summary(getattr(joint, "Reference2", None)),
+        "connector_lcs": connector_lcs,
     }
 
 
@@ -4026,6 +4408,46 @@ def add_native_techdraw_view_to_page(page, view):
             pass
 
 
+def assign_native_link_property(obj, prop, target):
+    if target is None or not hasattr(obj, prop):
+        return False
+    for value in (target, [target]):
+        try:
+            setattr(obj, prop, value)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def assign_native_vector_property(obj, prop, value):
+    vector = techdraw_vector_summary_from_patch({"value": value}, "value") if value is not None else None
+    if not vector or not hasattr(obj, prop):
+        return False
+    try:
+        setattr(obj, prop, FreeCAD.Vector(float(vector[0]), float(vector[1]), float(vector[2])))
+        return True
+    except Exception:
+        return False
+
+
+def native_techdraw_detail(detail):
+    detail.update({
+        "fallback": False,
+        "product_grade": True,
+        "status": "native_techdraw",
+        "native_creation_enabled": True,
+    })
+    return detail
+
+
+def native_techdraw_fallback_detail(detail, native_error):
+    detail["native_error"] = safe_text(native_error, 300) if native_error else None
+    detail["fallback_reason"] = "native TechDraw object creation failed" if native_error else "native TechDraw unavailable"
+    detail["product_grade"] = False
+    return detail
+
+
 def select_techdraw_page(doc, patch):
     selector = patch.get("page_selector") or patch.get("selector") or {}
     page = select_single_object(doc, selector)
@@ -4106,12 +4528,91 @@ def select_techdraw_view_model(doc, selector):
     return state, matches[0][0], matches[0][1]
 
 
+def select_or_seed_techdraw_page_model(doc, selector):
+    try:
+        return select_techdraw_page_model(doc, selector)
+    except Exception:
+        page_obj = select_single_object(doc, selector)
+        if not is_techdraw_page(page_obj):
+            raise
+        state = load_techdraw_fallback_state(doc)
+        page = techdraw_page_summary(page_obj)
+        page["fallback"] = True
+        page["product_grade"] = False
+        page["status"] = "native_seeded_typed_fallback"
+        save_techdraw_page_model(doc, state, page)
+        return state, page
+
+
+def select_or_seed_techdraw_view_model(doc, selector):
+    try:
+        return select_techdraw_view_model(doc, selector)
+    except Exception:
+        view_obj = select_single_object(doc, selector)
+        if not is_techdraw_view(view_obj):
+            raise
+        page_obj = None
+        for candidate in list(getattr(doc, "Objects", []) or []):
+            if not is_techdraw_page(candidate):
+                continue
+            try:
+                if view_obj in list(getattr(candidate, "Views", []) or []):
+                    page_obj = candidate
+                    break
+            except Exception:
+                continue
+        if page_obj is None:
+            pages = [obj for obj in list(getattr(doc, "Objects", []) or []) if is_techdraw_page(obj)]
+            page_obj = pages[0] if pages else None
+        if page_obj is None:
+            raise
+        state = load_techdraw_fallback_state(doc)
+        page = techdraw_page_summary(page_obj)
+        page["fallback"] = True
+        page["product_grade"] = False
+        page["status"] = "native_seeded_typed_fallback"
+        view = techdraw_view_summary(view_obj)
+        views = [item for item in list(page.get("views") or []) if safe_text(item.get("name"), 80) != safe_text(view.get("name"), 80)]
+        views.append(view)
+        page["views"] = views
+        save_techdraw_page_model(doc, state, page)
+        return state, page, view
+
+
 def save_techdraw_page_model(doc, state, page):
     name = safe_text(page.get("name"), 80)
     if not name:
         raise ValueError("TechDraw fallback page requires name")
     state.setdefault("pages", {})[name] = page
     save_techdraw_fallback_state(doc, state)
+
+
+def mirror_techdraw_fallback_view_to_native_page(doc, page, view):
+    try:
+        page_obj = select_single_object(doc, {"name": page.get("name")})
+    except Exception:
+        return
+    if not is_techdraw_page(page_obj):
+        return
+    try:
+        raw = getattr(page_obj, TECHDRAW_FALLBACK_VIEWS_PROPERTY, "")
+    except Exception:
+        raw = ""
+    try:
+        views = json.loads(raw) if raw else []
+    except Exception:
+        views = []
+    if not isinstance(views, list):
+        views = []
+    view_name = safe_text(view.get("name"), 80)
+    views = [item for item in views if not isinstance(item, dict) or safe_text(item.get("name"), 80) != view_name]
+    views.append(view)
+    set_json_property(
+        page_obj,
+        TECHDRAW_FALLBACK_VIEWS_PROPERTY,
+        views,
+        "4yi native TechDraw page supplemental typed view metadata",
+    )
 
 
 def add_techdraw_fallback_view_model(doc, page, view):
@@ -4121,6 +4622,7 @@ def add_techdraw_fallback_view_model(doc, page, view):
     views.append(view)
     current["views"] = views
     save_techdraw_page_model(doc, state, current)
+    mirror_techdraw_fallback_view_to_native_page(doc, current, view)
     return current, view
 
 
@@ -5198,7 +5700,7 @@ def add_techdraw_view(doc, patch):
             }, view_obj
         except Exception:
             pass
-    _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
+    _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
     source = select_techdraw_source(doc, patch)
     name = safe_feature_name(patch.get("name"), "View")
     view_box = techdraw_view_box_from_source(source, patch)
@@ -5231,13 +5733,59 @@ def add_techdraw_view(doc, patch):
 
 
 def add_techdraw_projection_group(doc, patch):
-    _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
     source = select_techdraw_source(doc, patch)
     name = safe_feature_name(patch.get("name"), "ProjectionGroup")
     view_box = techdraw_view_box_from_source(source, patch)
     projections = []
     for projection_name in techdraw_projection_names_from_patch(patch):
         projections.append(projection_name)
+    native_error = None
+    if native_techdraw_available():
+        try:
+            page_obj = select_techdraw_page(doc, patch)
+            group_obj = doc.addObject(TECHDRAW_PROJECTION_GROUP_TYPE, name)
+            if patch.get("label"):
+                group_obj.Label = safe_text(patch["label"], 160)
+            assign_native_link_property(group_obj, "Source", source)
+            assign_techdraw_native_layout(group_obj, patch)
+            if patch.get("projection_type") is not None and hasattr(group_obj, "ProjectionType"):
+                try:
+                    group_obj.ProjectionType = safe_text(patch["projection_type"], 80)
+                except Exception:
+                    pass
+            created_projections = []
+            for projection_name in projections:
+                created = False
+                for method_name in ["addProjection", "addProjectionType"]:
+                    method = getattr(group_obj, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method(projection_name)
+                        created = True
+                        break
+                    except Exception:
+                        continue
+                created_projections.append({
+                    "name": projection_name,
+                    "created": created,
+                    "backend": "native_projection_group",
+                })
+            add_native_techdraw_view_to_page(page_obj, group_obj)
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return native_techdraw_detail({
+                "page": object_ref(page_obj),
+                "source": object_ref(source),
+                "projection_group": techdraw_view_summary(group_obj),
+                "projections": projections,
+                "created_projections": created_projections,
+            }), group_obj
+        except Exception as exc:
+            native_error = exc
+    _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
     group = {
         **summary_ref(name, patch.get("label"), TECHDRAW_PROJECTION_GROUP_TYPE),
         "kind": "techdraw_projection_group",
@@ -5253,7 +5801,7 @@ def add_techdraw_projection_group(doc, patch):
     }
     group.update(techdraw_layout_summary_from_patch(patch))
     _page, group = add_techdraw_fallback_view_model(doc, page, group)
-    return {
+    return native_techdraw_fallback_detail({
         "page": summary_ref(page.get("name"), page.get("label"), TECHDRAW_PAGE_TYPE),
         "source": object_ref(source),
         "projection_group": group,
@@ -5261,12 +5809,57 @@ def add_techdraw_projection_group(doc, patch):
         "fallback": True,
         "product_grade": False,
         "status": "typed_vector_fallback",
-    }, None
+    }, native_error), None
 
 
 def add_techdraw_section_view(doc, patch):
-    _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or {})
-    _view_state, _view_page, base_view = select_techdraw_view_model(
+    native_error = None
+    if native_techdraw_available():
+        try:
+            page_obj = select_techdraw_page(doc, patch)
+            base_view_obj = select_techdraw_base_view(doc, patch)
+            source = None
+            if patch.get("source_selector") or patch.get("part_selector") or patch.get("feature_selector"):
+                source = select_techdraw_source(doc, patch)
+            else:
+                try:
+                    source_values = list(getattr(base_view_obj, "Source", []) or [])
+                    source = source_values[0] if source_values else None
+                except Exception:
+                    source = None
+            if source is None:
+                raise ValueError("add_techdraw_section_view requires source_selector or a base view with Source")
+            name = safe_feature_name(patch.get("name"), "Section")
+            origin, origin_detail = techdraw_section_origin(source, patch)
+            section_obj = doc.addObject(TECHDRAW_SECTION_VIEW_TYPE, name)
+            if patch.get("label"):
+                section_obj.Label = safe_text(patch["label"], 160)
+            assign_native_link_property(section_obj, "BaseView", base_view_obj)
+            assign_native_link_property(section_obj, "Source", source)
+            assign_native_vector_property(section_obj, "SectionOrigin", origin_detail.get("resolved"))
+            assign_native_vector_property(section_obj, "SectionNormal", patch.get("section_normal") or patch.get("direction") or [0, 1, 0])
+            if patch.get("section_symbol") is not None and hasattr(section_obj, "SectionSymbol"):
+                try:
+                    section_obj.SectionSymbol = safe_text(patch["section_symbol"], 20)
+                except Exception:
+                    pass
+            assign_techdraw_native_layout(section_obj, patch)
+            add_native_techdraw_view_to_page(page_obj, section_obj)
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return native_techdraw_detail({
+                "page": object_ref(page_obj),
+                "base_view": object_ref(base_view_obj),
+                "source": object_ref(source),
+                "section_origin": origin_detail,
+                "section_view": techdraw_view_summary(section_obj),
+            }), section_obj
+        except Exception as exc:
+            native_error = exc
+    _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or {})
+    _view_state, _view_page, base_view = select_or_seed_techdraw_view_model(
         doc,
         patch.get("base_view_selector") or patch.get("view_selector") or patch.get("selector") or {},
     )
@@ -5304,7 +5897,7 @@ def add_techdraw_section_view(doc, patch):
         section_view["sectionSymbol"] = safe_text(patch["section_symbol"], 20)
     section_view.update(techdraw_layout_summary_from_patch(patch))
     _page, section_view = add_techdraw_fallback_view_model(doc, page, section_view)
-    return {
+    return native_techdraw_fallback_detail({
         "page": summary_ref(page.get("name"), page.get("label"), TECHDRAW_PAGE_TYPE),
         "base_view": summary_ref(base_view.get("name"), base_view.get("label"), base_view.get("type_id")),
         "source": object_ref(source),
@@ -5313,12 +5906,49 @@ def add_techdraw_section_view(doc, patch):
         "status": "typed_vector_fallback",
         "section_origin": origin_detail,
         "section_view": section_view,
-    }, None
+    }, native_error), None
 
 
 def add_techdraw_detail_view(doc, patch):
-    _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or {})
-    _view_state, _view_page, base_view = select_techdraw_view_model(
+    native_error = None
+    if native_techdraw_available():
+        try:
+            page_obj = select_techdraw_page(doc, patch)
+            base_view_obj = select_techdraw_base_view(doc, patch)
+            name = safe_feature_name(patch.get("name"), "Detail")
+            detail_obj = doc.addObject(TECHDRAW_DETAIL_VIEW_TYPE, name)
+            if patch.get("label"):
+                detail_obj.Label = safe_text(patch["label"], 160)
+            assign_native_link_property(detail_obj, "BaseView", base_view_obj)
+            if patch.get("anchor_point") is not None:
+                assign_native_vector_property(detail_obj, "AnchorPoint", patch.get("anchor_point"))
+            elif patch.get("point") is not None:
+                assign_native_vector_property(detail_obj, "AnchorPoint", patch.get("point"))
+            if patch.get("radius") is not None and hasattr(detail_obj, "Radius"):
+                try:
+                    detail_obj.Radius = float(patch["radius"])
+                except Exception:
+                    pass
+            if patch.get("reference") is not None and hasattr(detail_obj, "Reference"):
+                try:
+                    detail_obj.Reference = safe_text(patch["reference"], 80)
+                except Exception:
+                    pass
+            assign_techdraw_native_layout(detail_obj, patch)
+            add_native_techdraw_view_to_page(page_obj, detail_obj)
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return native_techdraw_detail({
+                "page": object_ref(page_obj),
+                "base_view": object_ref(base_view_obj),
+                "detail_view": techdraw_view_summary(detail_obj),
+            }), detail_obj
+        except Exception as exc:
+            native_error = exc
+    _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or {})
+    _view_state, _view_page, base_view = select_or_seed_techdraw_view_model(
         doc,
         patch.get("base_view_selector") or patch.get("view_selector") or patch.get("selector") or {},
     )
@@ -5346,18 +5976,18 @@ def add_techdraw_detail_view(doc, patch):
         detail_view["reference"] = safe_text(patch["reference"], 80)
     detail_view.update(techdraw_layout_summary_from_patch(patch))
     _page, detail_view = add_techdraw_fallback_view_model(doc, page, detail_view)
-    return {
+    return native_techdraw_fallback_detail({
         "page": summary_ref(page.get("name"), page.get("label"), TECHDRAW_PAGE_TYPE),
         "base_view": summary_ref(base_view.get("name"), base_view.get("label"), base_view.get("type_id")),
         "fallback": True,
         "product_grade": False,
         "status": "headless_fallback",
         "detail_view": detail_view,
-    }, None
+    }, native_error), None
 
 
 def add_techdraw_centerline(doc, patch):
-    state, page, view = select_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
+    state, page, view = select_or_seed_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
     references = patch.get("references")
     if references is None and patch.get("reference") is not None:
         references = [patch["reference"]]
@@ -5388,7 +6018,7 @@ def add_techdraw_centerline(doc, patch):
 
 
 def add_techdraw_cosmetic_vertex(doc, patch):
-    state, page, view = select_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
+    state, page, view = select_or_seed_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
     point = vector_summary(vector_payload(patch, "point", "point", "position", "anchor_point"))
     vertexes = list(view.get("cosmetic_vertexes") or [])
     tag = "cosmeticVertex{}".format(len(vertexes) + 1)
@@ -5409,7 +6039,7 @@ def add_techdraw_cosmetic_vertex(doc, patch):
 
 
 def add_techdraw_cosmetic_line(doc, patch):
-    state, page, view = select_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
+    state, page, view = select_or_seed_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
     start = vector_summary(vector_payload(patch, "start", "start", "p1", "from"))
     end = vector_summary(vector_payload(patch, "end", "end", "p2", "to"))
     edges = list(view.get("cosmetic_edges") or [])
@@ -5434,14 +6064,25 @@ def add_techdraw_cosmetic_line(doc, patch):
 def request_techdraw_pdf_export(doc, patch):
     page = None
     if patch.get("page_selector") or patch.get("selector"):
-        _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
-    return {
+        if native_techdraw_available():
+            try:
+                page = select_techdraw_page(doc, patch)
+                return native_techdraw_detail({
+                    "page": object_ref(page),
+                    "export": "techdraw_pdf",
+                    "exporter": "rsvg-convert",
+                    "requested": True,
+                }), page
+            except Exception:
+                pass
+        _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
+    return native_techdraw_fallback_detail({
         "page": summary_ref(page.get("name"), page.get("label"), TECHDRAW_PAGE_TYPE) if page is not None else None,
         "export": "techdraw_pdf",
         "exporter": "rsvg-convert",
         "requested": True,
         "fallback": True,
-    }, page
+    }, None), page
 
 
 def selector_from_summary_ref(ref):
@@ -5510,8 +6151,6 @@ def resolve_techdraw_references(doc, patch, view, references):
 
 
 def add_techdraw_dimension(doc, patch):
-    _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or {})
-    _view_state, _view_page, view = select_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
     name = safe_feature_name(patch.get("name"), "Dimension")
     dimension_type = safe_text(patch.get("dimension_type") or patch.get("type") or "Distance", 80)
     if dimension_type not in SUPPORTED_TECHDRAW_DIMENSION_TYPES:
@@ -5526,6 +6165,67 @@ def add_techdraw_dimension(doc, patch):
         references = [patch["reference"]]
     if not references:
         references = ["Edge1"]
+    native_error = None
+    if native_techdraw_available():
+        try:
+            page_obj = select_techdraw_page(doc, patch)
+            view_obj = select_techdraw_view(doc, patch)
+            resolved_references, reference_diagnostics = resolve_techdraw_references(doc, patch, techdraw_view_summary(view_obj), references)
+            dimension_mode = techdraw_dimension_mode(patch)
+            dim_obj = doc.addObject(TECHDRAW_DIMENSION_TYPE, name)
+            if patch.get("label"):
+                dim_obj.Label = safe_text(patch["label"], 160)
+            if hasattr(dim_obj, "Type"):
+                try:
+                    dim_obj.Type = dimension_type
+                except Exception:
+                    pass
+            if measure_type is not None and hasattr(dim_obj, "MeasureType"):
+                try:
+                    dim_obj.MeasureType = measure_type
+                except Exception:
+                    pass
+            if hasattr(dim_obj, "References2D"):
+                try:
+                    dim_obj.References2D = [(view_obj, ref) for ref in resolved_references]
+                except Exception:
+                    pass
+            if hasattr(dim_obj, "References3D"):
+                source = techdraw_reference_source(doc, patch, techdraw_view_summary(view_obj))
+                if source is not None:
+                    try:
+                        dim_obj.References3D = [(source, ref) for ref in resolved_references]
+                    except Exception:
+                        pass
+            origin = patch.get("origin") or patch.get("base_point") or [0, 0, 0]
+            chain_offsets = patch.get("chain_offsets") if isinstance(patch.get("chain_offsets"), list) else []
+            coordinate_axis = safe_text(patch.get("coordinate_axis") or patch.get("axis") or "X", 8).upper()
+            set_json_property(dim_obj, "FourYiTechDrawDimensionMeta", {
+                "dimension_mode": dimension_mode,
+                "origin": safe_value(origin),
+                "chain_offsets": safe_value(chain_offsets),
+                "coordinate_axis": coordinate_axis if coordinate_axis in {"X", "Y"} else "X",
+                "reference_diagnostics": reference_diagnostics,
+            }, "4yi TechDraw typed dimension metadata")
+            assign_techdraw_native_layout(dim_obj, patch)
+            add_native_techdraw_view_to_page(page_obj, dim_obj)
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return native_techdraw_detail({
+                "page": object_ref(page_obj),
+                "view": object_ref(view_obj),
+                "dimension": techdraw_dimension_summary(dim_obj),
+                "dimension_type": dimension_type,
+                "dimension_mode": dimension_mode,
+                "references": list(resolved_references),
+                "reference_diagnostics": reference_diagnostics,
+            }), dim_obj
+        except Exception as exc:
+            native_error = exc
+    _state, page = select_or_seed_techdraw_page_model(doc, patch.get("page_selector") or {})
+    _view_state, _view_page, view = select_or_seed_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
     references, reference_diagnostics = resolve_techdraw_references(doc, patch, view, references)
     dimension_mode = techdraw_dimension_mode(patch)
     origin = patch.get("origin") or patch.get("base_point") or [0, 0, 0]
@@ -5554,7 +6254,7 @@ def add_techdraw_dimension(doc, patch):
     }
     dimension.update(techdraw_layout_summary_from_patch(patch))
     _page, dimension = add_techdraw_fallback_dimension_model(doc, page, dimension)
-    return {
+    return native_techdraw_fallback_detail({
         "page": summary_ref(page.get("name"), page.get("label"), TECHDRAW_PAGE_TYPE),
         "view": summary_ref(view.get("name"), view.get("label"), view.get("type_id")),
         "dimension": summary_ref(name, patch.get("label"), TECHDRAW_DIMENSION_TYPE),
@@ -5563,7 +6263,7 @@ def add_techdraw_dimension(doc, patch):
         "references": list(references),
         "reference_diagnostics": reference_diagnostics,
         "fallback": True,
-    }, None
+    }, native_error), None
 
 
 def apply_document_patches(doc, patches):
@@ -5573,6 +6273,7 @@ def apply_document_patches(doc, patches):
     for index, patch in enumerate(patches):
         if not isinstance(patch, dict):
             raise ValueError("patch at index {} must be an object".format(index))
+        before_lineage = document_topological_lineage(doc)
         op = patch.get("op")
         obj = None
         result_object = None
@@ -5715,12 +6416,38 @@ def apply_document_patches(doc, patches):
             pass
         else:
             raise ValueError("unsupported FreeCAD document patch op: " + safe_text(op))
+        try:
+            doc.recompute()
+        except Exception:
+            pass
+        after_lineage = document_topological_lineage(doc)
         result = {
             "index": index,
             "op": op,
             "object": result_object,
+            "operation_history": {
+                "schema": "freecad.operation_history.v1",
+                "index": index,
+                "op": safe_text(op, 80),
+                "patch": safe_value(patch),
+            },
+            "topological_lineage": {
+                "schema": "freecad.patch_topological_lineage.v1",
+                "before": {
+                    "digest": topological_lineage_digest(before_lineage),
+                    "ref_count": before_lineage.get("ref_count", 0),
+                },
+                "after": {
+                    "digest": topological_lineage_digest(after_lineage),
+                    "ref_count": after_lineage.get("ref_count", 0),
+                },
+                "migration": topological_lineage_migration(before_lineage, after_lineage),
+            },
         }
-        result.update(detail)
+        if isinstance(detail, dict):
+            result.update(detail)
+        else:
+            result["detail"] = safe_value(detail)
         results.append(result)
     try:
         doc.recompute()
@@ -5741,16 +6468,16 @@ def objects_from_namespace(namespace):
 
     if result is not None:
         if isinstance(result, (list, tuple)):
-            objects = list(result)
+            objects = exportable_shape_objects(result)
             if objects:
                 return objects
-        if hasattr(result, "Shape"):
+        if hasattr(result, "Shape") and is_exportable_shape_object(result):
             return [result]
         if hasattr(result, "exportStep"):
             return [result]
 
     if doc is not None:
-        objects = [obj for obj in getattr(doc, "Objects", []) if hasattr(obj, "Shape")]
+        objects = exportable_shape_objects(getattr(doc, "Objects", []))
         if objects:
             return objects
 
@@ -6123,6 +6850,8 @@ def document_from_namespace(namespace, objects):
     for obj in objects:
         if any(obj is existing_obj for existing_obj in existing):
             continue
+        if not is_exportable_shape_object(obj):
+            continue
         shape = getattr(obj, "Shape", obj)
         if not hasattr(shape, "ShapeType"):
             continue
@@ -6166,7 +6895,7 @@ try:
         with open(user_script, "r", encoding="utf-8") as fh:
             exec(compile(fh.read(), user_script, "exec"), namespace)
 
-    objects = objects_from_namespace(namespace)
+    objects = exportable_shape_objects(objects_from_namespace(namespace))
     if not objects:
         emit({"ok": False, "error": "script did not create a result shape or document object"})
         raise SystemExit(0)
@@ -6201,7 +6930,7 @@ try:
     fcstd_path = os.path.join(out_dir, "model.FCStd")
     doc = document_from_namespace(namespace, objects)
     doc.saveAs(fcstd_path)
-    viewer_objects = [obj for obj in list(getattr(doc, "Objects", []) or []) if hasattr(obj, "Shape")] or objects
+    viewer_objects = exportable_shape_objects(getattr(doc, "Objects", [])) or objects
     viewer_scene_path = export_viewer_scene_json(doc, viewer_objects, out_dir)
     techdraw_svg_path = export_techdraw_svg(doc, out_dir)
     techdraw_dxf_path = export_techdraw_dxf(doc, out_dir)
