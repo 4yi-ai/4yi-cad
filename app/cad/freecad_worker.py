@@ -30,9 +30,11 @@ SUPPORTED_IMPORT_FORMATS = {"step", "stp", "iges", "igs", "brep", "fcstd"}
 
 
 HARNESS = r'''
+import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import traceback
@@ -303,6 +305,68 @@ def bbox_center_summary(shape):
     ]
 
 
+def stable_number(value, digits=6):
+    try:
+        number = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(number):
+        return None
+    return round(number, digits)
+
+
+def stable_sequence(values, digits=6):
+    if not isinstance(values, (list, tuple)):
+        return None
+    result = []
+    for value in list(values)[:3]:
+        number = stable_number(value, digits=digits)
+        if number is None:
+            return None
+        result.append(number)
+    return result
+
+
+def subshape_stable_signature(subshape, prefix, index):
+    bbox = bbox_summary(subshape)
+    center = bbox_center_summary(subshape) if bbox else None
+    signature = {
+        "kind": prefix,
+        "shape_type": safe_text(getattr(subshape, "ShapeType", "")),
+        "center": stable_sequence(center),
+        "bbox_size": stable_sequence(bbox.get("size") if bbox else None),
+        "index_hint": int(index),
+    }
+    try:
+        signature["length"] = stable_number(getattr(subshape, "Length"))
+    except Exception:
+        pass
+    try:
+        signature["area"] = stable_number(getattr(subshape, "Area"))
+    except Exception:
+        pass
+    try:
+        signature["volume"] = stable_number(getattr(subshape, "Volume"))
+    except Exception:
+        pass
+    return {key: value for key, value in signature.items() if value is not None and value != ""}
+
+
+def subshape_stable_fields(subshape, prefix, index):
+    signature = subshape_stable_signature(subshape, prefix, index)
+    digest = hashlib.sha1(
+        json.dumps(signature, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:16]
+    reference = "{}{}".format(prefix, index + 1)
+    return {
+        "topological_reference": reference,
+        "stable_id": "{}:{}".format(prefix.lower(), digest),
+        "stable_reference": "{}:{}".format(reference, digest[:8]),
+        "signature": signature,
+        "stability": "geometric_signature",
+    }
+
+
 def subshape_ref_summary(subshape, prefix, index):
     item = {
         "name": "{}{}".format(prefix, index + 1),
@@ -310,6 +374,7 @@ def subshape_ref_summary(subshape, prefix, index):
         "index": index,
         "reference": "{}{}".format(prefix, index + 1),
     }
+    item.update(subshape_stable_fields(subshape, prefix, index))
     try:
         item["shape_type"] = safe_text(getattr(subshape, "ShapeType", ""))
     except Exception:
@@ -443,6 +508,7 @@ def viewer_face_mesh(face, index, placement=None, tolerance=0.8, triangle_limit=
         "reference": "Face{}".format(index + 1),
         "kind": "Face",
         "index": index,
+        **subshape_stable_fields(face, "Face", index),
         "bbox": bbox,
         "center": bbox_center_from_summary(bbox),
         "vertices": coords,
@@ -473,6 +539,7 @@ def viewer_edge_geometry(edge, index, placement=None, point_limit=32):
         "reference": "Edge{}".format(index + 1),
         "kind": "Edge",
         "index": index,
+        **subshape_stable_fields(edge, "Edge", index),
         "bbox": bbox,
         "center": bbox_center_from_summary(bbox),
         "points": points,
@@ -497,6 +564,7 @@ def viewer_vertex_geometry(vertex, index, placement=None):
         "reference": "Vertex{}".format(index + 1),
         "kind": "Vertex",
         "index": index,
+        **subshape_stable_fields(vertex, "Vertex", index),
         "bbox": bbox,
         "center": point,
         "point": point,
@@ -725,7 +793,24 @@ def constraint_summary(constraint, index):
         "index": index,
         "type": safe_text(getattr(constraint, "Type", type(constraint).__name__)),
         "name": safe_text(getattr(constraint, "Name", "")),
+        "status": "driving",
     }
+    active = None
+    driving = None
+    for key, attr in [("active", "IsActive"), ("driving", "IsDriving"), ("virtual_space", "InVirtualSpace")]:
+        if hasattr(constraint, attr):
+            try:
+                item[key] = bool(getattr(constraint, attr))
+                if key == "active":
+                    active = item[key]
+                if key == "driving":
+                    driving = item[key]
+            except Exception:
+                pass
+    if active is False:
+        item["status"] = "disabled"
+    elif driving is False:
+        item["status"] = "reference"
     for attr in [
         "Value",
         "First",
@@ -742,6 +827,63 @@ def constraint_summary(constraint, index):
             except Exception:
                 pass
     return item
+
+
+def sketch_edit_mode_summary(sketch, constraints, solver):
+    diagnostics = []
+    state = "unknown"
+    degrees_of_freedom = solver.get("degrees_of_freedom")
+    fully_constrained = solver.get("fully_constrained")
+    solver_status = solver.get("solver_status")
+    if solver.get("error"):
+        state = "solver_error"
+        diagnostics.append({
+            "severity": "error",
+            "code": "solver_error",
+            "message": safe_text(solver.get("error"), 300),
+        })
+    elif fully_constrained is True or degrees_of_freedom == 0:
+        state = "fully_constrained"
+    elif degrees_of_freedom is not None and degrees_of_freedom > 0:
+        state = "under_constrained"
+        diagnostics.append({
+            "severity": "warning",
+            "code": "under_constrained",
+            "message": "{} degrees of freedom remain".format(degrees_of_freedom),
+            "degrees_of_freedom": degrees_of_freedom,
+        })
+    status_text = safe_text(solver_status, 300).lower()
+    if "redundant" in status_text:
+        diagnostics.append({
+            "severity": "warning",
+            "code": "redundant_constraint",
+            "message": "Sketch solver reports redundant constraints",
+        })
+    if "conflict" in status_text or "inconsistent" in status_text or "over" in status_text:
+        diagnostics.append({
+            "severity": "error",
+            "code": "conflicting_constraint",
+            "message": "Sketch solver reports conflicting constraints",
+        })
+        state = "conflicting"
+    disabled = [item for item in list(constraints or []) if item.get("status") == "disabled"]
+    reference = [item for item in list(constraints or []) if item.get("status") == "reference"]
+    if disabled:
+        diagnostics.append({
+            "severity": "info",
+            "code": "disabled_constraints",
+            "message": "{} disabled constraints".format(len(disabled)),
+            "constraint_indexes": [item.get("index") for item in disabled],
+        })
+    return {
+        "state": state,
+        "degrees_of_freedom": degrees_of_freedom,
+        "fully_constrained": fully_constrained,
+        "constraint_count": len(constraints or []),
+        "reference_constraint_count": len(reference),
+        "diagnostics": diagnostics,
+        "diagnostic_count": len(diagnostics),
+    }
 
 
 def vector_summary(value):
@@ -893,6 +1035,7 @@ def sketch_summary(obj):
     solver = sketch_solver_status(obj, solve=False)
     degrees_of_freedom = solver.get("degrees_of_freedom")
     fully_constrained = solver.get("fully_constrained")
+    edit_mode = sketch_edit_mode_summary(obj, constraints, solver)
     return {
         "name": safe_text(getattr(obj, "Name", "")),
         "label": safe_text(getattr(obj, "Label", "")),
@@ -908,6 +1051,7 @@ def sketch_summary(obj):
         "degrees_of_freedom": degrees_of_freedom,
         "fully_constrained": fully_constrained,
         "solver": solver,
+        "edit_mode": edit_mode,
         "constraints": constraints[:120],
     }
 
@@ -1107,6 +1251,131 @@ def quantity_summary(value):
         return safe_value(value)
 
 
+def normalize_vector_values(values):
+    try:
+        x, y, z = [float(value) for value in list(values)[:3]]
+    except Exception:
+        return None
+    length = math.sqrt(x * x + y * y + z * z)
+    if not math.isfinite(length) or length <= 1e-12:
+        return None
+    return [x / length, y / length, z / length]
+
+
+def vector_from_points(start, end):
+    try:
+        return normalize_vector_values([
+            float(end[0]) - float(start[0]),
+            float(end[1]) - float(start[1]),
+            float(end[2]) - float(start[2]),
+        ])
+    except Exception:
+        return None
+
+
+def subshape_by_reference(obj, reference):
+    text = safe_text(reference, 160)
+    match = re.match(r"^(Face|Edge|Vertex)(\d+)$", text, re.IGNORECASE)
+    if not match:
+        return None, "", None
+    prefix = match.group(1).capitalize()
+    index = int(match.group(2)) - 1
+    attr = subelement_attr_for_prefix(prefix)
+    shape = getattr(obj, "Shape", None)
+    if shape is None or not attr:
+        return None, prefix, index
+    try:
+        values = list(getattr(shape, attr) or [])
+    except Exception:
+        values = []
+    if index < 0 or index >= len(values):
+        return None, prefix, index
+    return values[index], prefix, index
+
+
+def subshape_connector_frame(obj, reference):
+    subshape, prefix, index = subshape_by_reference(obj, reference)
+    if subshape is None:
+        center = None
+        try:
+            center = bbox_center_summary(getattr(obj, "Shape", None))
+        except Exception:
+            center = None
+        return {
+            "reference": safe_text(reference, 160),
+            "origin": center,
+            "frame_quality": "missing_reference",
+            "source": "fallback_object_center" if center else "unresolved",
+        }
+    fields = subshape_stable_fields(subshape, prefix, index)
+    origin = bbox_center_summary(subshape)
+    frame = {
+        "reference": safe_text(reference, 160),
+        "origin": origin,
+        "stable_id": fields.get("stable_id"),
+        "stable_reference": fields.get("stable_reference"),
+        "signature": fields.get("signature"),
+    }
+    if prefix == "Face":
+        normal = None
+        try:
+            umin, umax, vmin, vmax = subshape.ParameterRange
+            normal = vector_summary(subshape.normalAt((float(umin) + float(umax)) / 2.0, (float(vmin) + float(vmax)) / 2.0))
+        except Exception:
+            pass
+        frame.update({
+            "primary_axis": normalize_vector_values(normal) if normal else None,
+            "frame_quality": "orientation_complete" if normal else "origin_only",
+            "source": "face_normal" if normal else "face_center",
+        })
+    elif prefix == "Edge":
+        points = []
+        try:
+            points = [vector_summary(point) for point in list(subshape.discretize(Number=2))]
+        except Exception:
+            try:
+                points = [vector_summary(vertex.Point) for vertex in list(getattr(subshape, "Vertexes") or [])]
+            except Exception:
+                points = []
+        tangent = vector_from_points(points[0], points[-1]) if len(points) >= 2 else None
+        frame.update({
+            "primary_axis": tangent,
+            "frame_quality": "orientation_complete" if tangent else "origin_only",
+            "source": "edge_tangent" if tangent else "edge_center",
+        })
+    else:
+        point = None
+        try:
+            point = vector_summary(subshape.Point)
+        except Exception:
+            pass
+        frame.update({
+            "origin": point or origin,
+            "primary_axis": None,
+            "frame_quality": "origin_only",
+            "source": "vertex_point",
+        })
+    return frame
+
+
+def assembly_connector_frame_summary(obj, subelements):
+    values = [safe_text(value, 160) for value in list(subelements or []) if safe_text(value, 160)]
+    reference = values[0] if values else ""
+    if not reference:
+        return {
+            "object": object_ref(obj),
+            "reference": "",
+            "frame_quality": "object_only",
+            "origin": bbox_center_summary(getattr(obj, "Shape", None)) if hasattr(obj, "Shape") else None,
+            "source": "object_center",
+        }
+    frame = subshape_connector_frame(obj, reference)
+    frame["object"] = object_ref(obj)
+    if len(values) > 1:
+        frame["secondary_reference"] = values[1]
+    return frame
+
+
 def assembly_reference_summary(ref):
     try:
         if isinstance(ref, (list, tuple)) and len(ref) == 2:
@@ -1114,6 +1383,7 @@ def assembly_reference_summary(ref):
             return {
                 "object": object_ref(obj),
                 "subelements": [safe_text(value) for value in list(subelements or [])],
+                "connector_frame": assembly_connector_frame_summary(obj, subelements),
             }
     except Exception:
         pass
@@ -1175,6 +1445,78 @@ def assembly_joint_group_summary(group):
     }
 
 
+def assembly_solver_diagnostics(parts, joints, detail=None, *, fallback=False):
+    issues = []
+    detail = detail if isinstance(detail, dict) else {}
+    if fallback:
+        issues.append({
+            "severity": "warning",
+            "code": "assembly_fallback",
+            "message": "Assembly is stored as typed fallback metadata, not native persistent Assembly objects",
+        })
+    if detail.get("error"):
+        issues.append({
+            "severity": "error",
+            "code": "solver_error",
+            "message": safe_text(detail.get("error"), 300),
+        })
+    if len(parts or []) < 2 and any(joint.get("kind") == "joint" for joint in list(joints or [])):
+        issues.append({
+            "severity": "error",
+            "code": "not_enough_parts",
+            "message": "Assembly joints need at least two parts",
+        })
+    grounded = any(joint.get("kind") == "grounded" for joint in list(joints or [])) or any(part.get("grounded") for part in list(parts or []))
+    if parts and joints and not grounded:
+        issues.append({
+            "severity": "warning",
+            "code": "ungrounded_assembly",
+            "message": "No grounded part found; solver may leave rigid-body degrees of freedom",
+        })
+    for joint in list(joints or []):
+        if joint.get("kind") != "joint":
+            continue
+        for key in ["reference1", "reference2"]:
+            ref = joint.get(key)
+            if not isinstance(ref, dict) or not ref.get("object"):
+                issues.append({
+                    "severity": "error",
+                    "code": "missing_joint_reference",
+                    "joint": joint.get("name"),
+                    "reference": key,
+                    "message": "Joint is missing connector reference",
+                })
+                continue
+            frame = ref.get("connector_frame") if isinstance(ref.get("connector_frame"), dict) else {}
+            quality = frame.get("frame_quality")
+            if quality in {"missing_reference", "object_only"}:
+                issues.append({
+                    "severity": "error",
+                    "code": "unresolved_connector",
+                    "joint": joint.get("name"),
+                    "reference": key,
+                    "message": "Connector subelement could not be resolved",
+                })
+            elif quality == "origin_only":
+                issues.append({
+                    "severity": "warning",
+                    "code": "connector_origin_only",
+                    "joint": joint.get("name"),
+                    "reference": key,
+                    "message": "Connector has origin but no orientation axis",
+                })
+    severity_order = {"error": 3, "warning": 2, "info": 1}
+    severity = "ok"
+    if issues:
+        severity = max(issues, key=lambda item: severity_order.get(item.get("severity"), 0)).get("severity", "warning")
+    return {
+        "ok": severity != "error",
+        "severity": severity,
+        "issue_count": len(issues),
+        "issues": issues,
+    }
+
+
 def assembly_summary(assembly):
     group = list(getattr(assembly, "Group", []) or [])
     joint_groups = [obj for obj in group if is_assembly_joint_group(obj)]
@@ -1223,6 +1565,8 @@ def assembly_summary(assembly):
         "parts": parts,
         "joint_groups": [assembly_joint_group_summary(obj) for obj in joint_groups],
         "joints": joint_summaries,
+        "solver_backend": "native",
+        "solver_diagnostics": assembly_solver_diagnostics(parts, joint_summaries, fallback=False),
     }
 
 
@@ -1465,6 +1809,65 @@ def save_techdraw_fallback_state(doc, state):
     setattr(holder, TECHDRAW_FALLBACK_PAGES_PROPERTY, json.dumps(state, ensure_ascii=False))
 
 
+def techdraw_layout_diagnostics(page, views, dimensions, *, fallback=False):
+    issues = []
+    if fallback:
+        issues.append({
+            "severity": "warning",
+            "code": "typed_vector_fallback",
+            "message": "TechDraw page is represented by typed fallback layout metadata",
+        })
+    if not views:
+        issues.append({
+            "severity": "error",
+            "code": "no_views",
+            "message": "TechDraw page has no drawing views",
+        })
+    if not dimensions:
+        issues.append({
+            "severity": "warning",
+            "code": "no_dimensions",
+            "message": "TechDraw page has no dimensions",
+        })
+    template_path = page.get("template_path") if isinstance(page, dict) else None
+    if not template_path:
+        try:
+            template_path = safe_text(getattr(page.Template, "Template", "")) if getattr(page, "Template", None) is not None else ""
+        except Exception:
+            template_path = ""
+    if not template_path:
+        issues.append({
+            "severity": "warning",
+            "code": "no_template",
+            "message": "No drawing template/title block is attached",
+        })
+    for view in list(views or []):
+        width = view.get("width") if isinstance(view, dict) else None
+        height = view.get("height") if isinstance(view, dict) else None
+        if width is not None and height is not None:
+            try:
+                if float(width) <= 0 or float(height) <= 0:
+                    issues.append({
+                        "severity": "error",
+                        "code": "invalid_view_extent",
+                        "view": view.get("name"),
+                        "message": "TechDraw view has invalid layout extent",
+                    })
+            except Exception:
+                pass
+    severity_order = {"error": 3, "warning": 2, "info": 1}
+    severity = "ok"
+    if issues:
+        severity = max(issues, key=lambda item: severity_order.get(item.get("severity"), 0)).get("severity", "warning")
+    return {
+        "ok": severity != "error",
+        "severity": severity,
+        "issue_count": len(issues),
+        "issues": issues,
+        "export_quality": "fallback" if fallback else ("product_candidate" if severity != "error" else "incomplete"),
+    }
+
+
 def techdraw_fallback_pages(doc):
     state = load_techdraw_fallback_state(doc)
     pages = []
@@ -1478,6 +1881,10 @@ def techdraw_fallback_pages(doc):
         normalized["dimension_count"] = len(dimensions)
         normalized["views"] = views
         normalized["dimensions"] = dimensions
+        normalized["fallback"] = True
+        normalized["product_grade"] = False
+        normalized["status"] = normalized.get("status") or "typed_vector_fallback"
+        normalized["layout_diagnostics"] = techdraw_layout_diagnostics(normalized, views, dimensions, fallback=True)
         pages.append(normalized)
     return pages
 
@@ -1519,6 +1926,9 @@ def techdraw_page_summary(page):
     item.update({
         "kind": "techdraw_page",
         "scale": quantity_summary(getattr(page, "Scale", None)),
+        "fallback": False,
+        "product_grade": True,
+        "status": "native_techdraw",
         "view_count": len(views),
         "dimension_count": len(dimensions),
         "views": views,
@@ -1530,6 +1940,7 @@ def techdraw_page_summary(page):
             item["template_path"] = safe_text(getattr(page.Template, "Template", ""))
     except Exception:
         pass
+    item["layout_diagnostics"] = techdraw_layout_diagnostics(item, views, dimensions, fallback=False)
     return item
 
 
@@ -1843,6 +2254,69 @@ def select_single_object(doc, selector):
     return matches[0]
 
 
+def subelement_prefix_from_payload(kind="", reference="", stable_id=""):
+    raw = safe_text(kind or reference or stable_id, 80).lower()
+    if raw.startswith("face"):
+        return "Face"
+    if raw.startswith("edge"):
+        return "Edge"
+    if raw.startswith("vertex"):
+        return "Vertex"
+    return ""
+
+
+def subelement_attr_for_prefix(prefix):
+    return {
+        "Face": "Faces",
+        "Edge": "Edges",
+        "Vertex": "Vertexes",
+    }.get(prefix)
+
+
+def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", kind=""):
+    reference = safe_text(reference, 160)
+    stable_id = safe_text(stable_id, 160)
+    prefix = subelement_prefix_from_payload(kind=kind, reference=reference, stable_id=stable_id)
+    if not stable_id:
+        return reference, {
+            "requested_reference": reference,
+            "resolved_reference": reference,
+            "stable_id": None,
+            "status": "topological_reference",
+        }
+    attr = subelement_attr_for_prefix(prefix)
+    shape = getattr(obj, "Shape", None)
+    if shape is None or not attr:
+        return reference, {
+            "requested_reference": reference,
+            "resolved_reference": reference,
+            "stable_id": stable_id,
+            "status": "stable_unresolved_no_shape",
+        }
+    try:
+        subshapes = list(getattr(shape, attr) or [])
+    except Exception:
+        subshapes = []
+    for index, subshape in enumerate(subshapes):
+        fields = subshape_stable_fields(subshape, prefix, index)
+        if fields.get("stable_id") == stable_id:
+            resolved = fields["topological_reference"]
+            return resolved, {
+                "requested_reference": reference,
+                "resolved_reference": resolved,
+                "stable_id": stable_id,
+                "stable_reference": fields.get("stable_reference"),
+                "status": "stable_resolved" if resolved == reference else "stable_remapped",
+                "signature": fields.get("signature"),
+            }
+    return reference, {
+        "requested_reference": reference,
+        "resolved_reference": reference,
+        "stable_id": stable_id,
+        "status": "stable_unresolved_fallback_reference",
+    }
+
+
 def assign_property_value(obj, property_name, value):
     if not property_name or not isinstance(property_name, str):
         raise ValueError("set_property requires property")
@@ -1945,7 +2419,7 @@ def select_sketch(doc, patch):
     return ensure_sketch(select_single_object(doc, selector))
 
 
-def sketch_support_payload(patch):
+def sketch_support_payload(doc, patch):
     selector = (
         patch.get("support_selector")
         or patch.get("source_selector")
@@ -1969,13 +2443,28 @@ def sketch_support_payload(patch):
             or "Face1"
         )
         subelements = [safe_text(reference, 160)]
-    return selector, subelements
+    stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
+    if patch.get("stable_id") and not stable_ids:
+        stable_ids = [patch.get("stable_id")]
+    support = select_single_object(doc, selector)
+    diagnostics = []
+    resolved = []
+    for index, reference in enumerate(subelements):
+        stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        resolved_reference, detail = resolve_subelement_reference_on_object(
+            support,
+            reference=reference,
+            stable_id=stable_id,
+            kind=patch.get("kind") or "",
+        )
+        resolved.append(resolved_reference)
+        diagnostics.append(detail)
+    return support, resolved, diagnostics
 
 
 def attach_sketch_to_support(doc, sketch, patch):
     ensure_sketch(sketch)
-    selector, subelements = sketch_support_payload(patch)
-    support = select_single_object(doc, selector)
+    support, subelements, reference_diagnostics = sketch_support_payload(doc, patch)
     old_support = sketch_attachment_support_summary(sketch)
     old_map_mode = safe_text(getattr(sketch, "MapMode", ""))
     sketch.AttachmentSupport = [(support, tuple(subelements))]
@@ -2001,6 +2490,7 @@ def attach_sketch_to_support(doc, sketch, patch):
         "references": list(subelements),
         "old_attachment_support": old_support,
         "new_attachment_support": sketch_attachment_support_summary(sketch),
+        "reference_diagnostics": reference_diagnostics,
         "old_map_mode": old_map_mode,
         "new_map_mode": safe_text(getattr(sketch, "MapMode", "")),
         "placement": placement_summary(sketch),
@@ -2228,11 +2718,19 @@ def add_sketch_external_geometry(doc, sketch, patch):
         ]
     if any(not item for item in items):
         raise ValueError("add_external_geometry references must be non-empty")
+    stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
     old_count = len(sketch_external_geometry_summary(sketch))
     results = []
-    for reference in items:
-        sketch.addExternal(safe_text(getattr(source, "Name", "")), reference)
-        results.append({"source": object_ref(source), "reference": reference})
+    for index, reference in enumerate(items):
+        stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        resolved_reference, detail = resolve_subelement_reference_on_object(
+            source,
+            reference=reference,
+            stable_id=stable_id,
+            kind=patch.get("kind") or reference,
+        )
+        sketch.addExternal(safe_text(getattr(source, "Name", "")), resolved_reference)
+        results.append({"source": object_ref(source), "reference": resolved_reference, "reference_diagnostics": detail})
     try:
         doc.recompute()
     except Exception:
@@ -2647,7 +3145,23 @@ def assembly_connector_from_payload(doc, payload, fallback_selector=None):
         values = [safe_text(element, 160), safe_text(vertex, 160)]
     while len(values) < 2:
         values.append("")
-    return [obj, values[:2]]
+    stable_ids = payload.get("stable_ids") if isinstance(payload.get("stable_ids"), list) else []
+    if payload.get("stable_id") and not stable_ids:
+        stable_ids = [payload.get("stable_id")]
+    resolved = []
+    for index, reference in enumerate(values[:2]):
+        stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        kind = payload.get("kind") or payload.get("subelement_kind") or reference
+        resolved_reference, _detail = resolve_subelement_reference_on_object(
+            obj,
+            reference=reference,
+            stable_id=stable_id,
+            kind=kind,
+        )
+        resolved.append(resolved_reference)
+    while len(resolved) < 2:
+        resolved.append("")
+    return [obj, resolved[:2]]
 
 
 def connector_payloads_from_patch(patch):
@@ -2769,10 +3283,13 @@ def solve_assembly(doc, patch):
             doc.recompute()
         except Exception:
             pass
+        summary = assembly_summary(assembly)
         return native_assembly_detail({
             "assembly": object_ref(assembly),
             "solver_status": safe_value(status),
-            "assembly_summary": assembly_summary(assembly),
+            "solver_backend": "native",
+            "solver_diagnostics": summary.get("solver_diagnostics"),
+            "assembly_summary": summary,
         }), assembly
     except Exception as exc:
         return assembly_fallback_or_raise(solve_fallback_assembly, doc, patch, exc)
@@ -3548,9 +4065,26 @@ def fallback_assembly_connector(doc, payload, fallback_selector=None):
         or ""
     )
     vertex = payload.get("vertex") or payload.get("vertex_reference") or payload.get("point_reference") or ""
+    stable_ids = payload.get("stable_ids") if isinstance(payload.get("stable_ids"), list) else []
+    if payload.get("stable_id") and not stable_ids:
+        stable_ids = [payload.get("stable_id")]
+    element, element_detail = resolve_subelement_reference_on_object(
+        obj,
+        reference=element,
+        stable_id=stable_ids[0] if stable_ids else "",
+        kind=payload.get("kind") or payload.get("subelement_kind") or element,
+    )
+    vertex, vertex_detail = resolve_subelement_reference_on_object(
+        obj,
+        reference=vertex,
+        stable_id=stable_ids[1] if len(stable_ids) > 1 else "",
+        kind="Vertex" if vertex else "",
+    )
     return {
         "object": object_ref(obj),
         "subelements": [safe_text(element, 160), safe_text(vertex, 160)],
+        "connector_frame": assembly_connector_frame_summary(obj, [element, vertex]),
+        "reference_diagnostics": [element_detail, vertex_detail],
     }
 
 
@@ -3768,6 +4302,7 @@ def solve_fallback_assembly(doc, patch):
         "solver_status": assembly.get("solver_status"),
         "solver_backend": assembly.get("solver_backend"),
         "solver_detail": native_result,
+        "solver_diagnostics": summary.get("solver_diagnostics"),
         "assembly_summary": summary,
         "fallback": True,
     }, None
@@ -3776,6 +4311,12 @@ def solve_fallback_assembly(doc, patch):
 def fallback_assembly_summary(assembly):
     parts = list(assembly.get("parts") or [])
     joints = list(assembly.get("joints") or [])
+    diagnostics = assembly_solver_diagnostics(
+        parts,
+        joints,
+        detail=assembly.get("solver_detail"),
+        fallback=True,
+    )
     return {
         "name": safe_text(assembly.get("name"), 80),
         "label": safe_text(assembly.get("label"), 160),
@@ -3789,6 +4330,7 @@ def fallback_assembly_summary(assembly):
         "solver_status": assembly.get("solver_status"),
         "solver_backend": assembly.get("solver_backend"),
         "solver_detail": assembly.get("solver_detail"),
+        "solver_diagnostics": diagnostics,
         "fallback": True,
         "product_grade": False,
         "status": "typed_state_native_solver" if assembly.get("solver_backend") == "native_transient" else "headless_fallback",
@@ -4192,7 +4734,7 @@ def add_techdraw_centerline(doc, patch):
         references = [patch["reference"]]
     if not isinstance(references, list) or len(references) < 2:
         raise ValueError("add_techdraw_centerline requires at least two references")
-    refs = [safe_text(ref, 160) for ref in references]
+    refs, reference_diagnostics = resolve_techdraw_references(doc, patch, view, references)
     mode = bool(patch.get("centerline_mode", patch.get("mode", False)))
     center_lines = list(view.get("center_lines") or [])
     tag = "centerline{}".format(len(center_lines) + 1)
@@ -4202,6 +4744,7 @@ def add_techdraw_centerline(doc, patch):
         "references": refs,
         "mode": mode,
         "kind": "centerline",
+        "reference_diagnostics": reference_diagnostics,
     })
     view["center_lines"] = center_lines
     save_techdraw_page_model(doc, state, page)
@@ -4209,6 +4752,7 @@ def add_techdraw_centerline(doc, patch):
         "view": summary_ref(view.get("name"), view.get("label"), view.get("type_id")),
         "tag": tag,
         "references": refs,
+        "reference_diagnostics": reference_diagnostics,
         "center_lines": center_lines,
         "fallback": True,
     }, None
@@ -4271,6 +4815,61 @@ def request_techdraw_pdf_export(doc, patch):
     }, page
 
 
+def selector_from_summary_ref(ref):
+    if not isinstance(ref, dict):
+        return {}
+    if ref.get("name"):
+        return {"name": ref.get("name")}
+    if ref.get("label"):
+        return {"label": ref.get("label")}
+    if ref.get("type_id"):
+        return {"type_id": ref.get("type_id")}
+    return {}
+
+
+def techdraw_reference_source(doc, patch, view):
+    selector = (
+        patch.get("source_selector")
+        or patch.get("part_selector")
+        or patch.get("feature_selector")
+        or patch.get("object_selector")
+        or {}
+    )
+    if not selector and isinstance(view, dict):
+        source_refs = list(view.get("source") or [])
+        if source_refs:
+            selector = selector_from_summary_ref(source_refs[0])
+    if not selector:
+        return None
+    try:
+        return select_single_object(doc, selector)
+    except Exception:
+        return None
+
+
+def resolve_techdraw_references(doc, patch, view, references):
+    refs = [safe_text(ref, 160) for ref in list(references or [])]
+    stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
+    if patch.get("stable_id") and not stable_ids:
+        stable_ids = [patch.get("stable_id")]
+    source = techdraw_reference_source(doc, patch, view)
+    if source is None:
+        return refs, []
+    resolved = []
+    diagnostics = []
+    for index, reference in enumerate(refs):
+        stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        resolved_reference, detail = resolve_subelement_reference_on_object(
+            source,
+            reference=reference,
+            stable_id=stable_id,
+            kind=patch.get("kind") or patch.get("subelement_kind") or reference,
+        )
+        resolved.append(resolved_reference)
+        diagnostics.append(detail)
+    return resolved, diagnostics
+
+
 def add_techdraw_dimension(doc, patch):
     _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or {})
     _view_state, _view_page, view = select_techdraw_view_model(doc, patch.get("view_selector") or patch.get("selector") or {})
@@ -4288,6 +4887,7 @@ def add_techdraw_dimension(doc, patch):
         references = [patch["reference"]]
     if not references:
         references = ["Edge1"]
+    references, reference_diagnostics = resolve_techdraw_references(doc, patch, view, references)
     dimension_mode = techdraw_dimension_mode(patch)
     origin = patch.get("origin") or patch.get("base_point") or [0, 0, 0]
     chain_offsets = patch.get("chain_offsets") if isinstance(patch.get("chain_offsets"), list) else []
@@ -4311,6 +4911,7 @@ def add_techdraw_dimension(doc, patch):
             }
             for ref in references
         ],
+        "reference_diagnostics": reference_diagnostics,
     }
     dimension.update(techdraw_layout_summary_from_patch(patch))
     _page, dimension = add_techdraw_fallback_dimension_model(doc, page, dimension)
@@ -4321,6 +4922,7 @@ def add_techdraw_dimension(doc, patch):
         "dimension_type": dimension_type,
         "dimension_mode": dimension_mode,
         "references": list(references),
+        "reference_diagnostics": reference_diagnostics,
         "fallback": True,
     }, None
 

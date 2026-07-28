@@ -547,7 +547,7 @@
   .feature-meta span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
   .version-pill { border-radius: 999px; background: var(--panel-2); color: var(--muted); padding: 4px 8px; font-size: 12px; font-weight: 650; }
   .rename-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 8px; margin-top: 12px; }
-  .text-input, .param-input, .command-input {
+  .text-input, .param-input, .command-input, .select-input {
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: #fff;
@@ -556,6 +556,7 @@
   }
   .text-input { height: 36px; padding: 0 10px; }
   .param-input { width: 92px; height: 32px; text-align: right; padding: 0 9px; }
+  .select-input { height: 32px; min-width: 112px; padding: 0 8px; }
   .feature-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
   .typed-action-button {
     min-height: 30px;
@@ -641,6 +642,9 @@
   }
   .subelement-row:hover,
   .subelement-row.active { border-color: #9fc8ff; background: var(--primary-soft); }
+  .subelement-row.warning { border-color: #ffe1a6; background: #fff8e8; }
+  .subelement-row.error { border-color: #f4b8b8; background: #fff0f0; }
+  .subelement-row.info { border-color: #cfe4ff; background: #f5f9ff; }
   .subelement-row strong,
   .subelement-row span {
     min-width: 0;
@@ -649,6 +653,20 @@
     white-space: nowrap;
   }
   .subelement-row span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .diagnostic-list { display: grid; gap: 6px; margin-top: 10px; }
+  .diagnostic-row {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 7px 9px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .diagnostic-row strong { display: block; margin-bottom: 2px; }
+  .diagnostic-row span { display: block; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .diagnostic-row.warning { border-color: #ffe1a6; background: #fff8e8; color: var(--warning); }
+  .diagnostic-row.error { border-color: #f4b8b8; background: #fff0f0; color: var(--danger); }
+  .diagnostic-row.info { border-color: #cfe4ff; background: #f5f9ff; color: var(--primary); }
   .param-row {
     min-height: 42px;
     display: grid;
@@ -923,6 +941,29 @@ const I18N = {
     selectedObject: "Selected object",
     selectedReference: "Selected reference",
     typedActions: "Typed actions",
+    assemblyPanel: "Assembly",
+    assemblies: "Assemblies",
+    assemblyStatus: "Assembly status",
+    assemblyBackend: "Backend",
+    solverBackend: "Solver backend",
+    solverError: "Solver error",
+    solverDiagnostics: "Solver diagnostics",
+    connectorFrame: "Connector frame",
+    frameQuality: "Frame quality",
+    primaryAxis: "Primary axis",
+    parts: "Parts",
+    joints: "Joints",
+    selectedJoint: "Selected joint",
+    jointType: "Joint type",
+    jointDistance: "Distance",
+    jointAngle: "Angle",
+    connector1: "Connector 1",
+    connector2: "Connector 2",
+    solveAssembly: "Solve",
+    useConnectorAForConnector1: "Use connector A as connector 1",
+    useConnectorAForConnector2: "Use connector A as connector 2",
+    noAssemblyParts: "No assembly parts yet.",
+    noAssemblyJoints: "No assembly joints yet.",
     assemblyConnectorA: "Connector A",
     setAssemblyConnectorA: "Set connector A",
     clearAssemblyConnectorA: "Clear connector A",
@@ -942,6 +983,17 @@ const I18N = {
     addTechDrawCosmeticVertex: "Cosmetic vertex",
     needsSketch: "Needs an existing sketch",
     needsTechDrawView: "Needs a TechDraw page and view",
+    sketchEditMode: "Sketch edit mode",
+    degreesOfFreedom: "Degrees of freedom",
+    sketchGeometryList: "Geometry list",
+    sketchConstraintList: "Constraint list",
+    sketchDiagnostics: "Sketch diagnostics",
+    techDrawPanel: "TechDraw",
+    layoutDiagnostics: "Layout diagnostics",
+    exportQuality: "Export quality",
+    productGrade: "Product grade",
+    techDrawViews: "Views",
+    techDrawDimensions: "Dimensions",
     objectBadge: "Object: {name}",
     objectProperties: "Object properties",
     editableProperties: "Editable properties",
@@ -1235,6 +1287,29 @@ const I18N = {
     selectedObject: "已选对象",
     selectedReference: "已选引用",
     typedActions: "类型化操作",
+    assemblyPanel: "装配",
+    assemblies: "装配",
+    assemblyStatus: "装配状态",
+    assemblyBackend: "后端",
+    solverBackend: "求解后端",
+    solverError: "求解错误",
+    solverDiagnostics: "求解诊断",
+    connectorFrame: "连接器坐标系",
+    frameQuality: "坐标系质量",
+    primaryAxis: "主轴",
+    parts: "零件",
+    joints: "关节",
+    selectedJoint: "已选关节",
+    jointType: "关节类型",
+    jointDistance: "距离",
+    jointAngle: "角度",
+    connector1: "连接器 1",
+    connector2: "连接器 2",
+    solveAssembly: "求解",
+    useConnectorAForConnector1: "用连接器 A 替换连接器 1",
+    useConnectorAForConnector2: "用连接器 A 替换连接器 2",
+    noAssemblyParts: "还没有装配零件。",
+    noAssemblyJoints: "还没有装配关节。",
     assemblyConnectorA: "连接器 A",
     setAssemblyConnectorA: "设为连接器 A",
     clearAssemblyConnectorA: "清除连接器 A",
@@ -1254,6 +1329,17 @@ const I18N = {
     addTechDrawCosmeticVertex: "辅助点",
     needsSketch: "需要已有草图",
     needsTechDrawView: "需要 TechDraw 页面和视图",
+    sketchEditMode: "草图编辑模式",
+    degreesOfFreedom: "自由度",
+    sketchGeometryList: "几何列表",
+    sketchConstraintList: "约束列表",
+    sketchDiagnostics: "草图诊断",
+    techDrawPanel: "工程图",
+    layoutDiagnostics: "布局诊断",
+    exportQuality: "导出质量",
+    productGrade: "产品级",
+    techDrawViews: "视图",
+    techDrawDimensions: "尺寸",
     objectBadge: "对象：{name}",
     objectProperties: "对象属性",
     editableProperties: "可编辑属性",
@@ -1547,6 +1633,7 @@ const state = {
   selectedGeneratedParameterName: "",
   selectedFreeCadObjectName: "",
   selectedFreeCadSubelement: null,
+  selectedFreeCadAssemblyJoint: null,
   assemblyConnectorAnchor: null,
   viewMode: "iso",
   selectionMode: "feature",
@@ -1669,6 +1756,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     selectedGeneratedParameterName: state.selectedGeneratedParameterName,
     selectedFreeCadObjectName: state.selectedFreeCadObjectName,
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
+    selectedFreeCadAssemblyJoint: state.selectedFreeCadAssemblyJoint,
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
     viewMode: state.viewMode,
     selectionMode: state.selectionMode,
@@ -1734,6 +1822,7 @@ function restoreWorkbenchSession() {
     state.selectedGeneratedParameterName = saved.selectedGeneratedParameterName || "";
     state.selectedFreeCadObjectName = saved.selectedFreeCadObjectName || "";
     state.selectedFreeCadSubelement = saved.selectedFreeCadSubelement && typeof saved.selectedFreeCadSubelement === "object" ? saved.selectedFreeCadSubelement : null;
+    state.selectedFreeCadAssemblyJoint = saved.selectedFreeCadAssemblyJoint && typeof saved.selectedFreeCadAssemblyJoint === "object" ? saved.selectedFreeCadAssemblyJoint : null;
     state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
@@ -1901,7 +1990,17 @@ function selectedFreeCadSubelementKey() {
   return [
     normalizeFreeCadToken(selected.objectName),
     normalizeFreeCadToken(selected.reference),
+    normalizeFreeCadToken(selected.stableId),
     normalizeFreeCadToken(selected.kind),
+  ].join(":");
+}
+
+function selectedFreeCadAssemblyJointKey() {
+  const selected = state.selectedFreeCadAssemblyJoint;
+  if (!selected) return "";
+  return [
+    normalizeFreeCadToken(selected.assemblyName),
+    normalizeFreeCadToken(selected.jointName),
   ].join(":");
 }
 
@@ -1917,8 +2016,10 @@ function generatedCadViewerKey() {
     state.exploded ? "exploded" : "normal",
     normalizeFreeCadToken(state.selectedFreeCadObjectName),
     selectedFreeCadSubelementKey(),
+    selectedFreeCadAssemblyJointKey(),
     freeCadSelectableShapeObjects().length,
     freeCadDocumentGeometryText(),
+    freeCadAssemblyText(),
   ].join("|");
 }
 
@@ -1971,6 +2072,7 @@ function disposeThreeObject(object) {
     if (child.geometry?.dispose) child.geometry.dispose();
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.filter(Boolean).forEach((material) => {
+      if (material.map?.dispose) material.map.dispose();
       if (material.dispose) material.dispose();
     });
   });
@@ -2057,11 +2159,14 @@ function freeCadSelectionColor(kind) {
   }[kind] || 0x64748b;
 }
 
-function freeCadSubelementMatchesSelection(objectName, reference, kind) {
+function freeCadSubelementMatchesSelection(objectName, reference, kind, stableId = "") {
   const selected = state.selectedFreeCadSubelement;
   return Boolean(selected)
     && normalizeFreeCadToken(selected.objectName) === normalizeFreeCadToken(objectName)
-    && normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference)
+    && (
+      normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference)
+      || (stableId && normalizeFreeCadToken(selected.stableId) === normalizeFreeCadToken(stableId))
+    )
     && (!kind || normalizeFreeCadToken(selected.kind) === normalizeFreeCadToken(kind));
 }
 
@@ -2083,6 +2188,7 @@ function addFreeCadBoxTarget(THREE, group, options) {
     objectName: options.objectName,
     reference: options.reference || "",
     kind: options.kind,
+    stableId: options.stableId || "",
     priority: options.priority,
   };
   box.renderOrder = options.renderOrder || 4;
@@ -2141,7 +2247,8 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
         }
       }
       if (positions.length < 9) continue;
-      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Face");
+      const stableId = face.stable_id || face.stableId || "";
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Face", stableId);
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.computeVertexNormals();
@@ -2159,6 +2266,7 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
         objectName,
         reference,
         kind: "Face",
+        stableId,
         priority: 0,
       };
       mesh.renderOrder = selected ? 7 : 2;
@@ -2200,7 +2308,8 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
         positions.push(Number(point[0]) || 0, Number(point[1]) || 0, Number(point[2]) || 0);
       }
       if (positions.length < 6) continue;
-      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Edge");
+      const stableId = edge.stable_id || edge.stableId || "";
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Edge", stableId);
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       const material = new THREE.LineBasicMaterial({
@@ -2214,6 +2323,7 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
         objectName,
         reference,
         kind: "Edge",
+        stableId,
         priority: 0,
       };
       line.renderOrder = selected ? 10 : 5;
@@ -2237,7 +2347,8 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
       const reference = vertex.reference || vertex.name || "";
       const point = freeCadTriplet(vertex.point || vertex.center);
       if (!objectName || !reference || !point) continue;
-      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Vertex");
+      const stableId = vertex.stable_id || vertex.stableId || "";
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Vertex", stableId);
       const geometry = new THREE.SphereGeometry(selected ? radius * 1.35 : radius, 10, 6);
       const material = new THREE.MeshBasicMaterial({
         color: selected ? 0x22c55e : objectSelected || mode === "vertex" ? 0x16a34a : 0x64748b,
@@ -2252,11 +2363,202 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
         objectName,
         reference,
         kind: "Vertex",
+        stableId,
         priority: 0,
       };
       sphere.renderOrder = selected ? 11 : 6;
       group.add(sphere);
       targets.push(sphere);
+    }
+  }
+  return targets;
+}
+
+function viewerSceneObjectByName(scene, objectName) {
+  const normalized = normalizeFreeCadToken(objectName);
+  if (!normalized || !Array.isArray(scene?.objects)) return null;
+  return scene.objects.find((obj) => {
+    return normalizeFreeCadToken(obj.name) === normalized
+      || normalizeFreeCadToken(obj.label) === normalized;
+  }) || null;
+}
+
+function viewerSceneAveragePoint(points) {
+  const values = (Array.isArray(points) ? points : [])
+    .map(freeCadTriplet)
+    .filter(Boolean);
+  if (!values.length) return null;
+  const total = values.reduce((acc, point) => [acc[0] + point[0], acc[1] + point[1], acc[2] + point[2]], [0, 0, 0]);
+  return total.map((value) => value / values.length);
+}
+
+function viewerSceneSubelementPoint(objectScene, reference) {
+  const normalized = normalizeFreeCadToken(reference);
+  if (!objectScene || !normalized) return freeCadBboxInfo(objectScene?.bbox)?.center || null;
+  const vertex = (objectScene.vertices || []).find((item) => {
+    return normalizeFreeCadToken(item.reference || item.name) === normalized;
+  });
+  if (vertex) return freeCadTriplet(vertex.point || vertex.center);
+  const edge = (objectScene.edges || []).find((item) => {
+    return normalizeFreeCadToken(item.reference || item.name) === normalized;
+  });
+  if (edge) return freeCadTriplet(edge.center) || viewerSceneAveragePoint(edge.points);
+  const face = (objectScene.faces || []).find((item) => {
+    return normalizeFreeCadToken(item.reference || item.name) === normalized;
+  });
+  if (face) return freeCadTriplet(face.center) || freeCadBboxInfo(face.bbox)?.center || viewerSceneAveragePoint(face.vertices);
+  return freeCadBboxInfo(objectScene.bbox)?.center || null;
+}
+
+function viewerSceneConnectorPoint(scene, reference) {
+  if (!reference || typeof reference !== "object") return null;
+  const objRef = reference.object || reference.part || {};
+  const objectScene = viewerSceneObjectByName(scene, objRef.name || objRef.label || reference.objectName || "");
+  if (!objectScene) return null;
+  const subelements = Array.isArray(reference.subelements)
+    ? reference.subelements.filter(Boolean)
+    : [reference.reference, reference.element, reference.vertex].filter(Boolean);
+  if (!subelements.length) return freeCadBboxInfo(objectScene.bbox)?.center || null;
+  for (const subelement of subelements) {
+    const point = viewerSceneSubelementPoint(objectScene, subelement);
+    if (point) return point;
+  }
+  return freeCadBboxInfo(objectScene.bbox)?.center || null;
+}
+
+function freeCadPointDistance(left, right) {
+  const a = freeCadTriplet(left);
+  const b = freeCadTriplet(right);
+  if (!a || !b) return null;
+  const distance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  return Number.isFinite(distance) ? distance : null;
+}
+
+function freeCadJointVisualizationLabel(joint, pointA, pointB) {
+  const jointType = freeCadJointTypeValue(joint) || "Joint";
+  if (jointType === "Distance") {
+    const distance = freeCadJointScalarValue(joint, "distance") ?? freeCadPointDistance(pointA, pointB);
+    return distance !== null ? `${formatNumber(distance)} mm` : jointType;
+  }
+  if (jointType === "Angle") {
+    const angle = freeCadJointScalarValue(joint, "angle");
+    return angle !== null ? `${formatNumber(angle)} deg` : jointType;
+  }
+  return jointType;
+}
+
+function freeCadJointVisualizationSelected(assembly, joint) {
+  const selected = state.selectedFreeCadAssemblyJoint;
+  return Boolean(selected)
+    && normalizeFreeCadToken(selected.assemblyName) === normalizeFreeCadToken(freeCadAssemblyKey(assembly))
+    && normalizeFreeCadToken(selected.jointName) === normalizeFreeCadToken(freeCadJointKey(joint));
+}
+
+function addFreeCadViewerLabelSprite(THREE, group, text, point, options = {}) {
+  const location = freeCadTriplet(point);
+  if (!text || !location) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 384;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = "700 34px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const metrics = ctx.measureText(text);
+  const width = Math.min(canvas.width - 18, Math.max(58, metrics.width + 30));
+  const x = canvas.width / 2 - width / 2;
+  ctx.fillStyle = options.fill || "rgba(255,255,255,0.96)";
+  ctx.strokeStyle = options.stroke || "#bfdbfe";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(x, 36, width, 56, 10);
+  } else {
+    ctx.rect(x, 36, width, 56);
+  }
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = options.color || "#0b6fe8";
+  ctx.fillText(text, canvas.width / 2, 65);
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.position.set(location[0], location[1], location[2]);
+  const scale = Number(options.scale) || Math.max(8, freeCadPickPadding() * 5);
+  sprite.scale.set(scale * 2.4, scale * 0.8, 1);
+  sprite.renderOrder = options.renderOrder || 24;
+  group.add(sprite);
+  return sprite;
+}
+
+function addViewerSceneAssemblyJoints(THREE, group, scene) {
+  if (!scene || !freeCadAssemblies().length) return [];
+  const targets = [];
+  const radius = Math.max(0.45, freeCadPickPadding() * 0.7);
+  const labelScale = Math.max(10, freeCadPickPadding() * 5.4);
+  for (const assembly of freeCadAssemblies()) {
+    for (const joint of assembly.joints || []) {
+      if (joint.kind !== "joint") continue;
+      const pointA = viewerSceneConnectorPoint(scene, joint.reference1);
+      const pointB = viewerSceneConnectorPoint(scene, joint.reference2);
+      if (!pointA || !pointB) continue;
+      const selected = freeCadJointVisualizationSelected(assembly, joint);
+      const color = selected ? 0x0b6fe8 : 0x7c3aed;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute([...pointA, ...pointB], 3));
+      const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: selected ? 0.98 : 0.72,
+      }));
+      line.userData.freeCadSelection = {
+        type: "assembly_joint",
+        assemblyName: freeCadAssemblyKey(assembly),
+        jointName: freeCadJointKey(joint),
+        priority: selected ? -3 : -1,
+      };
+      line.renderOrder = selected ? 22 : 18;
+      group.add(line);
+      targets.push(line);
+
+      [pointA, pointB].forEach((point, index) => {
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(selected ? radius * 1.2 : radius, 12, 8),
+          new THREE.MeshBasicMaterial({
+            color: index === 0 ? 0x0b6fe8 : 0x22c55e,
+            transparent: true,
+            opacity: selected ? 0.96 : 0.8,
+            depthWrite: false,
+          })
+        );
+        sphere.position.set(point[0], point[1], point[2]);
+        sphere.userData.freeCadSelection = {
+          type: "assembly_joint",
+          assemblyName: freeCadAssemblyKey(assembly),
+          jointName: freeCadJointKey(joint),
+          priority: selected ? -4 : -2,
+        };
+        sphere.renderOrder = selected ? 23 : 19;
+        group.add(sphere);
+        targets.push(sphere);
+        addFreeCadViewerLabelSprite(THREE, group, index === 0 ? "A" : "B", point, {
+          scale: labelScale * 0.52,
+          renderOrder: selected ? 27 : 24,
+          color: index === 0 ? "#0b6fe8" : "#16a34a",
+        });
+      });
+
+      const mid = [
+        (pointA[0] + pointB[0]) / 2,
+        (pointA[1] + pointB[1]) / 2,
+        (pointA[2] + pointB[2]) / 2,
+      ];
+      addFreeCadViewerLabelSprite(THREE, group, freeCadJointVisualizationLabel(joint, pointA, pointB), mid, {
+        scale: labelScale,
+        renderOrder: selected ? 28 : 25,
+      });
     }
   }
   return targets;
@@ -2302,13 +2604,15 @@ function addFreeCadSelectionBoxes(THREE, group, options = {}) {
       const reference = item.reference || item.name || "";
       if (!reference) return;
       const pickInfo = freeCadBboxInfo(item.bbox, item.center);
-      const subSelected = freeCadSubelementMatchesSelection(objectName, reference, kind);
+      const stableId = item.stable_id || item.stableId || "";
+      const subSelected = freeCadSubelementMatchesSelection(objectName, reference, kind, stableId);
       const subVisible = subSelected || state.showBBox;
       const subTarget = addFreeCadBoxTarget(THREE, group, {
         type: "subelement",
         objectName,
         reference,
         kind,
+        stableId,
         info: pickInfo,
         color: subSelected ? 0x0b6fe8 : freeCadSelectionColor(kind),
         opacity: subSelected ? 0.34 : subVisible ? 0.075 : 0.012,
@@ -2330,7 +2634,8 @@ function chooseFreeCadViewerHit(hits) {
     .map((hit, index) => {
       const selection = hit.object?.userData?.freeCadSelection || {};
       let rank = 100;
-      if (targetKind && selection.kind === targetKind) rank = selection.priority ?? 0;
+      if (selection.type === "assembly_joint") rank = targetKind ? 24 : (selection.priority ?? -1);
+      else if (targetKind && selection.kind === targetKind) rank = selection.priority ?? 0;
       else if (!targetKind && selection.type === "object") rank = 0;
       else if (selection.type === "object") rank = 30;
       return { hit, rank, index };
@@ -2352,9 +2657,13 @@ function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
   raycaster.setFromCamera(pointer, camera);
   const hit = chooseFreeCadViewerHit(raycaster.intersectObjects(targets, false));
   const selection = hit?.object?.userData?.freeCadSelection;
+  if (selection?.type === "assembly_joint") {
+    selectFreeCadAssemblyJoint(selection.assemblyName, selection.jointName);
+    return;
+  }
   if (!selection?.objectName) return;
   if (selection.type === "subelement" && selection.reference) {
-    selectFreeCadSubelement(selection.objectName, selection.reference, selection.kind);
+    selectFreeCadSubelement(selection.objectName, selection.reference, selection.kind, selection.stableId || "");
     return;
   }
   selectFreeCadObject(selection.objectName);
@@ -2446,12 +2755,13 @@ async function mountGeneratedCadViewer() {
       const faceTargets = addViewerSceneFaceMeshes(THREE, group, viewerScene);
       const edgeTargets = addViewerSceneEdgeTargets(THREE, group, viewerScene);
       const vertexTargets = addViewerSceneVertexTargets(THREE, group, viewerScene);
+      const jointTargets = addViewerSceneAssemblyJoints(THREE, group, viewerScene);
       const proxyTargets = addFreeCadSelectionBoxes(THREE, group, {
         includeFaceProxies: !faceTargets.length,
         includeEdgeProxies: !edgeTargets.length,
         includeVertexProxies: !vertexTargets.length,
       });
-      targets = [...faceTargets, ...edgeTargets, ...vertexTargets, ...proxyTargets];
+      targets = [...faceTargets, ...edgeTargets, ...vertexTargets, ...jointTargets, ...proxyTargets];
     } else {
       if (!stlGeometry && stlBuffer) {
         stlGeometry = new STLLoader().parse(stlBuffer);
@@ -2622,6 +2932,7 @@ async function applyStoredServerVersion(version, versions = null) {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   state.bottomTab = "history";
@@ -2713,6 +3024,7 @@ async function importFreeCadModelFile(file) {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   state.previewPng = null;
   state.artifacts = {};
@@ -3039,8 +3351,20 @@ function firstFreeCadSketchObject() {
 }
 
 function firstFreeCadTechDrawPage() {
-  const pages = Array.isArray(state.documentSummary?.techdraw) ? state.documentSummary.techdraw : [];
-  return pages[0] || null;
+  return freeCadTechDrawPages()[0] || null;
+}
+
+function freeCadTechDrawPages() {
+  return Array.isArray(state.documentSummary?.techdraw) ? state.documentSummary.techdraw : [];
+}
+
+function freeCadTechDrawPageByName(name) {
+  const normalized = normalizeFreeCadToken(name);
+  if (!normalized) return null;
+  return freeCadTechDrawPages().find((page) => {
+    return normalizeFreeCadToken(page.name) === normalized
+      || normalizeFreeCadToken(page.label) === normalized;
+  }) || null;
 }
 
 function firstFreeCadTechDrawView() {
@@ -3246,14 +3570,150 @@ function freeCadBodyTipText() {
   return tips.join(" · ");
 }
 
-function freeCadAssemblyText() {
-  const assemblies = Array.isArray(state.documentSummary?.assemblies)
+function freeCadAssemblies() {
+  return Array.isArray(state.documentSummary?.assemblies)
     ? state.documentSummary.assemblies
     : [];
-  return assemblies
+}
+
+function freeCadAssemblyKey(assembly) {
+  return assembly?.name || assembly?.label || "";
+}
+
+function freeCadAssemblyDisplayName(assembly) {
+  return assembly?.label || assembly?.name || "Assembly";
+}
+
+function freeCadAssemblySelector(assembly) {
+  if (assembly?.name) return { name: assembly.name };
+  if (assembly?.label) return { label: assembly.label };
+  return { type_id: assembly?.type_id || "Assembly::AssemblyObject" };
+}
+
+function freeCadAssemblyByName(name) {
+  const normalized = normalizeFreeCadToken(name);
+  if (!normalized) return null;
+  return freeCadAssemblies().find((assembly) => {
+    return normalizeFreeCadToken(assembly.name) === normalized
+      || normalizeFreeCadToken(assembly.label) === normalized;
+  }) || null;
+}
+
+function freeCadJointKey(joint) {
+  return joint?.name || joint?.label || "";
+}
+
+function freeCadJointDisplayName(joint) {
+  return joint?.label || joint?.name || joint?.joint_type || "Joint";
+}
+
+function freeCadJointByName(assembly, jointName) {
+  const normalized = normalizeFreeCadToken(jointName);
+  if (!assembly || !normalized) return null;
+  return (Array.isArray(assembly.joints) ? assembly.joints : []).find((joint) => {
+    return normalizeFreeCadToken(joint.name) === normalized
+      || normalizeFreeCadToken(joint.label) === normalized;
+  }) || null;
+}
+
+function freeCadJointTypeValue(joint) {
+  const raw = String(joint?.joint_type || joint?.type || "").trim();
+  if (!raw) return "";
+  const normalized = raw.replace(/[-_\s]+/g, " ").toLowerCase();
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase()).replace(/\s+/g, "");
+}
+
+function freeCadJointScalarValue(joint, key) {
+  const value = joint?.[key] ?? (key === "angle" ? joint?.angle_degrees : null);
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function freeCadJointReferenceText(reference) {
+  if (!reference || typeof reference !== "object") return t("notAvailable");
+  const obj = reference.object || reference.part || {};
+  const objectName = obj.label || obj.name || "";
+  const subelements = Array.isArray(reference.subelements)
+    ? reference.subelements.filter(Boolean)
+    : [reference.reference || reference.element || reference.vertex].filter(Boolean);
+  return [objectName, subelements.join(".")].filter(Boolean).join(".") || t("notAvailable");
+}
+
+function freeCadConnectorFrame(reference) {
+  return reference?.connector_frame || reference?.connectorFrame || null;
+}
+
+function freeCadConnectorFrameText(reference) {
+  const frame = freeCadConnectorFrame(reference);
+  if (!frame) return t("notAvailable");
+  const stable = frame.stable_id ? `stable ${String(frame.stable_id).slice(-8)}` : "";
+  const axis = freeCadTriplet(frame.primary_axis) ? `axis ${freeCadVectorText(frame.primary_axis)}` : "";
+  return [frame.frame_quality, frame.source, axis, stable].filter(Boolean).join(" · ") || t("notAvailable");
+}
+
+function renderFreeCadConnectorFrameRows(joint) {
+  return `
+    <div class="kv"><span>${escapeHtml(t("connector1"))} ${escapeHtml(t("connectorFrame"))}</span><strong>${escapeHtml(freeCadConnectorFrameText(joint.reference1))}</strong></div>
+    <div class="kv"><span>${escapeHtml(t("connector2"))} ${escapeHtml(t("connectorFrame"))}</span><strong>${escapeHtml(freeCadConnectorFrameText(joint.reference2))}</strong></div>
+  `;
+}
+
+function freeCadAssemblyPartText(part) {
+  const base = Array.isArray(part?.placement?.base) ? ` @ ${part.placement.base.map(formatNumber).join(",")}` : "";
+  const grounded = part?.grounded ? " grounded" : "";
+  return `${part?.label || part?.name || "Part"}${grounded}${base}`;
+}
+
+function freeCadSolverDetailText(detail) {
+  if (!detail || typeof detail !== "object") return "";
+  if (detail.error) return String(detail.error);
+  const parts = [];
+  if (detail.ok !== undefined && detail.ok !== null) parts.push(detail.ok ? "ok" : "failed");
+  if (detail.part_count !== undefined) parts.push(`${detail.part_count} parts`);
+  if (detail.joint_count !== undefined) parts.push(`${detail.joint_count} joints`);
+  return parts.join(" · ");
+}
+
+function freeCadAssemblySolverText(assembly) {
+  const detail = assembly?.solver_detail || {};
+  const status = assembly?.solver_status ?? detail.solver_status;
+  const backend = assembly?.solver_backend || detail.solver_backend || "";
+  const result = freeCadSolverDetailText(detail);
+  return [backend, status !== undefined && status !== null ? `status ${status}` : "", result].filter(Boolean).join(" · ") || t("notAvailable");
+}
+
+function freeCadAssemblyStatusText(assembly) {
+  return [
+    assembly?.assembly_backend || (assembly?.fallback ? "typed_fallback" : "native"),
+    assembly?.status || "",
+    assembly?.product_grade === false ? "fallback" : "product-grade",
+  ].filter(Boolean).join(" · ");
+}
+
+function selectedFreeCadAssemblyJointRef() {
+  const selected = state.selectedFreeCadAssemblyJoint;
+  if (!selected) return null;
+  const assembly = freeCadAssemblyByName(selected.assemblyName);
+  const joint = freeCadJointByName(assembly, selected.jointName);
+  if (!assembly || !joint) {
+    state.selectedFreeCadAssemblyJoint = null;
+    return null;
+  }
+  return { assembly, joint };
+}
+
+function freeCadAssemblyJointStillExists(selected = state.selectedFreeCadAssemblyJoint) {
+  if (!selected?.assemblyName || !selected?.jointName) return false;
+  const assembly = freeCadAssemblyByName(selected.assemblyName);
+  return Boolean(freeCadJointByName(assembly, selected.jointName));
+}
+
+function freeCadAssemblyText() {
+  return freeCadAssemblies()
     .map((assembly) => {
-      const name = assembly.label || assembly.name || "Assembly";
-      return `${name}: ${assembly.part_count || 0} parts, ${assembly.joint_count || 0} joints`;
+      const name = freeCadAssemblyDisplayName(assembly);
+      const backend = assembly.solver_backend || assembly.assembly_backend || (assembly.fallback ? "typed_fallback" : "native");
+      return `${name}: ${assembly.part_count || 0} parts, ${assembly.joint_count || 0} joints, ${backend}`;
     })
     .join(" · ");
 }
@@ -3265,9 +3725,53 @@ function freeCadTechDrawText() {
   return pages
     .map((page) => {
       const name = page.label || page.name || "Page";
-      return `${name}: ${page.view_count || 0} views, ${page.dimension_count || 0} dims`;
+      const quality = page.layout_diagnostics?.export_quality || page.status || "";
+      return `${name}: ${page.view_count || 0} views, ${page.dimension_count || 0} dims${quality ? `, ${quality}` : ""}`;
     })
     .join(" · ");
+}
+
+function freeCadVectorText(value) {
+  const vector = freeCadTriplet(value);
+  return vector ? vector.map(formatNumber).join(", ") : t("notAvailable");
+}
+
+function freeCadDiagnosticItems(diagnostics) {
+  if (!diagnostics) return [];
+  if (Array.isArray(diagnostics)) return diagnostics.filter(Boolean);
+  if (Array.isArray(diagnostics.issues)) return diagnostics.issues.filter(Boolean);
+  return [];
+}
+
+function freeCadDiagnosticsSummaryText(diagnostics) {
+  const items = freeCadDiagnosticItems(diagnostics);
+  if (!items.length) return diagnostics?.ok === false ? "failed" : "ok";
+  const severity = diagnostics?.severity || items[0]?.severity || "warning";
+  return `${severity} · ${items.length}`;
+}
+
+function freeCadDiagnosticCssClass(item) {
+  const severity = String(item?.severity || "").toLowerCase();
+  if (severity === "error") return "error";
+  if (severity === "warning") return "warning";
+  return "info";
+}
+
+function renderFreeCadDiagnostics(titleKey, diagnostics) {
+  const items = freeCadDiagnosticItems(diagnostics);
+  if (!items.length) return "";
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t(titleKey))}</p>
+    <div class="diagnostic-list">
+      ${items.slice(0, 12).map((item) => {
+        const code = item.code || item.severity || "diagnostic";
+        const message = item.message || item.error || JSON.stringify(item);
+        const detail = [item.joint, item.reference, item.status].filter(Boolean).join(" · ");
+        return `<div class="diagnostic-row ${freeCadDiagnosticCssClass(item)}">
+          <strong>${escapeHtml(code)}</strong>
+          <span>${escapeHtml([message, detail].filter(Boolean).join(" · "))}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
 }
 
 function freeCadDocumentGeometryText() {
@@ -3319,10 +3823,18 @@ function selectedFreeCadSubelementRef() {
 function freeCadSubelementSummaryText(item) {
   const center = Array.isArray(item?.center) ? `center ${item.center.map(formatNumber).join(",")}` : "";
   const bbox = Array.isArray(item?.bbox?.size) ? `bbox ${item.bbox.size.map(formatNumber).join(" x ")}` : "";
-  return center || bbox || item?.shape_type || "";
+  const stable = item?.stable_id ? `stable ${String(item.stable_id).slice(-8)}` : "";
+  return [center || bbox || item?.shape_type || "", stable].filter(Boolean).join(" · ");
 }
 
-function freeCadSubelementByRef(obj, reference) {
+function freeCadSubelementByRef(obj, reference, stableId = "") {
+  const normalizedStable = normalizeFreeCadToken(stableId);
+  if (obj && normalizedStable) {
+    const stableMatch = freeCadSubelements(obj).find((item) => {
+      return normalizeFreeCadToken(item.stable_id || item.stableId) === normalizedStable;
+    });
+    if (stableMatch) return stableMatch;
+  }
   const normalized = normalizeFreeCadToken(reference);
   if (!obj || !normalized) return null;
   return freeCadSubelements(obj).find((item) => normalizeFreeCadToken(item.reference || item.name) === normalized) || null;
@@ -3546,7 +4058,7 @@ function renderViewport() {
   const generatedObject = generated ? selectedFreeCadObject() : null;
   const generatedSubelement = generated ? selectedFreeCadSubelementRef() : null;
   const generatedSubelementItem = generatedObject && generatedSubelement
-    ? freeCadSubelementByRef(generatedObject, generatedSubelement.reference)
+    ? freeCadSubelementByRef(generatedObject, generatedSubelement.reference, generatedSubelement.stableId)
     : null;
   $("subtitle").textContent = generated ? t("generatedPreviewSubtitle") : t("designStateVersion", { version: ds.version });
   $("selectionBadge").textContent = generated ? generatedViewportSelectionLabel(generatedObject, generatedParam, generatedSubelement) : t("featureBadge", { name: featureName(feature) });
@@ -3571,7 +4083,7 @@ function renderGeneratedPreview() {
   const selectedObject = selectedFreeCadObject();
   const selectedSubelement = selectedFreeCadSubelementRef();
   const selectedSubelementItem = selectedObject && selectedSubelement
-    ? freeCadSubelementByRef(selectedObject, selectedSubelement.reference)
+    ? freeCadSubelementByRef(selectedObject, selectedSubelement.reference, selectedSubelement.stableId)
     : null;
   const callout = selected ? `<div class="generated-selection-callout">
     <strong>${escapeHtml(generatedSelectionLabel(selected))}</strong>
@@ -3816,6 +4328,8 @@ function renderProperties() {
       </div>
     </div>
       ${renderFreeCadDocumentSummarySection()}
+      ${renderFreeCadAssemblySection()}
+      ${renderFreeCadTechDrawSection()}
       ${renderFreeCadObjectPropertySection()}
       ${renderGeneratedParameterSection()}
       <section class="section">
@@ -3897,6 +4411,189 @@ function renderFreeCadDocumentSummarySection() {
   </section>`;
 }
 
+function renderFreeCadAssemblySection() {
+  if (state.engine !== "freecad" || !state.documentSummary) return "";
+  const assemblies = freeCadAssemblies();
+  if (!assemblies.length) return "";
+  const selected = selectedFreeCadAssemblyJointRef();
+  return `<section class="section">
+    <h3>${icon("layers")} ${escapeHtml(t("assemblyPanel"))}</h3>
+    <div class="kv-list">
+      <div class="kv"><span>${escapeHtml(t("assemblies"))}</span><strong>${escapeHtml(String(assemblies.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("assemblyStatus"))}</span><strong>${escapeHtml(assemblies.map(freeCadAssemblyStatusText).join(" · "))}</strong></div>
+    </div>
+    ${assemblies.map((assembly) => renderFreeCadAssemblyBlock(assembly, selected)).join("")}
+  </section>`;
+}
+
+function renderFreeCadAssemblyBlock(assembly, selected) {
+  const assemblyName = freeCadAssemblyKey(assembly);
+  const parts = Array.isArray(assembly.parts) ? assembly.parts : [];
+  const joints = Array.isArray(assembly.joints) ? assembly.joints : [];
+  const solverDetail = freeCadSolverDetailText(assembly.solver_detail);
+  return `
+    <div class="selected-object-summary" style="margin-top:10px">
+      <strong>${escapeHtml(freeCadAssemblyDisplayName(assembly))}</strong>
+      <span>${escapeHtml(freeCadAssemblyStatusText(assembly))}</span>
+    </div>
+    <div class="kv-list">
+      <div class="kv"><span>${escapeHtml(t("parts"))}</span><strong>${escapeHtml(String(assembly.part_count ?? parts.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("joints"))}</span><strong>${escapeHtml(String(assembly.joint_count ?? joints.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("solverBackend"))}</span><strong>${escapeHtml(assembly.solver_backend || assembly.solver_detail?.solver_backend || t("notAvailable"))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("solverStatus"))}</span><strong>${escapeHtml(freeCadAssemblySolverText(assembly))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("solverDiagnostics"))}</span><strong>${escapeHtml(freeCadDiagnosticsSummaryText(assembly.solver_diagnostics))}</strong></div>
+      ${assembly.solver_detail?.error ? `<div class="kv"><span>${escapeHtml(t("solverError"))}</span><strong>${escapeHtml(assembly.solver_detail.error)}</strong></div>` : ""}
+      ${solverDetail && !assembly.solver_detail?.error ? `<div class="kv"><span>${escapeHtml(t("assemblyStatus"))}</span><strong>${escapeHtml(solverDetail)}</strong></div>` : ""}
+    </div>
+    ${renderFreeCadDiagnostics("solverDiagnostics", assembly.solver_diagnostics)}
+    <div class="feature-actions">
+      <button class="typed-action-button" type="button" onclick="solveFreeCadAssembly(${escapeHtml(jsString(assemblyName))})">${icon("sliders")} ${escapeHtml(t("solveAssembly"))}</button>
+    </div>
+    <p class="section-note" style="margin-top:12px">${escapeHtml(t("parts"))}</p>
+    ${parts.length ? `<div class="subelement-grid">${parts.map((part) => `
+      <button class="subelement-row" type="button" onclick="selectFreeCadObject(${escapeHtml(jsString(part.name || part.label || ""))})" title="${escapeHtml(freeCadAssemblyPartText(part))}">
+        <strong>${escapeHtml(part.label || part.name || "Part")}</strong>
+        <span>${escapeHtml([part.kind || part.type_id || "", part.grounded ? "grounded" : ""].filter(Boolean).join(" · "))}</span>
+      </button>
+    `).join("")}</div>` : `<p class="section-note">${escapeHtml(t("noAssemblyParts"))}</p>`}
+    <p class="section-note" style="margin-top:12px">${escapeHtml(t("joints"))}</p>
+    ${joints.length ? `<div class="subelement-grid">${joints.map((joint) => {
+      const active = selected
+        && normalizeFreeCadToken(freeCadAssemblyKey(selected.assembly)) === normalizeFreeCadToken(assemblyName)
+        && normalizeFreeCadToken(freeCadJointKey(selected.joint)) === normalizeFreeCadToken(freeCadJointKey(joint));
+      const detail = joint.kind === "grounded"
+        ? freeCadJointReferenceText({ object: joint.object_to_ground, subelements: [] })
+        : `${freeCadJointTypeValue(joint) || joint.kind || "Joint"} · ${freeCadJointReferenceText(joint.reference1)} -> ${freeCadJointReferenceText(joint.reference2)}`;
+      return `<button class="subelement-row ${active ? "active" : ""}" type="button" onclick="selectFreeCadAssemblyJoint(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(freeCadJointKey(joint)))})" title="${escapeHtml(detail)}">
+        <strong>${escapeHtml(freeCadJointDisplayName(joint))}</strong>
+        <span>${escapeHtml(detail)}</span>
+      </button>`;
+    }).join("")}</div>` : `<p class="section-note">${escapeHtml(t("noAssemblyJoints"))}</p>`}
+    ${selected && normalizeFreeCadToken(freeCadAssemblyKey(selected.assembly)) === normalizeFreeCadToken(assemblyName)
+      ? renderSelectedFreeCadAssemblyJointEditor(selected.assembly, selected.joint)
+      : ""}
+  `;
+}
+
+function renderSelectedFreeCadAssemblyJointEditor(assembly, joint) {
+  if (!assembly || !joint || joint.kind !== "joint") return "";
+  const assemblyName = freeCadAssemblyKey(assembly);
+  const jointName = freeCadJointKey(joint);
+  const jointType = freeCadJointTypeValue(joint) || "Fixed";
+  const distance = freeCadJointScalarValue(joint, "distance");
+  const angle = freeCadJointScalarValue(joint, "angle");
+  const typeOptions = ["Fixed", "Revolute", "Slider", "Cylindrical", "Distance", "Angle"];
+  const anchorReady = Boolean(state.assemblyConnectorAnchor && freeCadConnectorStillExists(state.assemblyConnectorAnchor));
+  return `
+    <div class="selected-object-summary" style="margin-top:10px">
+      <strong>${escapeHtml(t("selectedJoint"))}: ${escapeHtml(freeCadJointDisplayName(joint))}</strong>
+      <span>${escapeHtml(`${freeCadJointReferenceText(joint.reference1)} -> ${freeCadJointReferenceText(joint.reference2)}`)}</span>
+    </div>
+    <div class="param-row">
+      <label>${escapeHtml(t("jointType"))} <span>joint_type</span></label>
+      <select class="select-input" onchange="commitFreeCadJointType(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(jointName))}, this.value)">
+        ${typeOptions.map((value) => `<option value="${escapeHtml(value)}" ${value === jointType ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+      </select>
+      <span class="unit"></span>
+    </div>
+    <div class="param-row">
+      <label>${escapeHtml(t("jointDistance"))} <span>distance</span></label>
+      <input class="param-input" type="number" step="0.5" value="${escapeHtml(formatNumber(distance ?? 0))}" ${jointType === "Distance" ? "" : "disabled"} onchange="commitFreeCadJointScalar(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(jointName))}, 'distance', this.value)" />
+      <span class="unit">${escapeHtml(t("unitMm"))}</span>
+    </div>
+    <div class="param-row">
+      <label>${escapeHtml(t("jointAngle"))} <span>angle</span></label>
+      <input class="param-input" type="number" step="0.5" value="${escapeHtml(formatNumber(angle ?? 0))}" ${jointType === "Angle" ? "" : "disabled"} onchange="commitFreeCadJointScalar(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(jointName))}, 'angle', this.value)" />
+      <span class="unit">deg</span>
+    </div>
+    <div class="kv-list" style="margin-top:10px">
+      <div class="kv"><span>${escapeHtml(t("connector1"))}</span><strong>${escapeHtml(freeCadJointReferenceText(joint.reference1))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("connector2"))}</span><strong>${escapeHtml(freeCadJointReferenceText(joint.reference2))}</strong></div>
+      ${renderFreeCadConnectorFrameRows(joint)}
+    </div>
+    <div class="feature-actions">
+      <button class="typed-action-button" type="button" onclick="solveFreeCadAssembly(${escapeHtml(jsString(assemblyName))})">${icon("sliders")} ${escapeHtml(t("solveAssembly"))}</button>
+      <button class="typed-action-button" type="button" ${anchorReady ? `onclick="commitFreeCadJointConnector(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(jointName))}, 1)"` : "disabled"} title="${escapeHtml(anchorReady ? t("useConnectorAForConnector1") : t("needsConnectorA"))}">${icon("pointer")} ${escapeHtml(t("useConnectorAForConnector1"))}</button>
+      <button class="typed-action-button" type="button" ${anchorReady ? `onclick="commitFreeCadJointConnector(${escapeHtml(jsString(assemblyName))}, ${escapeHtml(jsString(jointName))}, 2)"` : "disabled"} title="${escapeHtml(anchorReady ? t("useConnectorAForConnector2") : t("needsConnectorA"))}">${icon("pointer")} ${escapeHtml(t("useConnectorAForConnector2"))}</button>
+    </div>
+  `;
+}
+
+function renderFreeCadTechDrawSection() {
+  if (state.engine !== "freecad" || !state.documentSummary) return "";
+  const pages = freeCadTechDrawPages();
+  if (!pages.length) return "";
+  return `<section class="section">
+    <h3>${icon("edit")} ${escapeHtml(t("techDrawPanel"))}</h3>
+    <div class="kv-list">
+      <div class="kv"><span>Pages</span><strong>${escapeHtml(String(pages.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("exportQuality"))}</span><strong>${escapeHtml(pages.map(freeCadTechDrawPageStatusText).join(" · "))}</strong></div>
+    </div>
+    ${pages.map(renderFreeCadTechDrawPageBlock).join("")}
+  </section>`;
+}
+
+function freeCadTechDrawPageKey(page) {
+  return page?.name || page?.label || "";
+}
+
+function freeCadTechDrawPageDisplayName(page) {
+  return page?.label || page?.name || "Page";
+}
+
+function freeCadTechDrawPageStatusText(page) {
+  const diagnostics = page?.layout_diagnostics || {};
+  const quality = diagnostics.export_quality || page?.status || "";
+  const product = page?.product_grade === false ? "fallback" : "product-grade";
+  return [freeCadTechDrawPageDisplayName(page), quality, diagnostics.severity, product].filter(Boolean).join(": ");
+}
+
+function freeCadTechDrawViewText(view) {
+  const source = Array.isArray(view?.source)
+    ? view.source.map((item) => item.label || item.name || item.type_id || "").filter(Boolean).join(",")
+    : "";
+  const placement = [Number.isFinite(Number(view?.x)) ? `x ${formatNumber(view.x)}` : "", Number.isFinite(Number(view?.y)) ? `y ${formatNumber(view.y)}` : ""].filter(Boolean).join(" · ");
+  return [view?.kind || view?.type_id || "view", source, placement].filter(Boolean).join(" · ");
+}
+
+function freeCadTechDrawDimensionText(dimension) {
+  const refs = Array.isArray(dimension?.references2D)
+    ? dimension.references2D.map((item) => item.subelement || item.reference || "").filter(Boolean).join(",")
+    : "";
+  return [dimension?.type || dimension?.dimension_type || "Dimension", dimension?.dimension_mode || "", refs].filter(Boolean).join(" · ");
+}
+
+function renderFreeCadTechDrawPageBlock(page) {
+  const pageName = freeCadTechDrawPageKey(page);
+  const views = Array.isArray(page.views) ? page.views : [];
+  const dimensions = Array.isArray(page.dimensions) ? page.dimensions : [];
+  return `<div class="selected-object-summary" style="margin-top:10px">
+      <strong>${escapeHtml(freeCadTechDrawPageDisplayName(page))}</strong>
+      <span>${escapeHtml(freeCadTechDrawPageStatusText(page))}</span>
+    </div>
+    <div class="kv-list">
+      <div class="kv"><span>${escapeHtml(t("techDrawViews"))}</span><strong>${escapeHtml(String(page.view_count ?? views.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("techDrawDimensions"))}</span><strong>${escapeHtml(String(page.dimension_count ?? dimensions.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("productGrade"))}</span><strong>${escapeHtml(page.product_grade === false ? "false" : "true")}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("exportQuality"))}</span><strong>${escapeHtml(page.layout_diagnostics?.export_quality || page.status || t("notAvailable"))}</strong></div>
+      ${page.template_path ? `<div class="kv"><span>Template</span><strong>${escapeHtml(page.template_path)}</strong></div>` : ""}
+    </div>
+    <div class="feature-actions">
+      <button class="typed-action-button" type="button" onclick="exportFreeCadTechDrawPage(${escapeHtml(jsString(pageName))})">${icon("download")} PDF</button>
+    </div>
+    ${renderFreeCadDiagnostics("layoutDiagnostics", page.layout_diagnostics)}
+    ${views.length ? `<p class="section-note" style="margin-top:12px">${escapeHtml(t("techDrawViews"))}</p>
+      <div class="subelement-grid">${views.slice(0, 16).map((view) => `<div class="subelement-row ${view.product_grade === false ? "warning" : ""}">
+        <strong>${escapeHtml(view.label || view.name || "View")}</strong>
+        <span title="${escapeHtml(freeCadTechDrawViewText(view))}">${escapeHtml(freeCadTechDrawViewText(view))}</span>
+      </div>`).join("")}</div>` : ""}
+    ${dimensions.length ? `<p class="section-note" style="margin-top:12px">${escapeHtml(t("techDrawDimensions"))}</p>
+      <div class="subelement-grid">${dimensions.slice(0, 16).map((dimension) => `<div class="subelement-row ${dimension.product_grade === false ? "warning" : ""}">
+        <strong>${escapeHtml(dimension.label || dimension.name || "Dim")}</strong>
+        <span title="${escapeHtml(freeCadTechDrawDimensionText(dimension))}">${escapeHtml(freeCadTechDrawDimensionText(dimension))}</span>
+      </div>`).join("")}</div>` : ""}`;
+}
+
 function renderFreeCadObjectPropertySection() {
   const obj = selectedFreeCadObject();
   if (state.engine !== "freecad" || !obj) return "";
@@ -3951,7 +4648,7 @@ function renderFreeCadSubelementSection(obj) {
   if (!refs.length) return "";
   const objectName = freeCadObjectKey(obj);
   const selected = selectedFreeCadSubelementRef();
-  const selectedItem = selected ? freeCadSubelementByRef(obj, selected.reference) : null;
+  const selectedItem = selected ? freeCadSubelementByRef(obj, selected.reference, selected.stableId) : null;
   const actions = selected ? renderFreeCadSubelementActions(obj, selected, selectedItem) : "";
   const selectedSummary = selected ? `<div class="selected-object-summary">
     <strong>${escapeHtml(t("selectedReference"))}: ${escapeHtml(selected.reference)}</strong>
@@ -3964,10 +4661,11 @@ function renderFreeCadSubelementSection(obj) {
     <div class="subelement-grid">
       ${refs.map((item) => {
         const reference = item.reference || item.name || "";
+        const stableId = item.stable_id || item.stableId || "";
         const active = selected
           && normalizeFreeCadToken(selected.objectName) === normalizeFreeCadToken(objectName)
-          && normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference);
-        return `<button class="subelement-row ${active ? "active" : ""}" type="button" onclick="selectFreeCadSubelement(${escapeHtml(jsString(objectName))}, ${escapeHtml(jsString(reference))}, ${escapeHtml(jsString(item.group || item.kind || ""))})" title="${escapeHtml(freeCadSubelementSummaryText(item))}">
+          && (normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference) || (stableId && normalizeFreeCadToken(selected.stableId) === normalizeFreeCadToken(stableId)));
+        return `<button class="subelement-row ${active ? "active" : ""}" type="button" onclick="selectFreeCadSubelement(${escapeHtml(jsString(objectName))}, ${escapeHtml(jsString(reference))}, ${escapeHtml(jsString(item.group || item.kind || ""))}, ${escapeHtml(jsString(stableId))})" title="${escapeHtml(freeCadSubelementSummaryText(item))}">
           <strong>${escapeHtml(reference)}</strong>
           <span>${escapeHtml(freeCadSubelementSummaryText(item) || item.shape_type || "")}</span>
         </button>`;
@@ -3998,9 +4696,17 @@ function freeCadSubelementPoint(item) {
   return freeCadTriplet(item?.point) || freeCadTriplet(item?.center);
 }
 
+function freeCadSubelementStablePatchFields(item, selected = null) {
+  const stableId = item?.stable_id || item?.stableId || selected?.stableId || "";
+  const fields = {};
+  if (stableId) fields.stable_id = stableId;
+  const kind = item?.group || item?.kind || selected?.kind || "";
+  if (kind) fields.kind = kind;
+  return fields;
+}
+
 function firstFreeCadAssembly() {
-  const assemblies = Array.isArray(state.documentSummary?.assemblies) ? state.documentSummary.assemblies : [];
-  return assemblies[0] || null;
+  return freeCadAssemblies()[0] || null;
 }
 
 function freeCadConnectorKind(kind, reference) {
@@ -4020,6 +4726,9 @@ function freeCadConnectorFromSelection(obj, reference, kind, item = null) {
     selector: freeCadObjectSelector(obj),
     reference,
     kind: connectorKind,
+    stableId: item?.stable_id || item?.stableId || "",
+    stableReference: item?.stable_reference || "",
+    stability: item?.stability || "",
     point,
   };
 }
@@ -4042,8 +4751,14 @@ function freeCadConnectorObjectSame(left, right) {
 
 function assemblyConnectorPayload(connector) {
   const payload = { selector: connector.selector || { name: connector.objectName } };
-  if (connector.kind === "Vertex") payload.vertex = connector.reference;
-  else payload.element = connector.reference;
+  if (connector.kind === "Vertex") {
+    payload.vertex = connector.reference;
+    if (connector.stableId) payload.stable_ids = ["", connector.stableId];
+  } else {
+    payload.element = connector.reference;
+    if (connector.stableId) payload.stable_id = connector.stableId;
+  }
+  if (connector.kind) payload.kind = connector.kind;
   return payload;
 }
 
@@ -4062,6 +4777,7 @@ function renderFreeCadSubelementActions(obj, selected, selectedItem) {
   if (!reference || !objectName) return "";
   const normalizedKind = normalizeFreeCadToken(kind || reference);
   const connector = freeCadConnectorFromSelection(obj, reference, kind, selectedItem);
+  const stableArg = jsString(selectedItem?.stable_id || selectedItem?.stableId || selected.stableId || "");
   const anchor = state.assemblyConnectorAnchor;
   const canCreateJoint = Boolean(connector && anchor && !freeCadConnectorSame(anchor, connector) && !freeCadConnectorObjectSame(anchor, connector));
   const hasSketch = Boolean(firstFreeCadSketchObject());
@@ -4077,7 +4793,7 @@ function renderFreeCadSubelementActions(obj, selected, selectedItem) {
     buttons.push(freeCadSubelementActionButton(
       "setAssemblyConnectorA",
       "pointer",
-      `setAssemblyConnectorAnchor(${objectArg}, ${refArg})`
+      `setAssemblyConnectorAnchor(${objectArg}, ${refArg}, ${stableArg})`
     ));
     if (anchor) {
       buttons.push(freeCadSubelementActionButton(
@@ -4096,7 +4812,7 @@ function renderFreeCadSubelementActions(obj, selected, selectedItem) {
         buttons.push(freeCadSubelementActionButton(
           labelKey,
           "layers",
-          `createAssemblyJointFromSelectedConnectors(${jsString(jointType)}, ${objectArg}, ${refArg})`,
+          `createAssemblyJointFromSelectedConnectors(${jsString(jointType)}, ${objectArg}, ${refArg}, ${stableArg})`,
           !canCreateJoint,
           !anchor ? "needsConnectorA" : "needsDifferentObject"
         ));
@@ -4161,30 +4877,92 @@ function renderFreeCadSketchPropertySection(obj) {
   const sketch = obj?.sketch;
   if (!sketch) return "";
   const constraints = Array.isArray(sketch.constraints) ? sketch.constraints : [];
+  const geometry = Array.isArray(sketch.geometry) ? sketch.geometry : [];
+  const editMode = sketch.edit_mode || {};
   const editableConstraints = constraints
     .filter((constraint) => Number.isFinite(Number(constraint.value)))
     .slice(0, 16);
   return `<section class="section">
-    <h3>${icon("ruler")} Sketcher</h3>
+    <h3>${icon("ruler")} ${escapeHtml(t("sketchEditMode"))}</h3>
     <div class="kv-list">
-      <div class="kv"><span>Geometry</span><strong>${escapeHtml(sketch.geometry_count ?? 0)}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("sketchGeometryList"))}</span><strong>${escapeHtml(sketch.geometry_count ?? geometry.length)}</strong></div>
       <div class="kv"><span>External geometry</span><strong>${escapeHtml(sketch.external_geometry_count ?? 0)}</strong></div>
-      <div class="kv"><span>Constraints</span><strong>${escapeHtml(sketch.constraint_count ?? constraints.length)}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("sketchConstraintList"))}</span><strong>${escapeHtml(sketch.constraint_count ?? constraints.length)}</strong></div>
       <div class="kv"><span>${escapeHtml(t("solverStatus"))}</span><strong>${escapeHtml(freeCadSketchSolverText(sketch))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("degreesOfFreedom"))}</span><strong>${escapeHtml(editMode.degrees_of_freedom ?? sketch.degrees_of_freedom ?? t("notAvailable"))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("sketchDiagnostics"))}</span><strong>${escapeHtml(freeCadDiagnosticsSummaryText(editMode))}</strong></div>
     </div>
     <div class="feature-actions">
       <button class="icon-button" type="button" title="Validate sketch" onclick="validateFreeCadSketch(${escapeHtml(jsString(freeCadObjectKey(obj)))})">${icon("eye")}</button>
     </div>
+    ${renderFreeCadDiagnostics("sketchDiagnostics", editMode)}
+    ${renderFreeCadSketchGeometryList(geometry)}
+    ${renderFreeCadSketchConstraintList(constraints)}
     ${editableConstraints.length ? editableConstraints.map((constraint) => freeCadConstraintRow(obj, constraint)).join("") : ""}
   </section>`;
 }
 
 function freeCadSketchSolverText(sketch) {
+  const editMode = sketch?.edit_mode || {};
+  if (editMode.state) return editMode.state;
   const solver = sketch?.solver || {};
   if (solver.solver_status !== undefined && solver.solver_status !== null) return String(solver.solver_status);
   if (sketch.fully_constrained !== undefined && sketch.fully_constrained !== null) return sketch.fully_constrained ? "fully constrained" : "under constrained";
   if (sketch.degrees_of_freedom !== undefined && sketch.degrees_of_freedom !== null) return `${sketch.degrees_of_freedom} DOF`;
   return t("notAvailable");
+}
+
+function freeCadSketchGeometryText(item) {
+  const values = [];
+  if (item.construction) values.push("construction");
+  if (freeCadTriplet(item.start) && freeCadTriplet(item.end)) values.push(`${freeCadVectorText(item.start)} -> ${freeCadVectorText(item.end)}`);
+  if (freeCadTriplet(item.center)) values.push(`center ${freeCadVectorText(item.center)}`);
+  if (Number.isFinite(Number(item.radius))) values.push(`r ${formatNumber(item.radius)}`);
+  if (Number.isFinite(Number(item.major_radius))) values.push(`major ${formatNumber(item.major_radius)}`);
+  return values.join(" · ") || t("notAvailable");
+}
+
+function renderFreeCadSketchGeometryList(geometry) {
+  if (!geometry.length) return "";
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchGeometryList"))}</p>
+    <div class="subelement-grid">
+      ${geometry.slice(0, 24).map((item) => `<div class="subelement-row ${item.construction ? "info" : ""}">
+        <strong>#${escapeHtml(item.index ?? "")}</strong>
+        <span title="${escapeHtml(freeCadSketchGeometryText(item))}">${escapeHtml([item.type || "Geometry", freeCadSketchGeometryText(item)].filter(Boolean).join(" · "))}</span>
+      </div>`).join("")}
+    </div>`;
+}
+
+function freeCadConstraintSeverity(constraint) {
+  const text = `${constraint?.status || ""} ${constraint?.solver_status || ""} ${constraint?.error || ""}`.toLowerCase();
+  if (/conflict|inconsistent|over/.test(text)) return "error";
+  if (/redundant|disabled/.test(text)) return "warning";
+  if (/reference|virtual/.test(text)) return "info";
+  return "";
+}
+
+function freeCadConstraintText(constraint) {
+  const parts = [
+    constraint?.status || "driving",
+    Number.isFinite(Number(constraint?.value)) ? formatNumber(constraint.value) : "",
+    constraint?.first !== undefined ? `first ${constraint.first}` : "",
+    constraint?.second !== undefined ? `second ${constraint.second}` : "",
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+function renderFreeCadSketchConstraintList(constraints) {
+  if (!constraints.length) return "";
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchConstraintList"))}</p>
+    <div class="subelement-grid">
+      ${constraints.slice(0, 24).map((constraint) => {
+        const label = constraint.name || constraint.type || "Constraint";
+        return `<div class="subelement-row ${freeCadConstraintSeverity(constraint)}">
+          <strong>#${escapeHtml(constraint.index ?? "")}</strong>
+          <span title="${escapeHtml(freeCadConstraintText(constraint))}">${escapeHtml([label, freeCadConstraintText(constraint)].filter(Boolean).join(" · "))}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
 }
 
 function freeCadEditableProperties(obj) {
@@ -4513,6 +5291,7 @@ async function commitGeneratedParameter(name, rawValue) {
     state.selectedGeneratedParameterName = name;
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
+    state.selectedFreeCadAssemblyJoint = null;
     state.previewPng = rendered.preview_png_b64 || null;
     state.artifacts = rendered.exports || {};
     state.artifactRefs = {};
@@ -4558,6 +5337,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     patch: state.patch,
     activeServerVersionId: state.activeServerVersionId,
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
+    selectedFreeCadAssemblyJoint: state.selectedFreeCadAssemblyJoint,
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
   };
 
@@ -4596,6 +5376,9 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     if (state.assemblyConnectorAnchor && !freeCadConnectorStillExists(state.assemblyConnectorAnchor)) {
       state.assemblyConnectorAnchor = null;
     }
+    if (state.selectedFreeCadAssemblyJoint && !freeCadAssemblyJointStillExists(state.selectedFreeCadAssemblyJoint)) {
+      state.selectedFreeCadAssemblyJoint = null;
+    }
     state.previewPng = patched.preview_png_b64 || null;
     state.artifacts = patched.exports || {};
     state.artifactRefs = patched.artifact_refs || {};
@@ -4628,6 +5411,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     state.generatedParameters = previous.generatedParameters;
     state.documentSummary = previous.documentSummary;
     state.selectedFreeCadSubelement = previous.selectedFreeCadSubelement;
+    state.selectedFreeCadAssemblyJoint = previous.selectedFreeCadAssemblyJoint;
     state.assemblyConnectorAnchor = previous.assemblyConnectorAnchor;
     state.exportStatus = previous.exportStatus;
     state.patch = previous.patch;
@@ -4650,6 +5434,7 @@ async function applyPatches(patches, label, detail) {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   setStatus("applyingPatch");
   try {
@@ -4715,6 +5500,7 @@ function showParametricDesign() {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   state.selectionMode = "feature";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
@@ -4726,6 +5512,7 @@ function showGeneratedModel() {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   if (freeCadSelectionAvailable()) state.selectionMode = "object";
   renderAll();
@@ -4743,6 +5530,7 @@ function focusGeneratedParameter(name) {
   state.selectedGeneratedParameterName = name;
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   renderAll();
   const input = $(`generated-param-${safeDomId(name)}`);
@@ -4764,17 +5552,21 @@ function selectFreeCadObject(name) {
   renderAll();
 }
 
-function selectFreeCadSubelement(objectName, reference, kind) {
+function selectFreeCadSubelement(objectName, reference, kind, stableId = "") {
   const obj = freeCadObjectByName(objectName);
   if (!obj || !reference) return;
+  const item = freeCadSubelementByRef(obj, reference, stableId);
   state.previewMode = "generated";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectionMode = selectionModeForFreeCadSubelementKind(kind);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
-    reference,
-    kind: kind || "",
+    reference: item?.reference || reference,
+    stableId: stableId || item?.stable_id || "",
+    stableReference: item?.stable_reference || "",
+    stability: item?.stability || "",
+    kind: kind || item?.group || item?.kind || "",
     selector: freeCadObjectSelector(obj),
   };
   log(t("log.selectedFreeCadSubelement", {
@@ -4807,11 +5599,14 @@ function freeCadGeneratedName(parts, fallback) {
 
 async function createSketchOnSelectedFace(objectName, reference) {
   const obj = freeCadObjectByName(objectName);
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
   if (!obj || !/^face/i.test(reference || "")) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: "Face",
     selector: freeCadObjectSelector(obj),
   };
@@ -4822,6 +5617,7 @@ async function createSketchOnSelectedFace(objectName, reference) {
       name: sketchName,
       support_selector: freeCadObjectSelector(obj),
       reference,
+      ...freeCadSubelementStablePatchFields(item, state.selectedFreeCadSubelement),
       map_mode: "FlatFace",
     }],
     name: `createSketch:${freeCadObjectDisplayName(obj)}.${reference}`,
@@ -4832,11 +5628,14 @@ async function createSketchOnSelectedFace(objectName, reference) {
 async function attachSketchToSelectedFace(objectName, reference) {
   const obj = freeCadObjectByName(objectName);
   const sketchObj = firstFreeCadSketchObject();
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
   if (!obj || !sketchObj || !/^face/i.test(reference || "")) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: "Face",
     selector: freeCadObjectSelector(obj),
   };
@@ -4846,6 +5645,7 @@ async function attachSketchToSelectedFace(objectName, reference) {
       selector: freeCadObjectSelector(sketchObj),
       support_selector: freeCadObjectSelector(obj),
       reference,
+      ...freeCadSubelementStablePatchFields(item, state.selectedFreeCadSubelement),
       map_mode: "FlatFace",
     }],
     name: `${freeCadObjectDisplayName(sketchObj)}.attach:${reference}`,
@@ -4856,11 +5656,14 @@ async function attachSketchToSelectedFace(objectName, reference) {
 async function addSelectedExternalGeometry(objectName, reference) {
   const obj = freeCadObjectByName(objectName);
   const sketchObj = firstFreeCadSketchObject();
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
   if (!obj || !sketchObj || !reference) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -4870,6 +5673,8 @@ async function addSelectedExternalGeometry(objectName, reference) {
       selector: freeCadObjectSelector(sketchObj),
       source_selector: freeCadObjectSelector(obj),
       references: [reference],
+      stable_ids: [item?.stable_id || selected?.stableId || ""],
+      kind: item?.group || item?.kind || state.selectedFreeCadSubelement.kind,
     }],
     name: `${freeCadObjectDisplayName(sketchObj)}.external:${reference}`,
   };
@@ -4880,11 +5685,14 @@ async function addSelectedTechDrawDimension(objectName, reference) {
   const obj = freeCadObjectByName(objectName);
   const page = firstFreeCadTechDrawPage();
   const view = firstFreeCadTechDrawView();
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
   if (!obj || !page || !view || !reference) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -4893,10 +5701,12 @@ async function addSelectedTechDrawDimension(objectName, reference) {
       op: "add_techdraw_dimension",
       page_selector: freeCadObjectSelector(page),
       view_selector: freeCadObjectSelector(view),
+      source_selector: freeCadObjectSelector(obj),
       name: freeCadGeneratedName([reference, "Dim"], "Dimension"),
       dimension_type: "Distance",
       dimension_mode: "single",
       reference,
+      stable_ids: [item?.stable_id || selected?.stableId || ""],
     }],
     name: `TechDrawDimension:${reference}`,
   };
@@ -4906,11 +5716,15 @@ async function addSelectedTechDrawDimension(objectName, reference) {
 async function addSelectedTechDrawCenterline(objectName, reference, pairedReference) {
   const obj = freeCadObjectByName(objectName);
   const view = firstFreeCadTechDrawView();
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
+  const pairedItem = obj ? freeCadSubelementByRef(obj, pairedReference) : null;
   if (!obj || !view || !reference || !pairedReference) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -4918,7 +5732,9 @@ async function addSelectedTechDrawCenterline(objectName, reference, pairedRefere
     patches: [{
       op: "add_techdraw_centerline",
       view_selector: freeCadObjectSelector(view),
+      source_selector: freeCadObjectSelector(obj),
       references: [reference, pairedReference],
+      stable_ids: [item?.stable_id || selected?.stableId || "", pairedItem?.stable_id || pairedItem?.stableId || ""],
     }],
     name: `TechDrawCenterline:${reference}/${pairedReference}`,
   };
@@ -4928,13 +5744,15 @@ async function addSelectedTechDrawCenterline(objectName, reference, pairedRefere
 async function addSelectedTechDrawCosmeticVertex(objectName, reference) {
   const obj = freeCadObjectByName(objectName);
   const view = firstFreeCadTechDrawView();
-  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const selected = selectedFreeCadSubelementRef();
+  const item = obj ? freeCadSubelementByRef(obj, reference, selected?.stableId) : null;
   const point = freeCadSubelementPoint(item);
   if (!obj || !view || !reference || !point) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
+    stableId: item?.stable_id || selected?.stableId || "",
     kind: "Vertex",
     selector: freeCadObjectSelector(obj),
   };
@@ -4949,9 +5767,22 @@ async function addSelectedTechDrawCosmeticVertex(objectName, reference) {
   return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
 }
 
-function setAssemblyConnectorAnchor(objectName, reference) {
+async function exportFreeCadTechDrawPage(pageName) {
+  const page = freeCadTechDrawPageByName(pageName) || firstFreeCadTechDrawPage();
+  if (!page) return false;
+  const patch = {
+    patches: [{
+      op: "export_techdraw_pdf",
+      page_selector: freeCadObjectSelector(page),
+    }],
+    name: `TechDrawPDF:${freeCadTechDrawPageDisplayName(page)}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function setAssemblyConnectorAnchor(objectName, reference, stableId = "") {
   const obj = freeCadObjectByName(objectName);
-  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const item = obj ? freeCadSubelementByRef(obj, reference, stableId) : null;
   const connector = freeCadConnectorFromSelection(obj, reference, item?.group || item?.kind || "", item);
   if (!connector) return false;
   state.previewMode = "generated";
@@ -4959,7 +5790,10 @@ function setAssemblyConnectorAnchor(objectName, reference) {
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
-    reference,
+    reference: item?.reference || reference,
+    stableId: item?.stable_id || item?.stableId || stableId || "",
+    stableReference: item?.stable_reference || "",
+    stability: item?.stability || "",
     kind: connector.kind,
     selector: freeCadObjectSelector(obj),
   };
@@ -4979,12 +5813,12 @@ function clearAssemblyConnectorAnchor() {
 function freeCadConnectorStillExists(connector) {
   if (!connector?.objectName || !connector.reference) return false;
   const obj = freeCadObjectByName(connector.objectName);
-  return Boolean(obj && freeCadSubelementByRef(obj, connector.reference));
+  return Boolean(obj && freeCadSubelementByRef(obj, connector.reference, connector.stableId));
 }
 
-async function createAssemblyJointFromSelectedConnectors(jointType, objectName, reference) {
+async function createAssemblyJointFromSelectedConnectors(jointType, objectName, reference, stableId = "") {
   const obj = freeCadObjectByName(objectName);
-  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const item = obj ? freeCadSubelementByRef(obj, reference, stableId) : null;
   const connector = freeCadConnectorFromSelection(obj, reference, item?.group || item?.kind || "", item);
   const anchor = state.assemblyConnectorAnchor;
   if (!connector || !anchor || !freeCadConnectorStillExists(anchor)) return false;
@@ -5026,7 +5860,10 @@ async function createAssemblyJointFromSelectedConnectors(jointType, objectName, 
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
-    reference,
+    reference: item?.reference || reference,
+    stableId: item?.stable_id || item?.stableId || stableId || "",
+    stableReference: item?.stable_reference || "",
+    stability: item?.stability || "",
     kind: connector.kind,
     selector: freeCadObjectSelector(obj),
   };
@@ -5036,11 +5873,140 @@ async function createAssemblyJointFromSelectedConnectors(jointType, objectName, 
   };
   const ok = await applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
   if (ok) {
+    state.selectedFreeCadAssemblyJoint = { assemblyName, jointName: jointPatch.name };
     state.assemblyConnectorAnchor = null;
     persistWorkbenchSession();
     renderAll();
   }
   return ok;
+}
+
+function selectFreeCadAssemblyJoint(assemblyName, jointName) {
+  const assembly = freeCadAssemblyByName(assemblyName);
+  const joint = freeCadJointByName(assembly, jointName);
+  if (!assembly || !joint) return false;
+  state.previewMode = "generated";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadAssemblyJoint = {
+    assemblyName: freeCadAssemblyKey(assembly),
+    jointName: freeCadJointKey(joint),
+  };
+  renderAll();
+  return true;
+}
+
+function freeCadJointSelector(joint) {
+  if (joint?.name) return { name: joint.name };
+  if (joint?.label) return { label: joint.label };
+  return { type_id: joint?.type_id || "App::FeaturePython" };
+}
+
+function freeCadAssemblyJointPatchBase(assembly, joint) {
+  return {
+    op: "update_joint",
+    assembly_selector: freeCadAssemblySelector(assembly),
+    joint_selector: freeCadJointSelector(joint),
+    solve: true,
+  };
+}
+
+function selectedFreeCadAssemblyJointOrName(assemblyName, jointName) {
+  const assembly = freeCadAssemblyByName(assemblyName);
+  const joint = freeCadJointByName(assembly, jointName);
+  return assembly && joint ? { assembly, joint } : null;
+}
+
+async function commitFreeCadJointType(assemblyName, jointName, jointType) {
+  const selected = selectedFreeCadAssemblyJointOrName(assemblyName, jointName);
+  if (!selected || !jointType) return false;
+  state.selectedFreeCadAssemblyJoint = { assemblyName: freeCadAssemblyKey(selected.assembly), jointName: freeCadJointKey(selected.joint) };
+  const patch = {
+    patches: [{
+      ...freeCadAssemblyJointPatchBase(selected.assembly, selected.joint),
+      joint_type: jointType,
+    }],
+    name: `${freeCadJointDisplayName(selected.joint)}.type:${jointType}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadJointScalar(assemblyName, jointName, scalar, rawValue) {
+  const selected = selectedFreeCadAssemblyJointOrName(assemblyName, jointName);
+  const value = Number(rawValue);
+  if (!selected || !Number.isFinite(value)) return false;
+  state.selectedFreeCadAssemblyJoint = { assemblyName: freeCadAssemblyKey(selected.assembly), jointName: freeCadJointKey(selected.joint) };
+  const update = freeCadAssemblyJointPatchBase(selected.assembly, selected.joint);
+  if (scalar === "angle") {
+    update.angle_degrees = value;
+  } else {
+    update.distance = value;
+  }
+  const patch = {
+    patches: [update],
+    name: `${freeCadJointDisplayName(selected.joint)}.${scalar}`,
+    value,
+    unit: scalar === "angle" ? "deg" : t("unitMm"),
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function assemblyConnectorPayloadFromJointReference(reference) {
+  if (!reference || typeof reference !== "object") return null;
+  const obj = reference.object || reference.part || {};
+  const selector = obj.name ? { name: obj.name } : obj.label ? { label: obj.label } : null;
+  if (!selector) return null;
+  const subelements = Array.isArray(reference.subelements)
+    ? reference.subelements.filter(Boolean)
+    : [reference.element, reference.reference, reference.vertex].filter(Boolean);
+  const payload = { selector };
+  const vertex = subelements.find((item) => /^vertex/i.test(String(item)));
+  const element = subelements.find((item) => !/^vertex/i.test(String(item)));
+  if (element) payload.element = element;
+  if (vertex) payload.vertex = vertex;
+  const stableId = reference.connector_frame?.stable_id || reference.connectorFrame?.stableId || "";
+  if (stableId) {
+    if (vertex && !element) payload.stable_ids = ["", stableId];
+    else payload.stable_id = stableId;
+  }
+  return payload;
+}
+
+async function commitFreeCadJointConnector(assemblyName, jointName, slot) {
+  const selected = selectedFreeCadAssemblyJointOrName(assemblyName, jointName);
+  const anchor = state.assemblyConnectorAnchor;
+  if (!selected || !anchor || !freeCadConnectorStillExists(anchor)) return false;
+  const connector1 = assemblyConnectorPayloadFromJointReference(selected.joint.reference1);
+  const connector2 = assemblyConnectorPayloadFromJointReference(selected.joint.reference2);
+  if (!connector1 || !connector2) return false;
+  const anchorPayload = assemblyConnectorPayload(anchor);
+  const update = freeCadAssemblyJointPatchBase(selected.assembly, selected.joint);
+  update.connector1 = slot === 1 ? anchorPayload : connector1;
+  update.connector2 = slot === 2 ? anchorPayload : connector2;
+  const patch = {
+    patches: [update],
+    name: `${freeCadJointDisplayName(selected.joint)}.connector${slot}`,
+  };
+  state.selectedFreeCadAssemblyJoint = { assemblyName: freeCadAssemblyKey(selected.assembly), jointName: freeCadJointKey(selected.joint) };
+  const ok = await applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+  if (ok) {
+    state.assemblyConnectorAnchor = null;
+    persistWorkbenchSession();
+    renderAll();
+  }
+  return ok;
+}
+
+async function solveFreeCadAssembly(assemblyName) {
+  const assembly = freeCadAssemblyByName(assemblyName);
+  if (!assembly) return false;
+  const patch = {
+    patches: [{
+      op: "solve_assembly",
+      selector: freeCadAssemblySelector(assembly),
+    }],
+    name: `${freeCadAssemblyDisplayName(assembly)}.solve`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
 }
 
 async function commitFreeCadObjectProperty(objectName, propertyName, rawValue) {
@@ -5204,6 +6170,7 @@ function parseSelectedSubelementFreeCadPatch(text) {
   const selected = selectedFreeCadSubelementRef();
   if (!selected?.reference || !selected?.selector) return null;
   const normalized = text.toLowerCase();
+  const stableId = selected.stableId || "";
   if (/\bexternal\s+geometry\b|外部几何/.test(normalized)) {
     const sketch = bestFreeCadObjectMatch(text);
     const sketchObj = sketch && freeCadObjectIsSketch(sketch) ? sketch : firstFreeCadSketchObject();
@@ -5214,6 +6181,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
         selector: freeCadObjectSelector(sketchObj),
         source_selector: selected.selector,
         references: [selected.reference],
+        stable_ids: stableId ? [stableId] : [],
+        kind: selected.kind || selected.reference,
       }],
       name: `${freeCadObjectDisplayName(sketchObj)}.external:${selected.reference}`,
     };
@@ -5228,6 +6197,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
         selector: freeCadObjectSelector(sketchObj),
         support_selector: selected.selector,
         reference: selected.reference,
+        stable_id: stableId,
+        kind: selected.kind || "Face",
         map_mode: "FlatFace",
       }],
       name: `${freeCadObjectDisplayName(sketchObj)}.attach:${selected.reference}`,
@@ -5243,10 +6214,12 @@ function parseSelectedSubelementFreeCadPatch(text) {
         op: "add_techdraw_dimension",
         page_selector: freeCadObjectSelector(page),
         view_selector: freeCadObjectSelector(view),
+        source_selector: selected.selector,
         name: `${selected.reference}Dim`,
         dimension_type: /^edge/i.test(selected.reference) ? "Distance" : "Distance",
         dimension_mode: mode,
         reference: selected.reference,
+        stable_ids: stableId ? [stableId] : [],
       }],
       name: `TechDrawDimension:${selected.reference}`,
     };
@@ -5590,6 +6563,7 @@ async function generateFromPrompt(prompt, options = {}) {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
   state.previewPng = null;
   state.artifacts = {};
@@ -5677,6 +6651,7 @@ function handleAgentEvent(ev, context = {}) {
     state.documentSummary = null;
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
+    state.selectedFreeCadAssemblyJoint = null;
     state.assemblyConnectorAnchor = null;
     if (!state.generatedParameters.some((param) => param.name === state.selectedGeneratedParameterName)) {
       state.selectedGeneratedParameterName = "";

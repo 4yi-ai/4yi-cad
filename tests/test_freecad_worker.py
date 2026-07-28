@@ -761,6 +761,10 @@ def test_local_freecadcmd_smoke_exports_step_stl_and_fcstd():
         assert scene["objects"][0]["faces"]
         assert scene["objects"][0]["edges"]
         assert scene["objects"][0]["vertices"]
+        assert scene["objects"][0]["faces"][0]["stable_id"].startswith("face:")
+        assert scene["objects"][0]["edges"][0]["stable_id"].startswith("edge:")
+        assert scene["objects"][0]["vertices"][0]["stable_id"].startswith("vertex:")
+        assert scene["objects"][0]["faces"][0]["signature"]
         assert scene["objects"][0]["edges"][0]["points"]
         assert scene["objects"][0]["vertices"][0]["point"]
     assert result["freecad_version"]
@@ -1060,6 +1064,8 @@ result = [box, sketch]
     assert objects["BaseBox"]["placement"]["base"] == [30.0, 0.0, 0.0]
     assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["reference"] == "Face1"
     assert objects["BaseBox"]["shape"]["subelements"]["edges"][0]["reference"] == "Edge1"
+    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["stable_id"].startswith("face:")
+    assert objects["BaseBox"]["shape"]["subelements"]["edges"][0]["signature"]
     length = next(prop for prop in objects["BaseBox"]["properties"] if prop["name"] == "Length")
     assert length["value"] == 20.0
     assert summary["feature_tree"]["nodes"]
@@ -1076,6 +1082,8 @@ result = [box, sketch]
     assert sketch["external_geometry_count"] == 1
     assert sketch["external_geometry"][0]["object"]["name"] == "BaseBox"
     assert sketch["solver"]["solver_status"] is None
+    assert sketch["edit_mode"]["constraint_count"] == sketch["constraint_count"]
+    assert "diagnostics" in sketch["edit_mode"]
     assert typed_state["sketches"]["Sketch"]["external_geometry"][0]["object"]["name"] == "BaseBox"
     assert face_sketch["map_mode"] == "FlatFace"
     assert face_sketch["attachment_support"][0]["object"]["name"] == "BaseBox"
@@ -1088,6 +1096,7 @@ result = [box, sketch]
     assembly = next(item for item in summary["assemblies"] if item["name"] == "Assembly")
     assert assembly["fallback"] is True
     assert assembly["solver_backend"] == "native_transient"
+    assert assembly["solver_diagnostics"]["severity"] in {"ok", "info", "warning", "error"}
     assert assembly["part_count"] >= 2
     assert assembly["joint_count"] == 1
     parts = {item["name"]: item for item in assembly["parts"]}
@@ -1096,6 +1105,7 @@ result = [box, sketch]
     assert assembly["joints"][0]["kind"] == "grounded"
     assert assembly["joints"][0]["object_to_ground"]["name"] == "BaseBox"
     page = next(item for item in summary["techdraw"] if item["name"] == "Page")
+    assert page["layout_diagnostics"]["export_quality"]
     assert page["view_count"] >= 3
     assert page["dimension_count"] == 1
     views = {item["name"]: item for item in page["views"]}
@@ -1217,4 +1227,11 @@ def test_local_freecadcmd_assembly_joint_types_and_solver():
         assert joint["joint_type"] == joint_type
         assert joint["reference1"]["object"]["name"] == f"Base{joint_type}"
         assert joint["reference2"]["object"]["name"] == f"Moving{joint_type}"
+        assert joint["reference1"]["connector_frame"]["frame_quality"] in {
+            "orientation_complete",
+            "origin_only",
+            "missing_reference",
+            "object_only",
+        }
+        assert assembly["solver_diagnostics"]["severity"] in {"ok", "info", "warning", "error"}
     assert assemblies["AsmDistance"]["joints"][1]["distance"] == 12.0
