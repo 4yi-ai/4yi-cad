@@ -2267,6 +2267,11 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
         reference,
         kind: "Face",
         stableId,
+        legacyStableId: face.legacy_stable_id || face.legacyStableId || "",
+        stableReference: face.stable_reference || face.stableReference || "",
+        signature: face.signature || null,
+        signatureVersion: face.signature_version || face.signatureVersion || null,
+        stability: face.stability || "",
         priority: 0,
       };
       mesh.renderOrder = selected ? 7 : 2;
@@ -2324,6 +2329,11 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
         reference,
         kind: "Edge",
         stableId,
+        legacyStableId: edge.legacy_stable_id || edge.legacyStableId || "",
+        stableReference: edge.stable_reference || edge.stableReference || "",
+        signature: edge.signature || null,
+        signatureVersion: edge.signature_version || edge.signatureVersion || null,
+        stability: edge.stability || "",
         priority: 0,
       };
       line.renderOrder = selected ? 10 : 5;
@@ -2364,6 +2374,11 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
         reference,
         kind: "Vertex",
         stableId,
+        legacyStableId: vertex.legacy_stable_id || vertex.legacyStableId || "",
+        stableReference: vertex.stable_reference || vertex.stableReference || "",
+        signature: vertex.signature || null,
+        signatureVersion: vertex.signature_version || vertex.signatureVersion || null,
+        stability: vertex.stability || "",
         priority: 0,
       };
       sphere.renderOrder = selected ? 11 : 6;
@@ -2613,6 +2628,11 @@ function addFreeCadSelectionBoxes(THREE, group, options = {}) {
         reference,
         kind,
         stableId,
+        legacyStableId: item.legacy_stable_id || item.legacyStableId || "",
+        stableReference: item.stable_reference || item.stableReference || "",
+        signature: item.signature || null,
+        signatureVersion: item.signature_version || item.signatureVersion || null,
+        stability: item.stability || "",
         info: pickInfo,
         color: subSelected ? 0x0b6fe8 : freeCadSelectionColor(kind),
         opacity: subSelected ? 0.34 : subVisible ? 0.075 : 0.012,
@@ -2663,7 +2683,7 @@ function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
   }
   if (!selection?.objectName) return;
   if (selection.type === "subelement" && selection.reference) {
-    selectFreeCadSubelement(selection.objectName, selection.reference, selection.kind, selection.stableId || "");
+    selectFreeCadSubelement(selection.objectName, selection.reference, selection.kind, selection.stableId || "", selection);
     return;
   }
   selectFreeCadObject(selection.objectName);
@@ -3831,7 +3851,8 @@ function freeCadSubelementByRef(obj, reference, stableId = "") {
   const normalizedStable = normalizeFreeCadToken(stableId);
   if (obj && normalizedStable) {
     const stableMatch = freeCadSubelements(obj).find((item) => {
-      return normalizeFreeCadToken(item.stable_id || item.stableId) === normalizedStable;
+      return normalizeFreeCadToken(item.stable_id || item.stableId) === normalizedStable
+        || normalizeFreeCadToken(item.legacy_stable_id || item.legacyStableId) === normalizedStable;
     });
     if (stableMatch) return stableMatch;
   }
@@ -4696,10 +4717,40 @@ function freeCadSubelementPoint(item) {
   return freeCadTriplet(item?.point) || freeCadTriplet(item?.center);
 }
 
+function freeCadSubelementStableId(item, selected = null) {
+  return item?.stable_id || item?.stableId || selected?.stableId || "";
+}
+
+function freeCadSubelementLegacyStableId(item, selected = null) {
+  return item?.legacy_stable_id || item?.legacyStableId || selected?.legacyStableId || "";
+}
+
+function freeCadSubelementStableReference(item, selected = null) {
+  return item?.stable_reference || item?.stableReference || selected?.stableReference || "";
+}
+
+function freeCadSubelementSignature(item, selected = null) {
+  return item?.signature || selected?.signature || null;
+}
+
+function freeCadSubelementSignatureVersion(item, selected = null) {
+  return item?.signature_version || item?.signatureVersion || selected?.signatureVersion || null;
+}
+
+function freeCadSubelementStability(item, selected = null) {
+  return item?.stability || selected?.stability || "";
+}
+
 function freeCadSubelementStablePatchFields(item, selected = null) {
-  const stableId = item?.stable_id || item?.stableId || selected?.stableId || "";
+  const stableId = freeCadSubelementStableId(item, selected);
+  const stableReference = freeCadSubelementStableReference(item, selected);
+  const signature = freeCadSubelementSignature(item, selected);
+  const signatureVersion = freeCadSubelementSignatureVersion(item, selected);
   const fields = {};
   if (stableId) fields.stable_id = stableId;
+  if (stableReference) fields.stable_reference = stableReference;
+  if (signature) fields.signature = signature;
+  if (signatureVersion) fields.signature_version = signatureVersion;
   const kind = item?.group || item?.kind || selected?.kind || "";
   if (kind) fields.kind = kind;
   return fields;
@@ -4726,9 +4777,12 @@ function freeCadConnectorFromSelection(obj, reference, kind, item = null) {
     selector: freeCadObjectSelector(obj),
     reference,
     kind: connectorKind,
-    stableId: item?.stable_id || item?.stableId || "",
-    stableReference: item?.stable_reference || "",
-    stability: item?.stability || "",
+    stableId: freeCadSubelementStableId(item),
+    legacyStableId: freeCadSubelementLegacyStableId(item),
+    stableReference: freeCadSubelementStableReference(item),
+    signature: freeCadSubelementSignature(item),
+    signatureVersion: freeCadSubelementSignatureVersion(item),
+    stability: freeCadSubelementStability(item),
     point,
   };
 }
@@ -4754,9 +4808,13 @@ function assemblyConnectorPayload(connector) {
   if (connector.kind === "Vertex") {
     payload.vertex = connector.reference;
     if (connector.stableId) payload.stable_ids = ["", connector.stableId];
+    if (connector.stableReference) payload.stable_references = ["", connector.stableReference];
+    if (connector.signature) payload.stable_signatures = [null, connector.signature];
   } else {
     payload.element = connector.reference;
     if (connector.stableId) payload.stable_id = connector.stableId;
+    if (connector.stableReference) payload.stable_reference = connector.stableReference;
+    if (connector.signature) payload.signature = connector.signature;
   }
   if (connector.kind) payload.kind = connector.kind;
   return payload;
@@ -5552,7 +5610,7 @@ function selectFreeCadObject(name) {
   renderAll();
 }
 
-function selectFreeCadSubelement(objectName, reference, kind, stableId = "") {
+function selectFreeCadSubelement(objectName, reference, kind, stableId = "", metadata = null) {
   const obj = freeCadObjectByName(objectName);
   if (!obj || !reference) return;
   const item = freeCadSubelementByRef(obj, reference, stableId);
@@ -5563,9 +5621,12 @@ function selectFreeCadSubelement(objectName, reference, kind, stableId = "") {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference: item?.reference || reference,
-    stableId: stableId || item?.stable_id || "",
-    stableReference: item?.stable_reference || "",
-    stability: item?.stability || "",
+    stableId: freeCadSubelementStableId(item, metadata) || stableId || "",
+    legacyStableId: freeCadSubelementLegacyStableId(item, metadata),
+    stableReference: freeCadSubelementStableReference(item, metadata),
+    signature: freeCadSubelementSignature(item, metadata),
+    signatureVersion: freeCadSubelementSignatureVersion(item, metadata),
+    stability: freeCadSubelementStability(item, metadata),
     kind: kind || item?.group || item?.kind || "",
     selector: freeCadObjectSelector(obj),
   };
@@ -5606,7 +5667,12 @@ async function createSketchOnSelectedFace(objectName, reference) {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: "Face",
     selector: freeCadObjectSelector(obj),
   };
@@ -5635,7 +5701,12 @@ async function attachSketchToSelectedFace(objectName, reference) {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: "Face",
     selector: freeCadObjectSelector(obj),
   };
@@ -5663,7 +5734,12 @@ async function addSelectedExternalGeometry(objectName, reference) {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -5673,7 +5749,9 @@ async function addSelectedExternalGeometry(objectName, reference) {
       selector: freeCadObjectSelector(sketchObj),
       source_selector: freeCadObjectSelector(obj),
       references: [reference],
-      stable_ids: [item?.stable_id || selected?.stableId || ""],
+      stable_ids: [freeCadSubelementStableId(item, selected)],
+      stable_references: [freeCadSubelementStableReference(item, selected)],
+      stable_signatures: [freeCadSubelementSignature(item, selected)],
       kind: item?.group || item?.kind || state.selectedFreeCadSubelement.kind,
     }],
     name: `${freeCadObjectDisplayName(sketchObj)}.external:${reference}`,
@@ -5692,7 +5770,12 @@ async function addSelectedTechDrawDimension(objectName, reference) {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -5706,7 +5789,9 @@ async function addSelectedTechDrawDimension(objectName, reference) {
       dimension_type: "Distance",
       dimension_mode: "single",
       reference,
-      stable_ids: [item?.stable_id || selected?.stableId || ""],
+      stable_ids: [freeCadSubelementStableId(item, selected)],
+      stable_references: [freeCadSubelementStableReference(item, selected)],
+      stable_signatures: [freeCadSubelementSignature(item, selected)],
     }],
     name: `TechDrawDimension:${reference}`,
   };
@@ -5724,7 +5809,12 @@ async function addSelectedTechDrawCenterline(objectName, reference, pairedRefere
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: "Edge",
     selector: freeCadObjectSelector(obj),
   };
@@ -5734,7 +5824,9 @@ async function addSelectedTechDrawCenterline(objectName, reference, pairedRefere
       view_selector: freeCadObjectSelector(view),
       source_selector: freeCadObjectSelector(obj),
       references: [reference, pairedReference],
-      stable_ids: [item?.stable_id || selected?.stableId || "", pairedItem?.stable_id || pairedItem?.stableId || ""],
+      stable_ids: [freeCadSubelementStableId(item, selected), freeCadSubelementStableId(pairedItem)],
+      stable_references: [freeCadSubelementStableReference(item, selected), freeCadSubelementStableReference(pairedItem)],
+      stable_signatures: [freeCadSubelementSignature(item, selected), freeCadSubelementSignature(pairedItem)],
     }],
     name: `TechDrawCenterline:${reference}/${pairedReference}`,
   };
@@ -5752,7 +5844,12 @@ async function addSelectedTechDrawCosmeticVertex(objectName, reference) {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference,
-    stableId: item?.stable_id || selected?.stableId || "",
+    stableId: freeCadSubelementStableId(item, selected),
+    legacyStableId: freeCadSubelementLegacyStableId(item, selected),
+    stableReference: freeCadSubelementStableReference(item, selected),
+    signature: freeCadSubelementSignature(item, selected),
+    signatureVersion: freeCadSubelementSignatureVersion(item, selected),
+    stability: freeCadSubelementStability(item, selected),
     kind: "Vertex",
     selector: freeCadObjectSelector(obj),
   };
@@ -5791,9 +5888,12 @@ function setAssemblyConnectorAnchor(objectName, reference, stableId = "") {
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference: item?.reference || reference,
-    stableId: item?.stable_id || item?.stableId || stableId || "",
-    stableReference: item?.stable_reference || "",
-    stability: item?.stability || "",
+    stableId: freeCadSubelementStableId(item) || stableId || "",
+    legacyStableId: freeCadSubelementLegacyStableId(item),
+    stableReference: freeCadSubelementStableReference(item),
+    signature: freeCadSubelementSignature(item),
+    signatureVersion: freeCadSubelementSignatureVersion(item),
+    stability: freeCadSubelementStability(item),
     kind: connector.kind,
     selector: freeCadObjectSelector(obj),
   };
@@ -5861,9 +5961,12 @@ async function createAssemblyJointFromSelectedConnectors(jointType, objectName, 
   state.selectedFreeCadSubelement = {
     objectName: freeCadObjectKey(obj),
     reference: item?.reference || reference,
-    stableId: item?.stable_id || item?.stableId || stableId || "",
-    stableReference: item?.stable_reference || "",
-    stability: item?.stability || "",
+    stableId: freeCadSubelementStableId(item) || stableId || "",
+    legacyStableId: freeCadSubelementLegacyStableId(item),
+    stableReference: freeCadSubelementStableReference(item),
+    signature: freeCadSubelementSignature(item),
+    signatureVersion: freeCadSubelementSignatureVersion(item),
+    stability: freeCadSubelementStability(item),
     kind: connector.kind,
     selector: freeCadObjectSelector(obj),
   };
@@ -5963,10 +6066,21 @@ function assemblyConnectorPayloadFromJointReference(reference) {
   const element = subelements.find((item) => !/^vertex/i.test(String(item)));
   if (element) payload.element = element;
   if (vertex) payload.vertex = vertex;
-  const stableId = reference.connector_frame?.stable_id || reference.connectorFrame?.stableId || "";
+  const frame = reference.connector_frame || reference.connectorFrame || {};
+  const stableId = frame.stable_id || frame.stableId || "";
+  const stableReference = frame.stable_reference || frame.stableReference || "";
+  const signature = frame.signature || null;
   if (stableId) {
     if (vertex && !element) payload.stable_ids = ["", stableId];
     else payload.stable_id = stableId;
+  }
+  if (stableReference) {
+    if (vertex && !element) payload.stable_references = ["", stableReference];
+    else payload.stable_reference = stableReference;
+  }
+  if (signature) {
+    if (vertex && !element) payload.stable_signatures = [null, signature];
+    else payload.signature = signature;
   }
   return payload;
 }
@@ -6171,6 +6285,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
   if (!selected?.reference || !selected?.selector) return null;
   const normalized = text.toLowerCase();
   const stableId = selected.stableId || "";
+  const stableReference = selected.stableReference || "";
+  const signature = selected.signature || null;
   if (/\bexternal\s+geometry\b|外部几何/.test(normalized)) {
     const sketch = bestFreeCadObjectMatch(text);
     const sketchObj = sketch && freeCadObjectIsSketch(sketch) ? sketch : firstFreeCadSketchObject();
@@ -6182,6 +6298,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
         source_selector: selected.selector,
         references: [selected.reference],
         stable_ids: stableId ? [stableId] : [],
+        stable_references: stableReference ? [stableReference] : [],
+        stable_signatures: signature ? [signature] : [],
         kind: selected.kind || selected.reference,
       }],
       name: `${freeCadObjectDisplayName(sketchObj)}.external:${selected.reference}`,
@@ -6198,6 +6316,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
         support_selector: selected.selector,
         reference: selected.reference,
         stable_id: stableId,
+        stable_reference: stableReference,
+        signature,
         kind: selected.kind || "Face",
         map_mode: "FlatFace",
       }],
@@ -6220,6 +6340,8 @@ function parseSelectedSubelementFreeCadPatch(text) {
         dimension_mode: mode,
         reference: selected.reference,
         stable_ids: stableId ? [stableId] : [],
+        stable_references: stableReference ? [stableReference] : [],
+        stable_signatures: signature ? [signature] : [],
       }],
       name: `TechDrawDimension:${selected.reference}`,
     };

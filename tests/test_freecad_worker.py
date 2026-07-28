@@ -1,6 +1,7 @@
 import base64
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +17,7 @@ from app.cad.freecad_worker import (
 )
 
 PY = sys.executable
+WORKER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "cad" / "freecad_worker.py"
 
 
 def test_run_freecad_script_reports_missing_binary(monkeypatch):
@@ -71,6 +73,24 @@ print("{FREECAD_RESULT_PREFIX}" + json.dumps({{
     scene = json.loads(base64.b64decode(result["exports"]["viewer_scene"]))
     assert scene["schema"] == "freecad.viewer_scene.v1"
     assert result["preview_png_b64"] is None
+
+
+def test_worker_defines_stable_subelement_ref_v2_semantics():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        '"stable_id": "{}:v2:{}"',
+        '"legacy_stable_id"',
+        '"signature_version": 2',
+        '"stability": "geometric_signature_v2"',
+        "stable_signature_score",
+        "stable_signature_remapped",
+        "stable_signature_ambiguous",
+        "match_method",
+        "stable_references",
+        "stable_signatures",
+    ):
+        assert marker in source
 
 
 def test_run_freecad_import_model_passes_decoded_import_to_wrapper(tmp_path, monkeypatch):
@@ -761,10 +781,13 @@ def test_local_freecadcmd_smoke_exports_step_stl_and_fcstd():
         assert scene["objects"][0]["faces"]
         assert scene["objects"][0]["edges"]
         assert scene["objects"][0]["vertices"]
-        assert scene["objects"][0]["faces"][0]["stable_id"].startswith("face:")
-        assert scene["objects"][0]["edges"][0]["stable_id"].startswith("edge:")
-        assert scene["objects"][0]["vertices"][0]["stable_id"].startswith("vertex:")
+        assert scene["objects"][0]["faces"][0]["stable_id"].startswith("face:v2:")
+        assert scene["objects"][0]["edges"][0]["stable_id"].startswith("edge:v2:")
+        assert scene["objects"][0]["vertices"][0]["stable_id"].startswith("vertex:v2:")
+        assert scene["objects"][0]["faces"][0]["legacy_stable_id"].startswith("face:")
         assert scene["objects"][0]["faces"][0]["signature"]
+        assert scene["objects"][0]["faces"][0]["signature_version"] == 2
+        assert scene["objects"][0]["faces"][0]["stability"] == "geometric_signature_v2"
         assert scene["objects"][0]["edges"][0]["points"]
         assert scene["objects"][0]["vertices"][0]["point"]
     assert result["freecad_version"]
@@ -1064,7 +1087,10 @@ result = [box, sketch]
     assert objects["BaseBox"]["placement"]["base"] == [30.0, 0.0, 0.0]
     assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["reference"] == "Face1"
     assert objects["BaseBox"]["shape"]["subelements"]["edges"][0]["reference"] == "Edge1"
-    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["stable_id"].startswith("face:")
+    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["stable_id"].startswith("face:v2:")
+    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["legacy_stable_id"].startswith("face:")
+    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["signature_version"] == 2
+    assert objects["BaseBox"]["shape"]["subelements"]["faces"][0]["stability"] == "geometric_signature_v2"
     assert objects["BaseBox"]["shape"]["subelements"]["edges"][0]["signature"]
     length = next(prop for prop in objects["BaseBox"]["properties"] if prop["name"] == "Length")
     assert length["value"] == 20.0

@@ -327,7 +327,7 @@ def stable_sequence(values, digits=6):
     return result
 
 
-def subshape_stable_signature(subshape, prefix, index):
+def subshape_stable_signature(subshape, prefix, index=None, *, include_index=False):
     bbox = bbox_summary(subshape)
     center = bbox_center_summary(subshape) if bbox else None
     signature = {
@@ -335,8 +335,9 @@ def subshape_stable_signature(subshape, prefix, index):
         "shape_type": safe_text(getattr(subshape, "ShapeType", "")),
         "center": stable_sequence(center),
         "bbox_size": stable_sequence(bbox.get("size") if bbox else None),
-        "index_hint": int(index),
     }
+    if include_index and index is not None:
+        signature["index_hint"] = int(index)
     try:
         signature["length"] = stable_number(getattr(subshape, "Length"))
     except Exception:
@@ -352,18 +353,27 @@ def subshape_stable_signature(subshape, prefix, index):
     return {key: value for key, value in signature.items() if value is not None and value != ""}
 
 
-def subshape_stable_fields(subshape, prefix, index):
-    signature = subshape_stable_signature(subshape, prefix, index)
-    digest = hashlib.sha1(
+def subshape_stable_digest(signature):
+    return hashlib.sha1(
         json.dumps(signature, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:16]
+
+
+def subshape_stable_fields(subshape, prefix, index):
+    signature = subshape_stable_signature(subshape, prefix, index, include_index=False)
+    indexed_signature = subshape_stable_signature(subshape, prefix, index, include_index=True)
+    digest = subshape_stable_digest(signature)
+    legacy_digest = subshape_stable_digest(indexed_signature)
     reference = "{}{}".format(prefix, index + 1)
     return {
         "topological_reference": reference,
-        "stable_id": "{}:{}".format(prefix.lower(), digest),
+        "stable_id": "{}:v2:{}".format(prefix.lower(), digest),
+        "legacy_stable_id": "{}:{}".format(prefix.lower(), legacy_digest),
         "stable_reference": "{}:{}".format(reference, digest[:8]),
         "signature": signature,
-        "stability": "geometric_signature",
+        "signature_version": 2,
+        "index_hint": int(index),
+        "stability": "geometric_signature_v2",
     }
 
 
@@ -2273,16 +2283,105 @@ def subelement_attr_for_prefix(prefix):
     }.get(prefix)
 
 
-def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", kind=""):
+def stable_signature_payload(value):
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: value.get(key)
+        for key in ["kind", "shape_type", "center", "bbox_size", "length", "area", "volume"]
+        if value.get(key) is not None
+    }
+
+
+def relative_delta(expected, actual):
+    if expected is None or actual is None:
+        return None
+    try:
+        left = float(expected)
+        right = float(actual)
+    except Exception:
+        return None
+    if not math.isfinite(left) or not math.isfinite(right):
+        return None
+    return abs(left - right) / max(abs(left), abs(right), 1.0)
+
+
+def sequence_delta(expected, actual):
+    if not isinstance(expected, (list, tuple)) or not isinstance(actual, (list, tuple)):
+        return None
+    if len(expected) < 3 or len(actual) < 3:
+        return None
+    values = []
+    for index in range(3):
+        delta = relative_delta(expected[index], actual[index])
+        if delta is None:
+            return None
+        values.append(delta)
+    return sum(values) / len(values)
+
+
+def stable_signature_score(expected, actual):
+    expected = stable_signature_payload(expected)
+    actual = stable_signature_payload(actual)
+    if not expected or not actual:
+        return None
+    score = 0.0
+    matched = 0
+    missing = 0
+    for key in ["kind", "shape_type"]:
+        if expected.get(key) is None or actual.get(key) is None:
+            missing += 1
+            continue
+        matched += 1
+        if safe_text(expected.get(key), 80).lower() != safe_text(actual.get(key), 80).lower():
+            score += 100.0
+    for key in ["center", "bbox_size"]:
+        delta = sequence_delta(expected.get(key), actual.get(key))
+        if delta is None:
+            missing += 1
+            continue
+        matched += 1
+        score += delta * (8.0 if key == "center" else 5.0)
+    for key, weight in [("length", 3.0), ("area", 3.0), ("volume", 2.0)]:
+        delta = relative_delta(expected.get(key), actual.get(key))
+        if delta is None:
+            continue
+        matched += 1
+        score += delta * weight
+    if matched == 0:
+        return None
+    score += missing * 0.25
+    return score
+
+
+def stable_match_confidence(score):
+    if score is None:
+        return "none"
+    if score <= 0.000001:
+        return "exact"
+    if score <= 0.02:
+        return "high"
+    if score <= 0.12:
+        return "medium"
+    return "low"
+
+
+def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", kind="", signature=None, stable_reference=""):
     reference = safe_text(reference, 160)
     stable_id = safe_text(stable_id, 160)
+    stable_reference = safe_text(stable_reference, 160)
+    signature = stable_signature_payload(signature)
     prefix = subelement_prefix_from_payload(kind=kind, reference=reference, stable_id=stable_id)
-    if not stable_id:
+    if not prefix and signature.get("kind"):
+        prefix = subelement_prefix_from_payload(kind=signature.get("kind"), reference=reference, stable_id=stable_id)
+    if not stable_id and not stable_reference and not signature:
         return reference, {
             "requested_reference": reference,
             "resolved_reference": reference,
             "stable_id": None,
+            "stable_reference": None,
             "status": "topological_reference",
+            "confidence": "none",
         }
     attr = subelement_attr_for_prefix(prefix)
     shape = getattr(obj, "Shape", None)
@@ -2291,29 +2390,85 @@ def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", k
             "requested_reference": reference,
             "resolved_reference": reference,
             "stable_id": stable_id,
+            "stable_reference": stable_reference or None,
             "status": "stable_unresolved_no_shape",
+            "confidence": "none",
         }
     try:
         subshapes = list(getattr(shape, attr) or [])
     except Exception:
         subshapes = []
+    signature_candidates = []
     for index, subshape in enumerate(subshapes):
         fields = subshape_stable_fields(subshape, prefix, index)
-        if fields.get("stable_id") == stable_id:
+        matched_stable_id = stable_id and stable_id in {fields.get("stable_id"), fields.get("legacy_stable_id")}
+        matched_stable_reference = stable_reference and stable_reference == fields.get("stable_reference")
+        if matched_stable_id or matched_stable_reference:
             resolved = fields["topological_reference"]
+            if matched_stable_reference:
+                match_method = "stable_reference"
+            elif stable_id == fields.get("stable_id"):
+                match_method = "stable_id"
+            else:
+                match_method = "legacy_stable_id"
             return resolved, {
                 "requested_reference": reference,
                 "resolved_reference": resolved,
-                "stable_id": stable_id,
+                "stable_id": stable_id or None,
+                "resolved_stable_id": fields.get("stable_id"),
                 "stable_reference": fields.get("stable_reference"),
+                "requested_stable_reference": stable_reference or None,
+                "signature_version": fields.get("signature_version"),
                 "status": "stable_resolved" if resolved == reference else "stable_remapped",
+                "match_method": match_method,
+                "confidence": "exact",
                 "signature": fields.get("signature"),
             }
+        if signature:
+            score = stable_signature_score(signature, fields.get("signature"))
+            if score is not None:
+                signature_candidates.append((score, fields))
+    if signature_candidates:
+        signature_candidates.sort(key=lambda item: item[0])
+        best_score, best_fields = signature_candidates[0]
+        second_score = signature_candidates[1][0] if len(signature_candidates) > 1 else None
+        confidence = stable_match_confidence(best_score)
+        ambiguous = second_score is not None and abs(second_score - best_score) <= max(0.000001, best_score * 0.15)
+        if confidence in {"exact", "high", "medium"} and not ambiguous:
+            resolved = best_fields["topological_reference"]
+            return resolved, {
+                "requested_reference": reference,
+                "resolved_reference": resolved,
+                "stable_id": stable_id or None,
+                "resolved_stable_id": best_fields.get("stable_id"),
+                "stable_reference": best_fields.get("stable_reference"),
+                "requested_stable_reference": stable_reference or None,
+                "signature_version": best_fields.get("signature_version"),
+                "status": "stable_signature_resolved" if resolved == reference else "stable_signature_remapped",
+                "match_method": "signature_score",
+                "confidence": confidence,
+                "score": best_score,
+                "second_score": second_score,
+                "signature": best_fields.get("signature"),
+            }
+        return reference, {
+            "requested_reference": reference,
+            "resolved_reference": reference,
+            "stable_id": stable_id or None,
+            "stable_reference": stable_reference or None,
+            "status": "stable_signature_ambiguous" if ambiguous else "stable_signature_low_confidence",
+            "match_method": "signature_score",
+            "confidence": "ambiguous" if ambiguous else confidence,
+            "score": best_score,
+            "second_score": second_score,
+        }
     return reference, {
         "requested_reference": reference,
         "resolved_reference": reference,
         "stable_id": stable_id,
+        "stable_reference": stable_reference or None,
         "status": "stable_unresolved_fallback_reference",
+        "confidence": "none",
     }
 
 
@@ -2446,16 +2601,26 @@ def sketch_support_payload(doc, patch):
     stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
     if patch.get("stable_id") and not stable_ids:
         stable_ids = [patch.get("stable_id")]
+    stable_signatures = patch.get("stable_signatures") if isinstance(patch.get("stable_signatures"), list) else []
+    if patch.get("signature") and not stable_signatures:
+        stable_signatures = [patch.get("signature")]
+    stable_references = patch.get("stable_references") if isinstance(patch.get("stable_references"), list) else []
+    if patch.get("stable_reference") and not stable_references:
+        stable_references = [patch.get("stable_reference")]
     support = select_single_object(doc, selector)
     diagnostics = []
     resolved = []
     for index, reference in enumerate(subelements):
         stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        signature = stable_signatures[index] if index < len(stable_signatures) else None
+        stable_reference = stable_references[index] if index < len(stable_references) else ""
         resolved_reference, detail = resolve_subelement_reference_on_object(
             support,
             reference=reference,
             stable_id=stable_id,
             kind=patch.get("kind") or "",
+            signature=signature,
+            stable_reference=stable_reference,
         )
         resolved.append(resolved_reference)
         diagnostics.append(detail)
@@ -2719,15 +2884,25 @@ def add_sketch_external_geometry(doc, sketch, patch):
     if any(not item for item in items):
         raise ValueError("add_external_geometry references must be non-empty")
     stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
+    stable_signatures = patch.get("stable_signatures") if isinstance(patch.get("stable_signatures"), list) else []
+    if patch.get("signature") and not stable_signatures:
+        stable_signatures = [patch.get("signature")]
+    stable_references = patch.get("stable_references") if isinstance(patch.get("stable_references"), list) else []
+    if patch.get("stable_reference") and not stable_references:
+        stable_references = [patch.get("stable_reference")]
     old_count = len(sketch_external_geometry_summary(sketch))
     results = []
     for index, reference in enumerate(items):
         stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        signature = stable_signatures[index] if index < len(stable_signatures) else None
+        stable_reference = stable_references[index] if index < len(stable_references) else ""
         resolved_reference, detail = resolve_subelement_reference_on_object(
             source,
             reference=reference,
             stable_id=stable_id,
             kind=patch.get("kind") or reference,
+            signature=signature,
+            stable_reference=stable_reference,
         )
         sketch.addExternal(safe_text(getattr(source, "Name", "")), resolved_reference)
         results.append({"source": object_ref(source), "reference": resolved_reference, "reference_diagnostics": detail})
@@ -3148,15 +3323,25 @@ def assembly_connector_from_payload(doc, payload, fallback_selector=None):
     stable_ids = payload.get("stable_ids") if isinstance(payload.get("stable_ids"), list) else []
     if payload.get("stable_id") and not stable_ids:
         stable_ids = [payload.get("stable_id")]
+    stable_signatures = payload.get("stable_signatures") if isinstance(payload.get("stable_signatures"), list) else []
+    if payload.get("signature") and not stable_signatures:
+        stable_signatures = [payload.get("signature")]
+    stable_references = payload.get("stable_references") if isinstance(payload.get("stable_references"), list) else []
+    if payload.get("stable_reference") and not stable_references:
+        stable_references = [payload.get("stable_reference")]
     resolved = []
     for index, reference in enumerate(values[:2]):
         stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        signature = stable_signatures[index] if index < len(stable_signatures) else None
+        stable_reference = stable_references[index] if index < len(stable_references) else ""
         kind = payload.get("kind") or payload.get("subelement_kind") or reference
         resolved_reference, _detail = resolve_subelement_reference_on_object(
             obj,
             reference=reference,
             stable_id=stable_id,
             kind=kind,
+            signature=signature,
+            stable_reference=stable_reference,
         )
         resolved.append(resolved_reference)
     while len(resolved) < 2:
@@ -4068,17 +4253,27 @@ def fallback_assembly_connector(doc, payload, fallback_selector=None):
     stable_ids = payload.get("stable_ids") if isinstance(payload.get("stable_ids"), list) else []
     if payload.get("stable_id") and not stable_ids:
         stable_ids = [payload.get("stable_id")]
+    stable_signatures = payload.get("stable_signatures") if isinstance(payload.get("stable_signatures"), list) else []
+    if payload.get("signature") and not stable_signatures:
+        stable_signatures = [payload.get("signature")]
+    stable_references = payload.get("stable_references") if isinstance(payload.get("stable_references"), list) else []
+    if payload.get("stable_reference") and not stable_references:
+        stable_references = [payload.get("stable_reference")]
     element, element_detail = resolve_subelement_reference_on_object(
         obj,
         reference=element,
         stable_id=stable_ids[0] if stable_ids else "",
         kind=payload.get("kind") or payload.get("subelement_kind") or element,
+        signature=stable_signatures[0] if stable_signatures else None,
+        stable_reference=stable_references[0] if stable_references else "",
     )
     vertex, vertex_detail = resolve_subelement_reference_on_object(
         obj,
         reference=vertex,
         stable_id=stable_ids[1] if len(stable_ids) > 1 else "",
         kind="Vertex" if vertex else "",
+        signature=stable_signatures[1] if len(stable_signatures) > 1 else None,
+        stable_reference=stable_references[1] if len(stable_references) > 1 else "",
     )
     return {
         "object": object_ref(obj),
@@ -4852,6 +5047,12 @@ def resolve_techdraw_references(doc, patch, view, references):
     stable_ids = patch.get("stable_ids") if isinstance(patch.get("stable_ids"), list) else []
     if patch.get("stable_id") and not stable_ids:
         stable_ids = [patch.get("stable_id")]
+    stable_signatures = patch.get("stable_signatures") if isinstance(patch.get("stable_signatures"), list) else []
+    if patch.get("signature") and not stable_signatures:
+        stable_signatures = [patch.get("signature")]
+    stable_references = patch.get("stable_references") if isinstance(patch.get("stable_references"), list) else []
+    if patch.get("stable_reference") and not stable_references:
+        stable_references = [patch.get("stable_reference")]
     source = techdraw_reference_source(doc, patch, view)
     if source is None:
         return refs, []
@@ -4859,11 +5060,15 @@ def resolve_techdraw_references(doc, patch, view, references):
     diagnostics = []
     for index, reference in enumerate(refs):
         stable_id = stable_ids[index] if index < len(stable_ids) else ""
+        signature = stable_signatures[index] if index < len(stable_signatures) else None
+        stable_reference = stable_references[index] if index < len(stable_references) else ""
         resolved_reference, detail = resolve_subelement_reference_on_object(
             source,
             reference=reference,
             stable_id=stable_id,
             kind=patch.get("kind") or patch.get("subelement_kind") or reference,
+            signature=signature,
+            stable_reference=stable_reference,
         )
         resolved.append(resolved_reference)
         diagnostics.append(detail)
