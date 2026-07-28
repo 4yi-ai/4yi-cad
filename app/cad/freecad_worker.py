@@ -365,15 +365,35 @@ def subshape_stable_fields(subshape, prefix, index):
     digest = subshape_stable_digest(signature)
     legacy_digest = subshape_stable_digest(indexed_signature)
     reference = "{}{}".format(prefix, index + 1)
+    stable_id = "{}:v2:{}".format(prefix.lower(), digest)
+    legacy_stable_id = "{}:{}".format(prefix.lower(), legacy_digest)
+    stable_reference = "{}:{}".format(reference, digest[:8])
+    provenance = {
+        "schema": "freecad.subelement_provenance.v1",
+        "source": "shape_scan",
+        "kind": prefix,
+        "topological_reference": reference,
+        "signature_version": 2,
+        "signature_digest": digest,
+        "legacy_signature_digest": legacy_digest,
+        "index_hint": int(index),
+    }
     return {
         "topological_reference": reference,
-        "stable_id": "{}:v2:{}".format(prefix.lower(), digest),
-        "legacy_stable_id": "{}:{}".format(prefix.lower(), legacy_digest),
-        "stable_reference": "{}:{}".format(reference, digest[:8]),
+        "stable_id": stable_id,
+        "legacy_stable_id": legacy_stable_id,
+        "stable_reference": stable_reference,
         "signature": signature,
         "signature_version": 2,
         "index_hint": int(index),
         "stability": "geometric_signature_v2",
+        "provenance": provenance,
+        "ref_history": [
+            {"scheme": "stable_id_v2", "value": stable_id, "signature_version": 2},
+            {"scheme": "stable_reference_v2", "value": stable_reference, "signature_version": 2},
+            {"scheme": "topological_name", "value": reference},
+            {"scheme": "stable_id_v1", "value": legacy_stable_id, "signature_version": 1},
+        ],
     }
 
 
@@ -839,12 +859,68 @@ def constraint_summary(constraint, index):
     return item
 
 
+def sketch_constraint_index_values(value):
+    result = []
+    if isinstance(value, bool) or value is None:
+        return result
+    if isinstance(value, int):
+        return [value]
+    if isinstance(value, float) and value.is_integer():
+        return [int(value)]
+    if isinstance(value, dict):
+        for item in value.values():
+            result.extend(sketch_constraint_index_values(item))
+        return result
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            result.extend(sketch_constraint_index_values(item))
+        return result
+    return result
+
+
+def sketch_constraint_indexes(sketch, method_names):
+    indexes = []
+    for method_name in method_names:
+        method = getattr(sketch, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            indexes.extend(sketch_constraint_index_values(method()))
+        except Exception:
+            continue
+    return sorted({int(index) for index in indexes if int(index) >= 0})
+
+
 def sketch_edit_mode_summary(sketch, constraints, solver):
     diagnostics = []
     state = "unknown"
     degrees_of_freedom = solver.get("degrees_of_freedom")
     fully_constrained = solver.get("fully_constrained")
     solver_status = solver.get("solver_status")
+    conflicting_indexes = sketch_constraint_indexes(
+        sketch,
+        [
+            "getConflictingConstraints",
+            "getConflicting",
+            "getConflicts",
+        ],
+    )
+    redundant_indexes = sketch_constraint_indexes(
+        sketch,
+        [
+            "getRedundantConstraints",
+            "getRedundant",
+            "getRedundants",
+            "getPartiallyRedundantConstraints",
+        ],
+    )
+    malformed_indexes = sketch_constraint_indexes(
+        sketch,
+        [
+            "getMalformedConstraints",
+            "getMalformed",
+        ],
+    )
     if solver.get("error"):
         state = "solver_error"
         diagnostics.append({
@@ -868,12 +944,37 @@ def sketch_edit_mode_summary(sketch, constraints, solver):
             "severity": "warning",
             "code": "redundant_constraint",
             "message": "Sketch solver reports redundant constraints",
+            "constraint_indexes": redundant_indexes,
         })
     if "conflict" in status_text or "inconsistent" in status_text or "over" in status_text:
         diagnostics.append({
             "severity": "error",
             "code": "conflicting_constraint",
             "message": "Sketch solver reports conflicting constraints",
+            "constraint_indexes": conflicting_indexes,
+        })
+        state = "conflicting"
+    if conflicting_indexes:
+        diagnostics.append({
+            "severity": "error",
+            "code": "conflicting_constraint_indexes",
+            "message": "{} conflicting constraints".format(len(conflicting_indexes)),
+            "constraint_indexes": conflicting_indexes,
+        })
+        state = "conflicting"
+    if redundant_indexes:
+        diagnostics.append({
+            "severity": "warning",
+            "code": "redundant_constraint_indexes",
+            "message": "{} redundant constraints".format(len(redundant_indexes)),
+            "constraint_indexes": redundant_indexes,
+        })
+    if malformed_indexes:
+        diagnostics.append({
+            "severity": "error",
+            "code": "malformed_constraint_indexes",
+            "message": "{} malformed constraints".format(len(malformed_indexes)),
+            "constraint_indexes": malformed_indexes,
         })
         state = "conflicting"
     disabled = [item for item in list(constraints or []) if item.get("status") == "disabled"]
@@ -891,9 +992,30 @@ def sketch_edit_mode_summary(sketch, constraints, solver):
         "fully_constrained": fully_constrained,
         "constraint_count": len(constraints or []),
         "reference_constraint_count": len(reference),
+        "conflicting_constraints": conflicting_indexes,
+        "redundant_constraints": redundant_indexes,
+        "malformed_constraints": malformed_indexes,
         "diagnostics": diagnostics,
         "diagnostic_count": len(diagnostics),
     }
+
+
+def annotate_sketch_constraints(constraints, edit_mode):
+    conflicting = set(edit_mode.get("conflicting_constraints") or [])
+    redundant = set(edit_mode.get("redundant_constraints") or [])
+    malformed = set(edit_mode.get("malformed_constraints") or [])
+    annotated = []
+    for constraint in list(constraints or []):
+        item = dict(constraint)
+        index = item.get("index")
+        if index in conflicting or index in malformed:
+            item["solver_status"] = "conflicting"
+            item["diagnostic_severity"] = "error"
+        elif index in redundant:
+            item["solver_status"] = "redundant"
+            item["diagnostic_severity"] = "warning"
+        annotated.append(item)
+    return annotated
 
 
 def vector_summary(value):
@@ -1046,6 +1168,7 @@ def sketch_summary(obj):
     degrees_of_freedom = solver.get("degrees_of_freedom")
     fully_constrained = solver.get("fully_constrained")
     edit_mode = sketch_edit_mode_summary(obj, constraints, solver)
+    constraints = annotate_sketch_constraints(constraints, edit_mode)
     return {
         "name": safe_text(getattr(obj, "Name", "")),
         "label": safe_text(getattr(obj, "Label", "")),
@@ -1283,6 +1406,78 @@ def vector_from_points(start, end):
         return None
 
 
+def vector_dot_values(left, right):
+    try:
+        return sum(float(left[index]) * float(right[index]) for index in range(3))
+    except Exception:
+        return None
+
+
+def vector_cross_values(left, right):
+    try:
+        return [
+            float(left[1]) * float(right[2]) - float(left[2]) * float(right[1]),
+            float(left[2]) * float(right[0]) - float(left[0]) * float(right[2]),
+            float(left[0]) * float(right[1]) - float(left[1]) * float(right[0]),
+        ]
+    except Exception:
+        return None
+
+
+def connector_helper_axis(primary):
+    primary = normalize_vector_values(primary)
+    if not primary:
+        return [1.0, 0.0, 0.0]
+    candidates = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    return min(
+        candidates,
+        key=lambda candidate: abs(vector_dot_values(primary, candidate) or 0.0),
+    )
+
+
+def connector_lcs_axes(primary_axis, *, primary_role="z"):
+    primary = normalize_vector_values(primary_axis)
+    if not primary:
+        return None
+    helper = connector_helper_axis(primary)
+    if primary_role == "x":
+        x_axis = primary
+        z_axis = normalize_vector_values(vector_cross_values(x_axis, helper))
+        if not z_axis:
+            return None
+        y_axis = normalize_vector_values(vector_cross_values(z_axis, x_axis))
+    else:
+        z_axis = primary
+        x_axis = normalize_vector_values(vector_cross_values(helper, z_axis))
+        if not x_axis:
+            return None
+        y_axis = normalize_vector_values(vector_cross_values(z_axis, x_axis))
+    if not (x_axis and y_axis and z_axis):
+        return None
+    return {
+        "x_axis": x_axis,
+        "y_axis": y_axis,
+        "z_axis": z_axis,
+        "primary_role": primary_role,
+        "orientation_quality": "complete",
+    }
+
+
+def connector_lcs_summary(origin, primary_axis=None, *, primary_role="z"):
+    stable_origin = stable_sequence(origin)
+    if stable_origin is None:
+        return None
+    axes = connector_lcs_axes(primary_axis, primary_role=primary_role)
+    if not axes:
+        return {
+            "origin": stable_origin,
+            "orientation_quality": "origin_only",
+        }
+    result = {"origin": stable_origin}
+    result.update(axes)
+    return result
+
+
 def subshape_by_reference(obj, reference):
     text = safe_text(reference, 160)
     match = re.match(r"^(Face|Edge|Vertex)(\d+)$", text, re.IGNORECASE)
@@ -1316,6 +1511,7 @@ def subshape_connector_frame(obj, reference):
             "origin": center,
             "frame_quality": "missing_reference",
             "source": "fallback_object_center" if center else "unresolved",
+            "lcs": connector_lcs_summary(center),
         }
     fields = subshape_stable_fields(subshape, prefix, index)
     origin = bbox_center_summary(subshape)
@@ -1323,8 +1519,12 @@ def subshape_connector_frame(obj, reference):
         "reference": safe_text(reference, 160),
         "origin": origin,
         "stable_id": fields.get("stable_id"),
+        "legacy_stable_id": fields.get("legacy_stable_id"),
         "stable_reference": fields.get("stable_reference"),
         "signature": fields.get("signature"),
+        "provenance": fields.get("provenance"),
+        "ref_history": fields.get("ref_history"),
+        "connector_type": prefix.lower(),
     }
     if prefix == "Face":
         normal = None
@@ -1338,6 +1538,8 @@ def subshape_connector_frame(obj, reference):
             "frame_quality": "orientation_complete" if normal else "origin_only",
             "source": "face_normal" if normal else "face_center",
         })
+        frame["local_axes"] = connector_lcs_axes(frame.get("primary_axis"), primary_role="z")
+        frame["lcs"] = connector_lcs_summary(origin, frame.get("primary_axis"), primary_role="z")
     elif prefix == "Edge":
         points = []
         try:
@@ -1353,6 +1555,8 @@ def subshape_connector_frame(obj, reference):
             "frame_quality": "orientation_complete" if tangent else "origin_only",
             "source": "edge_tangent" if tangent else "edge_center",
         })
+        frame["local_axes"] = connector_lcs_axes(frame.get("primary_axis"), primary_role="x")
+        frame["lcs"] = connector_lcs_summary(origin, frame.get("primary_axis"), primary_role="x")
     else:
         point = None
         try:
@@ -1365,6 +1569,8 @@ def subshape_connector_frame(obj, reference):
             "frame_quality": "origin_only",
             "source": "vertex_point",
         })
+        frame["local_axes"] = None
+        frame["lcs"] = connector_lcs_summary(frame.get("origin"))
     return frame
 
 
@@ -1378,6 +1584,7 @@ def assembly_connector_frame_summary(obj, subelements):
             "frame_quality": "object_only",
             "origin": bbox_center_summary(getattr(obj, "Shape", None)) if hasattr(obj, "Shape") else None,
             "source": "object_center",
+            "lcs": connector_lcs_summary(bbox_center_summary(getattr(obj, "Shape", None)) if hasattr(obj, "Shape") else None),
         }
     frame = subshape_connector_frame(obj, reference)
     frame["object"] = object_ref(obj)
@@ -1470,6 +1677,15 @@ def assembly_solver_diagnostics(parts, joints, detail=None, *, fallback=False):
             "code": "solver_error",
             "message": safe_text(detail.get("error"), 300),
         })
+    for skipped in list(detail.get("skipped_joints") or []):
+        if not isinstance(skipped, dict):
+            continue
+        issues.append({
+            "severity": "warning",
+            "code": "native_joint_skipped",
+            "joint": skipped.get("joint"),
+            "message": safe_text(skipped.get("reason") or "Native solver skipped a joint", 300),
+        })
     if len(parts or []) < 2 and any(joint.get("kind") == "joint" for joint in list(joints or [])):
         issues.append({
             "severity": "error",
@@ -1514,6 +1730,23 @@ def assembly_solver_diagnostics(parts, joints, detail=None, *, fallback=False):
                     "joint": joint.get("name"),
                     "reference": key,
                     "message": "Connector has origin but no orientation axis",
+                })
+            lcs = frame.get("lcs") if isinstance(frame.get("lcs"), dict) else None
+            if not lcs:
+                issues.append({
+                    "severity": "warning",
+                    "code": "connector_lcs_missing",
+                    "joint": joint.get("name"),
+                    "reference": key,
+                    "message": "Connector has no local coordinate system",
+                })
+            elif lcs.get("orientation_quality") != "complete":
+                issues.append({
+                    "severity": "info",
+                    "code": "connector_lcs_origin_only",
+                    "joint": joint.get("name"),
+                    "reference": key,
+                    "message": "Connector LCS has origin but no full orientation axes",
                 })
     severity_order = {"error": 3, "warning": 2, "info": 1}
     severity = "ok"
@@ -2135,6 +2368,8 @@ def document_summary(doc):
             "sketches": [],
             "assemblies": [],
             "techdraw": [],
+            "assembly_capabilities": assembly_runtime_capabilities(),
+            "techdraw_capabilities": techdraw_runtime_capabilities(),
             "typed_state": typed_document_state(document, [], geometry, {"roots": [], "nodes": []}, [], [], []),
         }
     try:
@@ -2224,6 +2459,8 @@ def document_summary(doc):
         "sketches": sketches,
         "assemblies": assemblies,
         "techdraw": techdraw,
+        "assembly_capabilities": assembly_runtime_capabilities(),
+        "techdraw_capabilities": techdraw_runtime_capabilities(),
         "typed_state": typed_document_state(document, summaries, geometry, feature_tree, sketches, assemblies, techdraw),
     }
 
@@ -2423,6 +2660,8 @@ def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", k
                 "match_method": match_method,
                 "confidence": "exact",
                 "signature": fields.get("signature"),
+                "provenance": fields.get("provenance"),
+                "ref_history": fields.get("ref_history"),
             }
         if signature:
             score = stable_signature_score(signature, fields.get("signature"))
@@ -2450,6 +2689,8 @@ def resolve_subelement_reference_on_object(obj, *, reference="", stable_id="", k
                 "score": best_score,
                 "second_score": second_score,
                 "signature": best_fields.get("signature"),
+                "provenance": best_fields.get("provenance"),
+                "ref_history": best_fields.get("ref_history"),
             }
         return reference, {
             "requested_reference": reference,
@@ -3372,8 +3613,12 @@ def connector_payloads_from_patch(patch):
     return [connector1, connector2]
 
 
+def truthy_env(name):
+    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+
+
 def native_assembly_available(*, require_joints=False):
-    if os.environ.get("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY", "").lower() not in {"1", "true", "yes"}:
+    if not truthy_env("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY"):
         return False
     if Assembly is None:
         return False
@@ -3384,6 +3629,52 @@ def native_assembly_available(*, require_joints=False):
 
 def native_assembly_solver_available():
     return Assembly is not None and JointObject is not None
+
+
+def assembly_runtime_capabilities():
+    module_available = Assembly is not None
+    joint_object_available = JointObject is not None
+    persist_enabled = truthy_env("FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY")
+    return {
+        "schema": "freecad.assembly_capabilities.v1",
+        "assembly_module_available": module_available,
+        "joint_object_available": joint_object_available,
+        "persistent_native_enabled": persist_enabled,
+        "persistent_native_available": bool(persist_enabled and module_available),
+        "native_solver_available": bool(module_available and joint_object_available),
+        "default_backend": "native_persistent" if native_assembly_available() else "typed_state_native_solver",
+        "supported_joint_types": sorted(SUPPORTED_ASSEMBLY_JOINT_TYPES),
+        "requires_env": "FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY=1",
+    }
+
+
+def native_techdraw_available():
+    return TechDraw is not None and truthy_env("FOURYI_FREECAD_NATIVE_TECHDRAW")
+
+
+def techdraw_runtime_capabilities():
+    module_available = TechDraw is not None
+    svg_native = bool(module_available and hasattr(TechDraw, "viewPartAsSvg"))
+    dxf_native = bool(module_available and hasattr(TechDraw, "writeDXFPage"))
+    pdf_converter = resolve_rsvg_convert()
+    return {
+        "schema": "freecad.techdraw_capabilities.v1",
+        "techdraw_module_available": module_available,
+        "native_creation_enabled": native_techdraw_available(),
+        "native_svg_export_available": svg_native,
+        "native_dxf_export_available": dxf_native,
+        "pdf_converter_available": bool(pdf_converter),
+        "pdf_converter": safe_text(pdf_converter) if pdf_converter else None,
+        "fallback_export_available": True,
+        "fallback_status": "typed_vector_preview",
+        "product_grade_requires": [
+            "native TechDraw page/view objects",
+            "template/title block",
+            "native SVG/DXF export",
+            "PDF converter",
+        ],
+        "requires_env": "FOURYI_FREECAD_NATIVE_TECHDRAW=1",
+    }
 
 
 def native_assembly_detail(detail):
@@ -3694,6 +3985,45 @@ def resolve_techdraw_template_path(patch):
     if not os.path.isfile(normalized):
         raise ValueError("TechDraw template_path does not exist")
     return normalized
+
+
+def assign_techdraw_native_layout(view, patch):
+    for patch_key, prop in [
+        ("x", "X"),
+        ("y", "Y"),
+        ("scale", "Scale"),
+        ("rotation", "Rotation"),
+    ]:
+        if patch.get(patch_key) is None or not hasattr(view, prop):
+            continue
+        try:
+            setattr(view, prop, float(patch[patch_key]))
+        except Exception:
+            pass
+    for patch_key, prop in [
+        ("direction", "Direction"),
+        ("x_direction", "XDirection"),
+        ("section_normal", "SectionNormal"),
+    ]:
+        vector = techdraw_vector_summary_from_patch(patch, patch_key)
+        if not vector or not hasattr(view, prop):
+            continue
+        try:
+            setattr(view, prop, FreeCAD.Vector(float(vector[0]), float(vector[1]), float(vector[2])))
+        except Exception:
+            pass
+
+
+def add_native_techdraw_view_to_page(page, view):
+    if hasattr(page, "addView"):
+        page.addView(view)
+        return
+    views = list(getattr(page, "Views", []) or [])
+    if view not in views:
+        try:
+            page.Views = views + [view]
+        except Exception:
+            pass
 
 
 def select_techdraw_page(doc, patch):
@@ -4414,25 +4744,42 @@ def solve_typed_assembly_with_native(doc, assembly):
             part_map[part_name] = clone
         joint_types = list(getattr(JointObject, "JointTypes", []))
         created_joints = 0
+        created_joint_details = []
+        skipped_joints = []
         for joint_entry in list(assembly.get("joints") or []):
             name = safe_feature_name(joint_entry.get("name"), "Joint")
             if joint_entry.get("kind") == "grounded":
                 target_name = safe_text((joint_entry.get("object_to_ground") or {}).get("name"), 80)
                 target = part_map.get(target_name)
                 if target is None:
+                    skipped_joints.append({
+                        "joint": name,
+                        "reason": "grounded target part is not available in native solve document",
+                    })
                     continue
                 joint = joint_group.newObject("App::FeaturePython", name)
                 JointObject.GroundedJoint(joint, target)
                 created_joints += 1
+                created_joint_details.append({"joint": name, "kind": "grounded", "target": target_name})
                 continue
             joint_type = safe_text(joint_entry.get("joint_type"), 80)
             if joint_type not in joint_types:
+                skipped_joints.append({
+                    "joint": name,
+                    "joint_type": joint_type,
+                    "reason": "joint type is not supported by this FreeCAD Assembly runtime",
+                })
                 continue
             ref1 = joint_entry.get("reference1") or {}
             ref2 = joint_entry.get("reference2") or {}
             obj1 = part_map.get(safe_text((ref1.get("object") or {}).get("name"), 80))
             obj2 = part_map.get(safe_text((ref2.get("object") or {}).get("name"), 80))
             if obj1 is None or obj2 is None:
+                skipped_joints.append({
+                    "joint": name,
+                    "joint_type": joint_type,
+                    "reason": "one or both connector parts are not available in native solve document",
+                })
                 continue
             joint = joint_group.newObject("App::FeaturePython", name)
             JointObject.Joint(joint, joint_types.index(joint_type))
@@ -4454,19 +4801,42 @@ def solve_typed_assembly_with_native(doc, assembly):
                 refs[0][1].append("")
             while len(refs[1][1]) < 2:
                 refs[1][1].append("")
-            joint.Proxy.setJointConnectors(joint, refs)
+            try:
+                joint.Proxy.setJointConnectors(joint, refs)
+            except Exception as exc:
+                skipped_joints.append({
+                    "joint": name,
+                    "joint_type": joint_type,
+                    "reason": "setJointConnectors failed: " + safe_text(exc, 220),
+                })
+                continue
             created_joints += 1
+            created_joint_details.append({
+                "joint": name,
+                "joint_type": joint_type,
+                "reference1_lcs": (ref1.get("connector_frame") or {}).get("lcs"),
+                "reference2_lcs": (ref2.get("connector_frame") or {}).get("lcs"),
+            })
         temp_doc.recompute()
         try:
             status = native_assembly.solve()
         except TypeError:
             status = native_assembly.solve(False)
+        diagnostics = assembly_solver_diagnostics(
+            list(assembly.get("parts") or []),
+            list(assembly.get("joints") or []),
+            detail={"skipped_joints": skipped_joints},
+            fallback=False,
+        )
         return {
-            "ok": True,
+            "ok": not any(issue.get("severity") == "error" for issue in diagnostics.get("issues", [])),
             "solver_backend": "native_transient",
             "solver_status": safe_value(status),
             "part_count": len(part_map),
             "joint_count": created_joints,
+            "created_joints": created_joint_details,
+            "skipped_joints": skipped_joints,
+            "solver_diagnostics": diagnostics,
         }
     except Exception as exc:
         return {"ok": False, "solver_backend": "native_transient", "error": safe_text(exc)}
@@ -4733,12 +5103,49 @@ def create_techdraw_page(doc, patch):
     template_name = safe_feature_name(name + "_Template", "Template")
     template_path = resolve_techdraw_template_path(patch)
     page_size_name, page_size = techdraw_page_size_from_patch(patch)
+    if native_techdraw_available():
+        try:
+            page_obj = doc.addObject(TECHDRAW_PAGE_TYPE, name)
+            if label is not None:
+                page_obj.Label = safe_text(label, 160)
+            template_obj = None
+            template_error = None
+            try:
+                template_obj = doc.addObject(TECHDRAW_TEMPLATE_TYPE, template_name)
+                template_obj.Template = template_path
+                page_obj.Template = template_obj
+            except Exception as exc:
+                template_error = safe_text(exc, 220)
+            if patch.get("scale") is not None and hasattr(page_obj, "Scale"):
+                page_obj.Scale = float(patch["scale"])
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return {
+                "page": object_ref(page_obj),
+                "template": object_ref(template_obj) if template_obj is not None else None,
+                "template_path": safe_text(template_path),
+                "template_error": template_error,
+                "fallback": False,
+                "product_grade": template_error is None,
+                "status": "native_techdraw",
+                "native_creation_enabled": True,
+            }, page_obj
+        except Exception as exc:
+            native_error = safe_text(exc, 300)
+        else:
+            native_error = None
+    else:
+        native_error = None
     page = {
         **summary_ref(name, label, TECHDRAW_PAGE_TYPE),
         "kind": "techdraw_page",
         "fallback": True,
         "product_grade": False,
         "status": "typed_vector_fallback",
+        "native_creation_enabled": native_techdraw_available(),
+        "native_error": native_error,
         "scale": float(patch.get("scale")) if patch.get("scale") is not None else None,
         "page_size": page_size_name,
         "page_width": page_size[0],
@@ -4760,10 +5167,37 @@ def create_techdraw_page(doc, patch):
         "fallback": True,
         "product_grade": False,
         "status": "typed_vector_fallback",
+        "native_error": native_error,
     }, None
 
 
 def add_techdraw_view(doc, patch):
+    if native_techdraw_available():
+        try:
+            page_obj = select_techdraw_page(doc, patch)
+            source = select_techdraw_source(doc, patch)
+            name = safe_feature_name(patch.get("name"), "View")
+            view_obj = doc.addObject(TECHDRAW_VIEW_PART_TYPE, name)
+            if patch.get("label"):
+                view_obj.Label = safe_text(patch["label"], 160)
+            view_obj.Source = [source]
+            assign_techdraw_native_layout(view_obj, patch)
+            add_native_techdraw_view_to_page(page_obj, view_obj)
+            try:
+                doc.recompute()
+            except Exception:
+                pass
+            return {
+                "page": object_ref(page_obj),
+                "view": object_ref(view_obj),
+                "source": object_ref(source),
+                "fallback": False,
+                "product_grade": True,
+                "status": "native_techdraw",
+                "native_creation_enabled": True,
+            }, view_obj
+        except Exception:
+            pass
     _state, page = select_techdraw_page_model(doc, patch.get("page_selector") or patch.get("selector") or {})
     source = select_techdraw_source(doc, patch)
     name = safe_feature_name(patch.get("name"), "View")
@@ -5783,19 +6217,37 @@ try:
     techdraw_mode = "native_techdraw" if native_view_count and not fallback_page_count else (
         "mixed_native_typed" if native_view_count and fallback_page_count else "typed_vector_fallback"
     )
+    techdraw_capabilities = techdraw_runtime_capabilities()
+    techdraw_fallback_reason = None
+    if fallback_page_count and not native_view_count:
+        techdraw_fallback_reason = "document contains typed fallback TechDraw pages only"
+    elif fallback_page_count:
+        techdraw_fallback_reason = "document mixes native TechDraw views with typed fallback pages"
+    elif not native_view_count:
+        techdraw_fallback_reason = "document has no native TechDraw drawing views"
     techdraw_export_status = {
         "mode": techdraw_mode,
-        "product_grade": bool(techdraw_svg_path and techdraw_dxf_path and techdraw_pdf_status.get("ok")),
+        "product_grade": bool(
+            techdraw_mode == "native_techdraw"
+            and techdraw_svg_path
+            and techdraw_dxf_path
+            and techdraw_pdf_status.get("ok")
+        ),
+        "native_first": True,
+        "fallback_reason": techdraw_fallback_reason,
+        "capabilities": techdraw_capabilities,
         "fallback_page_count": fallback_page_count,
         "native_page_count": native_page_count,
         "native_view_count": native_view_count,
         "svg": {
             "ok": bool(techdraw_svg_path),
             "exporter": "typed_vector_svg" if fallback_page_count and not native_view_count else "TechDraw.viewPartAsSvg",
+            "fallback": bool(fallback_page_count and not native_view_count),
         },
         "dxf": {
             "ok": bool(techdraw_dxf_path),
             "exporter": "typed_vector_dxf" if fallback_page_count and not native_view_count else "TechDraw.writeDXFPage",
+            "fallback": bool(fallback_page_count and not native_view_count),
         },
         "pdf": techdraw_pdf_status,
     }

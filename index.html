@@ -3668,13 +3668,22 @@ function freeCadConnectorFrameText(reference) {
   if (!frame) return t("notAvailable");
   const stable = frame.stable_id ? `stable ${String(frame.stable_id).slice(-8)}` : "";
   const axis = freeCadTriplet(frame.primary_axis) ? `axis ${freeCadVectorText(frame.primary_axis)}` : "";
-  return [frame.frame_quality, frame.source, axis, stable].filter(Boolean).join(" · ") || t("notAvailable");
+  const lcs = frame.lcs || {};
+  const lcsText = lcs.orientation_quality ? `LCS ${lcs.orientation_quality}` : "";
+  return [frame.frame_quality, frame.source, lcsText, axis, stable].filter(Boolean).join(" · ") || t("notAvailable");
 }
 
 function renderFreeCadConnectorFrameRows(joint) {
+  const lcsText = (reference) => {
+    const lcs = freeCadConnectorFrame(reference)?.lcs || {};
+    if (!freeCadTriplet(lcs.x_axis) || !freeCadTriplet(lcs.y_axis) || !freeCadTriplet(lcs.z_axis)) return "";
+    return `x ${freeCadVectorText(lcs.x_axis)} · y ${freeCadVectorText(lcs.y_axis)} · z ${freeCadVectorText(lcs.z_axis)}`;
+  };
   return `
     <div class="kv"><span>${escapeHtml(t("connector1"))} ${escapeHtml(t("connectorFrame"))}</span><strong>${escapeHtml(freeCadConnectorFrameText(joint.reference1))}</strong></div>
     <div class="kv"><span>${escapeHtml(t("connector2"))} ${escapeHtml(t("connectorFrame"))}</span><strong>${escapeHtml(freeCadConnectorFrameText(joint.reference2))}</strong></div>
+    ${lcsText(joint.reference1) ? `<div class="kv"><span>${escapeHtml(t("connector1"))} LCS</span><strong>${escapeHtml(lcsText(joint.reference1))}</strong></div>` : ""}
+    ${lcsText(joint.reference2) ? `<div class="kv"><span>${escapeHtml(t("connector2"))} LCS</span><strong>${escapeHtml(lcsText(joint.reference2))}</strong></div>` : ""}
   `;
 }
 
@@ -4437,11 +4446,14 @@ function renderFreeCadAssemblySection() {
   const assemblies = freeCadAssemblies();
   if (!assemblies.length) return "";
   const selected = selectedFreeCadAssemblyJointRef();
+  const capabilities = state.documentSummary?.assembly_capabilities || {};
   return `<section class="section">
     <h3>${icon("layers")} ${escapeHtml(t("assemblyPanel"))}</h3>
     <div class="kv-list">
       <div class="kv"><span>${escapeHtml(t("assemblies"))}</span><strong>${escapeHtml(String(assemblies.length))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("assemblyStatus"))}</span><strong>${escapeHtml(assemblies.map(freeCadAssemblyStatusText).join(" · "))}</strong></div>
+      <div class="kv"><span>Native solver</span><strong>${escapeHtml(capabilities.native_solver_available ? "available" : "unavailable")}</strong></div>
+      <div class="kv"><span>Persistent native</span><strong>${escapeHtml(capabilities.persistent_native_available ? "enabled" : "off")}</strong></div>
     </div>
     ${assemblies.map((assembly) => renderFreeCadAssemblyBlock(assembly, selected)).join("")}
   </section>`;
@@ -4544,11 +4556,15 @@ function renderFreeCadTechDrawSection() {
   if (state.engine !== "freecad" || !state.documentSummary) return "";
   const pages = freeCadTechDrawPages();
   if (!pages.length) return "";
+  const capabilities = state.documentSummary?.techdraw_capabilities || {};
   return `<section class="section">
     <h3>${icon("edit")} ${escapeHtml(t("techDrawPanel"))}</h3>
     <div class="kv-list">
       <div class="kv"><span>Pages</span><strong>${escapeHtml(String(pages.length))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("exportQuality"))}</span><strong>${escapeHtml(pages.map(freeCadTechDrawPageStatusText).join(" · "))}</strong></div>
+      <div class="kv"><span>Native TechDraw</span><strong>${escapeHtml(capabilities.techdraw_module_available ? "available" : "unavailable")}</strong></div>
+      <div class="kv"><span>Native creation</span><strong>${escapeHtml(capabilities.native_creation_enabled ? "enabled" : "off")}</strong></div>
+      <div class="kv"><span>PDF exporter</span><strong>${escapeHtml(capabilities.pdf_converter_available ? "available" : "unavailable")}</strong></div>
     </div>
     ${pages.map(renderFreeCadTechDrawPageBlock).join("")}
   </section>`;
@@ -4937,6 +4953,8 @@ function renderFreeCadSketchPropertySection(obj) {
   const constraints = Array.isArray(sketch.constraints) ? sketch.constraints : [];
   const geometry = Array.isArray(sketch.geometry) ? sketch.geometry : [];
   const editMode = sketch.edit_mode || {};
+  const conflictingConstraints = Array.isArray(editMode.conflicting_constraints) ? editMode.conflicting_constraints : [];
+  const redundantConstraints = Array.isArray(editMode.redundant_constraints) ? editMode.redundant_constraints : [];
   const editableConstraints = constraints
     .filter((constraint) => Number.isFinite(Number(constraint.value)))
     .slice(0, 16);
@@ -4948,6 +4966,8 @@ function renderFreeCadSketchPropertySection(obj) {
       <div class="kv"><span>${escapeHtml(t("sketchConstraintList"))}</span><strong>${escapeHtml(sketch.constraint_count ?? constraints.length)}</strong></div>
       <div class="kv"><span>${escapeHtml(t("solverStatus"))}</span><strong>${escapeHtml(freeCadSketchSolverText(sketch))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("degreesOfFreedom"))}</span><strong>${escapeHtml(editMode.degrees_of_freedom ?? sketch.degrees_of_freedom ?? t("notAvailable"))}</strong></div>
+      <div class="kv"><span>Conflicts</span><strong>${escapeHtml(String(conflictingConstraints.length))}</strong></div>
+      <div class="kv"><span>Redundant</span><strong>${escapeHtml(String(redundantConstraints.length))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("sketchDiagnostics"))}</span><strong>${escapeHtml(freeCadDiagnosticsSummaryText(editMode))}</strong></div>
     </div>
     <div class="feature-actions">
@@ -4955,7 +4975,7 @@ function renderFreeCadSketchPropertySection(obj) {
     </div>
     ${renderFreeCadDiagnostics("sketchDiagnostics", editMode)}
     ${renderFreeCadSketchGeometryList(geometry)}
-    ${renderFreeCadSketchConstraintList(constraints)}
+    ${renderFreeCadSketchConstraintList(constraints, editMode)}
     ${editableConstraints.length ? editableConstraints.map((constraint) => freeCadConstraintRow(obj, constraint)).join("") : ""}
   </section>`;
 }
@@ -4991,7 +5011,14 @@ function renderFreeCadSketchGeometryList(geometry) {
     </div>`;
 }
 
-function freeCadConstraintSeverity(constraint) {
+function freeCadConstraintSeverity(constraint, editMode = null) {
+  const index = Number(constraint?.index);
+  const conflicts = new Set(Array.isArray(editMode?.conflicting_constraints) ? editMode.conflicting_constraints.map(Number) : []);
+  const redundant = new Set(Array.isArray(editMode?.redundant_constraints) ? editMode.redundant_constraints.map(Number) : []);
+  const malformed = new Set(Array.isArray(editMode?.malformed_constraints) ? editMode.malformed_constraints.map(Number) : []);
+  if (Number.isFinite(index) && (conflicts.has(index) || malformed.has(index))) return "error";
+  if (Number.isFinite(index) && redundant.has(index)) return "warning";
+  if (constraint?.diagnostic_severity) return constraint.diagnostic_severity;
   const text = `${constraint?.status || ""} ${constraint?.solver_status || ""} ${constraint?.error || ""}`.toLowerCase();
   if (/conflict|inconsistent|over/.test(text)) return "error";
   if (/redundant|disabled/.test(text)) return "warning";
@@ -5002,6 +5029,7 @@ function freeCadConstraintSeverity(constraint) {
 function freeCadConstraintText(constraint) {
   const parts = [
     constraint?.status || "driving",
+    constraint?.solver_status || "",
     Number.isFinite(Number(constraint?.value)) ? formatNumber(constraint.value) : "",
     constraint?.first !== undefined ? `first ${constraint.first}` : "",
     constraint?.second !== undefined ? `second ${constraint.second}` : "",
@@ -5009,13 +5037,13 @@ function freeCadConstraintText(constraint) {
   return parts.filter(Boolean).join(" · ");
 }
 
-function renderFreeCadSketchConstraintList(constraints) {
+function renderFreeCadSketchConstraintList(constraints, editMode = null) {
   if (!constraints.length) return "";
   return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchConstraintList"))}</p>
     <div class="subelement-grid">
       ${constraints.slice(0, 24).map((constraint) => {
         const label = constraint.name || constraint.type || "Constraint";
-        return `<div class="subelement-row ${freeCadConstraintSeverity(constraint)}">
+        return `<div class="subelement-row ${freeCadConstraintSeverity(constraint, editMode)}">
           <strong>#${escapeHtml(constraint.index ?? "")}</strong>
           <span title="${escapeHtml(freeCadConstraintText(constraint))}">${escapeHtml([label, freeCadConstraintText(constraint)].filter(Boolean).join(" · "))}</span>
         </div>`;

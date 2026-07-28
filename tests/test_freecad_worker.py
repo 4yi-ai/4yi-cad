@@ -79,16 +79,53 @@ def test_worker_defines_stable_subelement_ref_v2_semantics():
     source = WORKER_SOURCE.read_text(encoding="utf-8")
 
     for marker in (
-        '"stable_id": "{}:v2:{}"',
+        'stable_id = "{}:v2:{}"',
+        '"stable_id": stable_id',
         '"legacy_stable_id"',
         '"signature_version": 2',
         '"stability": "geometric_signature_v2"',
+        '"schema": "freecad.subelement_provenance.v1"',
+        '"ref_history"',
         "stable_signature_score",
         "stable_signature_remapped",
         "stable_signature_ambiguous",
         "match_method",
         "stable_references",
         "stable_signatures",
+    ):
+        assert marker in source
+
+
+def test_worker_defines_assembly_lcs_and_runtime_capability_diagnostics():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        "connector_lcs_axes",
+        "connector_lcs_summary",
+        '"connector_lcs_missing"',
+        '"connector_lcs_origin_only"',
+        "assembly_runtime_capabilities",
+        '"native_solver_available"',
+        '"persistent_native_available"',
+        '"skipped_joints"',
+        '"created_joints"',
+    ):
+        assert marker in source
+
+
+def test_worker_defines_sketch_edit_mode_conflict_lists_and_techdraw_capabilities():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        "sketch_constraint_indexes",
+        '"conflicting_constraints"',
+        '"redundant_constraints"',
+        '"malformed_constraints"',
+        "annotate_sketch_constraints",
+        "techdraw_runtime_capabilities",
+        "FOURYI_FREECAD_NATIVE_TECHDRAW",
+        '"native_first"',
+        '"fallback_reason"',
     ):
         assert marker in source
 
@@ -1259,5 +1296,6 @@ def test_local_freecadcmd_assembly_joint_types_and_solver():
             "missing_reference",
             "object_only",
         }
+        assert "lcs" in joint["reference1"]["connector_frame"]
         assert assembly["solver_diagnostics"]["severity"] in {"ok", "info", "warning", "error"}
     assert assemblies["AsmDistance"]["joints"][1]["distance"] == 12.0

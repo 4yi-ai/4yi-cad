@@ -144,10 +144,13 @@ def test_production_smoke_reports_storage_and_worker_boundary(tmp_path):
     body = resp.json()
     assert body["ok"] is True
     assert isinstance(body["durable_storage_configured"], bool)
+    assert body["production_ready"] is False
     assert body["storage"]["session_db"]["writable"] is True
     assert body["storage"]["artifact_root"]["writable"] is True
     assert body["freecad_worker"]["mode"] == "single_container_subprocess"
+    assert body["freecad_worker"]["split_service_configured"] is False
     assert body["freecad_worker"]["hardened_worker_service"] is False
+    assert body["freecad_worker"]["security_controls"]["egress_blocked"] is False
 
 
 def test_session_api_creates_reads_and_appends_versions(tmp_path):

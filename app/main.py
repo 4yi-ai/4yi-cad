@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -634,13 +635,27 @@ def create_app(
         )
         durable = all(item.get("durable_configured") for item in storage.values())
         writable = all(item.get("writable") for item in storage.values())
+        worker_endpoint = os.environ.get("FOURYI_FREECAD_WORKER_URL") or os.environ.get("FREECAD_WORKER_URL")
+        worker_split = bool(worker_endpoint)
+        security_controls = {
+            "egress_blocked": os.environ.get("FOURYI_FREECAD_WORKER_EGRESS_BLOCKED", "").lower() in {"1", "true", "yes", "on"},
+            "read_only_rootfs": os.environ.get("FOURYI_FREECAD_WORKER_READ_ONLY_ROOTFS", "").lower() in {"1", "true", "yes", "on"},
+            "seccomp_profile": bool(os.environ.get("FOURYI_FREECAD_WORKER_SECCOMP_PROFILE")),
+            "tmpfs_workspace": os.environ.get("FOURYI_FREECAD_WORKER_TMPFS", "").lower() in {"1", "true", "yes", "on"},
+        }
+        hardened_worker = bool(worker_split and all(security_controls.values()))
         return {
             "ok": bool(writable),
             "durable_storage_configured": bool(durable),
+            "production_ready": bool(durable and writable and hardened_worker),
             "storage": storage,
             "freecad_worker": {
-                "mode": "single_container_subprocess",
-                "hardened_worker_service": False,
+                "mode": os.environ.get("FOURYI_CAD_WORKER_MODE", "single_container_subprocess"),
+                "split_service_configured": worker_split,
+                "endpoint_configured": worker_split,
+                "hardened_worker_service": hardened_worker,
+                "security_controls": security_controls,
+                "risk": None if hardened_worker else "FreeCAD still runs in the app container or lacks required runtime isolation controls",
             },
         }
 
