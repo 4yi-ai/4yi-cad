@@ -33,6 +33,7 @@ class ExecResult:
     error: str | None = None
     engine: str = "cadquery"
     freecad_version: str | None = None
+    diagnostics: dict = field(default_factory=dict)
 
 
 Executor = Callable[[str], Awaitable[ExecResult]]

@@ -114,6 +114,24 @@
     white-space: nowrap;
   }
   .lang-button:hover { background: var(--primary-soft); color: var(--primary); }
+  .top-action-button {
+    min-height: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+  }
+  .top-action-button:hover { background: var(--primary-soft); color: var(--primary); }
+  .top-action-button svg { width: 15px; height: 15px; stroke-width: 2; }
+  .hidden-file-input { display: none; }
 
   .workspace {
     min-height: 0;
@@ -197,7 +215,88 @@
     padding: 16px;
     position: relative;
   }
+  .generated-image-frame {
+    --generated-view-transform: none;
+    --generated-explode-transform: none;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    max-width: 100%;
+    max-height: 100%;
+    transform: var(--generated-view-transform) var(--generated-explode-transform);
+    transform-origin: 50% 56%;
+    transition: transform .18s ease, filter .18s ease;
+  }
+  .generated-preview.generated-view-top .generated-image-frame {
+    --generated-view-transform: rotate(-1.5deg) scale(.985);
+    filter: contrast(1.04) saturate(.98);
+  }
+  .generated-preview.generated-view-front .generated-image-frame {
+    --generated-view-transform: perspective(900px) rotateX(7deg) scale(1.015);
+  }
+  .generated-preview.generated-view-right .generated-image-frame {
+    --generated-view-transform: perspective(900px) rotateY(-11deg) scale(1.015);
+  }
+  .generated-preview.generated-exploded .generated-image-frame {
+    --generated-explode-transform: translateY(-10px) scale(1.025);
+    filter: contrast(1.06) saturate(1.03);
+  }
+  .generated-scene-frame {
+    width: min(100%, 820px);
+    height: min(100%, 520px);
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+  .generated-scene-frame .generated-png-fallback,
+  .cad-viewer {
+    position: absolute;
+    inset: 0;
+  }
+  .generated-scene-frame .generated-png-fallback {
+    display: grid;
+    place-items: center;
+    transition: opacity .16s ease;
+  }
+  .generated-scene-frame.viewer-ready .generated-png-fallback {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .cad-viewer {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .16s ease;
+  }
+  .generated-scene-frame.viewer-ready .cad-viewer {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .cad-viewer canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+  }
+  .cad-viewer-status {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 2;
+    max-width: calc(100% - 20px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255,255,255,.92);
+    color: var(--muted);
+    box-shadow: var(--shadow);
+    padding: 6px 8px;
+    font-size: 12px;
+    pointer-events: none;
+  }
   .generated-preview img {
+    display: block;
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
@@ -205,6 +304,159 @@
     border-radius: var(--radius);
     background: #fff;
     box-shadow: var(--shadow);
+  }
+  .generated-scene-frame img {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .generated-bbox-outline {
+    position: absolute;
+    inset: 10% 12% 12%;
+    z-index: 2;
+    pointer-events: none;
+    border: 2px dashed rgba(11,111,232,.88);
+    border-radius: 8px;
+    box-shadow: 0 0 0 5px rgba(11,111,232,.08);
+  }
+  .generated-dim {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 700;
+    text-shadow: 0 1px 0 #fff;
+  }
+  .generated-dim::before,
+  .generated-dim::after {
+    content: "";
+    position: absolute;
+    background: var(--primary);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.8);
+  }
+  .generated-dim-x {
+    left: 18%;
+    right: 18%;
+    bottom: 6%;
+    height: 1px;
+    border-top: 2px solid var(--primary);
+  }
+  .generated-dim-x::before,
+  .generated-dim-x::after {
+    width: 2px;
+    height: 14px;
+    top: -8px;
+  }
+  .generated-dim-x::before { left: 0; }
+  .generated-dim-x::after { right: 0; }
+  .generated-dim-y {
+    right: 6%;
+    top: 22%;
+    bottom: 22%;
+    width: 1px;
+    border-left: 2px solid var(--primary);
+  }
+  .generated-dim-y::before,
+  .generated-dim-y::after {
+    width: 14px;
+    height: 2px;
+    left: -8px;
+  }
+  .generated-dim-y::before { top: 0; }
+  .generated-dim-y::after { bottom: 0; }
+  .generated-dim span {
+    position: absolute;
+    padding: 3px 6px;
+    border: 1px solid #cfe4ff;
+    border-radius: 6px;
+    background: rgba(255,255,255,.94);
+    white-space: nowrap;
+  }
+  .generated-dim-x span { left: 50%; top: 8px; transform: translateX(-50%); }
+  .generated-dim-y span { left: 10px; top: 50%; transform: translateY(-50%); }
+  .generated-measure {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .generated-measure span {
+    display: inline-block;
+    border: 1px solid #cfe4ff;
+    border-radius: 999px;
+    background: rgba(255,255,255,.95);
+    padding: 4px 8px;
+    box-shadow: var(--shadow);
+  }
+  .generated-measure-distance {
+    left: 24%;
+    right: 24%;
+    bottom: 14%;
+    height: 0;
+    border-top: 2px solid var(--primary);
+  }
+  .generated-measure-distance span { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); }
+  .generated-measure-diameter {
+    left: 45%;
+    top: 43%;
+    width: 18%;
+    aspect-ratio: 1;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 0 5px rgba(11,111,232,.1);
+  }
+  .generated-measure-diameter span { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 8px); }
+  .generated-measure-angle {
+    left: 19%;
+    top: 62%;
+    width: 82px;
+    height: 52px;
+    border-left: 2px solid var(--primary);
+    border-bottom: 2px solid var(--primary);
+    border-bottom-left-radius: 8px;
+  }
+  .generated-measure-angle span { position: absolute; left: 18px; top: 10px; }
+  .generated-selection-marker {
+    position: absolute;
+    left: var(--marker-x);
+    top: var(--marker-y);
+    width: var(--marker-w);
+    height: var(--marker-h);
+    z-index: 5;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    border: 3px solid rgba(11,111,232,.95);
+    border-radius: 999px;
+    background: rgba(11,111,232,.08);
+    box-shadow: 0 0 0 5px rgba(11,111,232,.12), 0 0 0 1px rgba(255,255,255,.9) inset;
+  }
+  .generated-selection-marker::after {
+    content: "";
+    position: absolute;
+    inset: -9px;
+    border: 1px solid rgba(11,111,232,.6);
+    border-radius: inherit;
+    animation: markerPulse 1.35s ease-in-out infinite;
+  }
+  .generated-marker-length,
+  .generated-marker-width {
+    height: 10%;
+    border-radius: 999px;
+  }
+  .generated-marker-height {
+    width: 10%;
+    border-radius: 999px;
+  }
+  .generated-marker-diameter {
+    aspect-ratio: 1;
+    height: auto;
+  }
+  @keyframes markerPulse {
+    0%, 100% { opacity: .25; transform: scale(.96); }
+    50% { opacity: .9; transform: scale(1.04); }
   }
   .generated-placeholder {
     border: 1px dashed var(--line);
@@ -304,7 +556,23 @@
   }
   .text-input { height: 36px; padding: 0 10px; }
   .param-input { width: 92px; height: 32px; text-align: right; padding: 0 9px; }
-  .feature-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .feature-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .typed-action-button {
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .typed-action-button:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); border-color: #bdd8ff; }
+  .typed-action-button:disabled { opacity: .48; cursor: not-allowed; }
+  .typed-action-button svg { width: 14px; height: 14px; stroke-width: 2; }
 
   .section { padding: 14px; border-bottom: 1px solid var(--line); }
   .section h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
@@ -319,6 +587,68 @@
   }
   .selected-param-summary strong { display: block; color: var(--primary); font-size: 13px; }
   .selected-param-summary span { display: block; margin-top: 3px; color: var(--muted); }
+  .selected-object-summary {
+    border: 1px solid #cfe4ff;
+    border-radius: var(--radius);
+    background: var(--primary-soft);
+    padding: 9px 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+  .selected-object-summary strong { display: block; color: var(--primary); font-size: 13px; }
+  .selected-object-summary span { display: block; margin-top: 3px; color: var(--muted); }
+  .readonly-property {
+    min-height: 34px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(72px, auto);
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--line-soft);
+    padding: 7px 0;
+    font-size: 12px;
+  }
+  .readonly-property:first-of-type { border-top: 0; }
+  .readonly-property span:first-child {
+    min-width: 0;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .readonly-property strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .subelement-grid { display: grid; gap: 6px; }
+  .subelement-row {
+    min-height: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    color: var(--text);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .subelement-row:hover,
+  .subelement-row.active { border-color: #9fc8ff; background: var(--primary-soft); }
+  .subelement-row strong,
+  .subelement-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .subelement-row span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .param-row {
     min-height: 42px;
     display: grid;
@@ -399,8 +729,22 @@
     background: var(--panel-2);
     padding: 10px 12px;
   }
+  .history-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
   .history-item header { display: flex; justify-content: space-between; gap: 8px; font-weight: 650; padding: 0; border: 0; }
   .history-item p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .history-action {
+    align-self: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--primary);
+    min-height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .history-action:hover { background: var(--primary-soft); }
   pre {
     margin: 0;
     max-height: 120px;
@@ -473,6 +817,8 @@
     <nav class="toolbar" aria-label="CAD toolbar" id="toolbar"></nav>
     <div class="top-actions">
       <div class="status-chip" id="status">loading design state</div>
+      <input class="hidden-file-input" id="freeCadImportInput" type="file" accept=".FCStd,.fcstd,.step,.stp,.iges,.igs,.brep" onchange="importFreeCadModelFile(this.files && this.files[0]); this.value = '';" />
+      <button class="top-action-button" id="importButton" type="button" onclick="openFreeCadImportPicker()" title="Import FCStd, STEP, IGES, or BREP"><span data-icon="download"></span><span id="importButtonText">Import</span></button>
       <button class="lang-button" id="localeToggle" type="button" onclick="toggleLocale()">中文</button>
     </div>
   </header>
@@ -535,6 +881,8 @@ const I18N = {
     properties: "Properties / Parameters",
     commandPlaceholder: "Chat / modify: change four holes to 6mm",
     apply: "Apply",
+    importModel: "Import",
+    importModelTitle: "Import FCStd, STEP, IGES, or BREP",
     langToggle: "中文",
     none: "none",
     off: "off",
@@ -572,6 +920,40 @@ const I18N = {
     notAvailable: "not available",
     parameters: "Parameters",
     selectedParameter: "Selected parameter",
+    selectedObject: "Selected object",
+    selectedReference: "Selected reference",
+    typedActions: "Typed actions",
+    assemblyConnectorA: "Connector A",
+    setAssemblyConnectorA: "Set connector A",
+    clearAssemblyConnectorA: "Clear connector A",
+    createFixedJoint: "Fixed",
+    createRevoluteJoint: "Revolute",
+    createSliderJoint: "Slider",
+    createCylindricalJoint: "Cylindrical",
+    createDistanceJoint: "Distance",
+    createAngleJoint: "Angle",
+    needsConnectorA: "Select connector A first",
+    needsDifferentObject: "Select a connector on a different object",
+    createSketchOnFace: "Create sketch",
+    attachSketchToFace: "Attach sketch",
+    addExternalGeometry: "External geometry",
+    addTechDrawDimension: "Dimension",
+    addTechDrawCenterline: "Centerline",
+    addTechDrawCosmeticVertex: "Cosmetic vertex",
+    needsSketch: "Needs an existing sketch",
+    needsTechDrawView: "Needs a TechDraw page and view",
+    objectBadge: "Object: {name}",
+    objectProperties: "Object properties",
+    editableProperties: "Editable properties",
+    readonlyProperties: "Read-only properties",
+    geometryChecks: "Geometry checks",
+    shapeSummary: "Shape summary",
+    topologySummary: "Topology",
+    placement: "Placement",
+    solverStatus: "Solver status",
+    noEditableProperties: "No editable numeric FreeCAD properties on this object.",
+    interactiveMesh: "interactive mesh",
+    pngFallback: "PNG fallback",
     relatedParameters: "Related parameters",
     allScriptParameters: "All script parameters",
     inferredGroup: "Inferred group",
@@ -592,6 +974,7 @@ const I18N = {
     agent: "agent",
     noScript: "No script yet",
     download: "Download",
+    restore: "Restore",
     backToDesignState: "Back to parametric DesignState",
     actions: {
       rename: "Rename",
@@ -607,12 +990,20 @@ const I18N = {
       dims: "Dims",
       explode: "Explode",
       feature: "Feature",
+      object: "Object",
+      face: "Face",
+      edge: "Edge",
+      vertex: "Vertex",
       distance: "Distance",
       diameter: "Diameter",
       angle: "Angle",
     },
     modes: {
       feature: "Feature",
+      object: "Object",
+      face: "Face",
+      edge: "Edge",
+      vertex: "Vertex",
       distance: "Distance",
       diameter: "Diameter",
       angle: "Angle",
@@ -682,6 +1073,14 @@ const I18N = {
       initial: "Ready for CAD changes. Parameter edits use CADPatch; new-part prompts use the CAD agent.",
       appliedPatch: "Applied CADPatch: {name} = {value} mm.",
       appliedGeneratedParameter: "Updated generated parameter: {name} = {value} {unit}.",
+      appliedFreeCadDocumentPatch: "Updated FreeCAD document: {name} = {value} {unit}.",
+      appliedFreeCadTypedPatch: "Applied FreeCAD typed edit: {name}.",
+      importOk: "Imported {name} as mutable FreeCAD document state.",
+      importFailed: "Import failed: {message}",
+      scriptRewriteOk: "Rewrote the CAD script for the topology change.",
+      rollbackOk: "Restored server version v{version}.",
+      rollbackFailed: "Rollback failed: {message}",
+      commandNotUnderstood: "I could not map that to an existing CAD parameter or typed edit.",
       generationFailed: "Generation failed: {message}",
       generationOk: "Generated a CAD script and available preview/artifacts.",
       generationBad: "Generation failed. See Logs for details.",
@@ -689,14 +1088,18 @@ const I18N = {
     artifact: {
       stepTitle: "STEP solid",
       stlTitle: "STL mesh",
+      viewerSceneTitle: "Viewer scene",
       featureTreeTitle: "Feature tree",
       fcstdTitle: "FreeCAD document",
       pdfTitle: "Engineering drawing",
       svgTitle: "Vector drawing",
+      dxfTitle: "Drawing exchange",
       sandboxExport: "live export from sandbox",
       liveJson: "live DesignState JSON",
-      plannedFreecad: "planned FreeCAD backend",
+      viewerSceneJson: "interactive FreeCAD selection scene",
+      plannedFreecad: "FreeCAD document export",
       plannedTechdraw: "planned TechDraw backend",
+      techdrawFallback: "TechDraw headless fallback",
       plannedProjection: "planned 2D projection",
       planned: "planned",
       notReady: "not ready",
@@ -716,12 +1119,26 @@ const I18N = {
       agentGenerationFailed: "Agent generation failed",
       agentDetail: "Generated preview and artifacts",
       agentFailedDetail: "See logs for failure",
+      scriptRewrite: "Script rewrite",
+      scriptRewriteDetail: "Topology edit: {instruction}",
+      rollback: "Rollback",
+      rollbackDetail: "Restored v{version}",
+      freecadImport: "FreeCAD import: {name}",
+      freecadImportDetail: "Imported {name} as mutable FCStd state",
       scriptParameter: "Script parameter: {name}",
       scriptParameterDetail: "{name} = {value} {unit}",
+      freecadDocumentPatch: "FreeCAD document patch: {name}",
+      freecadDocumentPatchDetail: "{name} = {value} {unit}",
     },
     log: {
       workbenchStarting: "Workbench starting",
       selectedFeature: "Selected feature: {name}",
+      selectedFreeCadObject: "Selected FreeCAD object: {name}",
+      selectedFreeCadSubelement: "Selected FreeCAD {kind}: {name}.{reference}",
+      importStarted: "Importing FreeCAD model: {name}",
+      importDone: "Imported FreeCAD model: {name}",
+      importFailed: "FreeCAD import failed: {message}",
+      importUnsupported: "Unsupported import format: {name}",
       patchFailed: "Patch failed: {message}",
       exportUnavailable: "Export unavailable: {message}",
       initialFailed: "Initial state failed: {message}",
@@ -729,8 +1146,15 @@ const I18N = {
       retry: "Retry {attempt}: {message}",
       renderedPreview: "Rendered preview PNG",
       artifactReady: "Artifact ready: {format}",
+      serverArtifactsRestored: "Restored server artifacts",
+      rolledBack: "Rolled back to server version v{version}",
+      rollbackFailed: "Rollback failed: {message}",
       scriptParameterUpdated: "Updated script parameter: {name} = {value} {unit}",
       scriptPatchFailed: "Script parameter update failed: {message}",
+      freecadDocumentPatchUpdated: "Updated FreeCAD document: {name} = {value} {unit}",
+      freecadTypedPatchUpdated: "Updated FreeCAD document: {name}",
+      freecadDocumentPatchFailed: "FreeCAD document patch failed: {message}",
+      commandNotUnderstood: "Command was not routed because it did not match an existing parameter or typed edit.",
       streamEndedWithoutDone: "Generation stream ended before a final done event",
       unknownError: "unknown error",
     },
@@ -747,6 +1171,9 @@ const I18N = {
       previewExportReady: "preview/export ready",
       previewUpdated: "preview updated",
       submitting: "submitting to CAD agent",
+      loadingVersion: "loading version",
+      rollingBack: "rolling back",
+      importingModel: "importing model",
       waking: "waking up ({attempt})",
       generationFailed: "generation failed",
       done: "done",
@@ -766,6 +1193,8 @@ const I18N = {
     properties: "属性 / 参数",
     commandPlaceholder: "聊天 / 修改：把四个孔改成 6mm",
     apply: "应用",
+    importModel: "导入",
+    importModelTitle: "导入 FCStd、STEP、IGES 或 BREP",
     langToggle: "EN",
     none: "无",
     off: "关闭",
@@ -803,6 +1232,40 @@ const I18N = {
     notAvailable: "不可用",
     parameters: "参数",
     selectedParameter: "已选参数",
+    selectedObject: "已选对象",
+    selectedReference: "已选引用",
+    typedActions: "类型化操作",
+    assemblyConnectorA: "连接器 A",
+    setAssemblyConnectorA: "设为连接器 A",
+    clearAssemblyConnectorA: "清除连接器 A",
+    createFixedJoint: "固定",
+    createRevoluteJoint: "旋转",
+    createSliderJoint: "滑块",
+    createCylindricalJoint: "圆柱",
+    createDistanceJoint: "距离",
+    createAngleJoint: "角度",
+    needsConnectorA: "先选择连接器 A",
+    needsDifferentObject: "请选择另一个对象上的连接器",
+    createSketchOnFace: "创建草图",
+    attachSketchToFace: "附着草图",
+    addExternalGeometry: "外部几何",
+    addTechDrawDimension: "工程图标注",
+    addTechDrawCenterline: "中心线",
+    addTechDrawCosmeticVertex: "辅助点",
+    needsSketch: "需要已有草图",
+    needsTechDrawView: "需要 TechDraw 页面和视图",
+    objectBadge: "对象：{name}",
+    objectProperties: "对象属性",
+    editableProperties: "可编辑属性",
+    readonlyProperties: "只读属性",
+    geometryChecks: "几何检查",
+    shapeSummary: "形状摘要",
+    topologySummary: "拓扑",
+    placement: "放置",
+    solverStatus: "求解状态",
+    noEditableProperties: "这个对象没有可编辑的数值 FreeCAD 属性。",
+    interactiveMesh: "交互网格",
+    pngFallback: "PNG 回退",
     relatedParameters: "相关参数",
     allScriptParameters: "全部脚本参数",
     inferredGroup: "推断分组",
@@ -823,6 +1286,7 @@ const I18N = {
     agent: "Agent",
     noScript: "暂无脚本",
     download: "下载",
+    restore: "恢复",
     backToDesignState: "返回参数化 DesignState",
     actions: {
       rename: "重命名",
@@ -838,12 +1302,20 @@ const I18N = {
       dims: "尺寸",
       explode: "爆炸",
       feature: "特征",
+      object: "对象",
+      face: "面",
+      edge: "边",
+      vertex: "点",
       distance: "距离",
       diameter: "直径",
       angle: "角度",
     },
     modes: {
       feature: "特征",
+      object: "对象",
+      face: "面",
+      edge: "边",
+      vertex: "点",
       distance: "距离",
       diameter: "直径",
       angle: "角度",
@@ -913,6 +1385,14 @@ const I18N = {
       initial: "已准备好处理 CAD 修改。参数编辑使用 CADPatch；新零件提示词交给 CAD agent。",
       appliedPatch: "已应用 CADPatch：{name} = {value} mm。",
       appliedGeneratedParameter: "已更新生成模型参数：{name} = {value} {unit}。",
+      appliedFreeCadDocumentPatch: "已更新 FreeCAD 文档：{name} = {value} {unit}。",
+      appliedFreeCadTypedPatch: "已应用 FreeCAD 类型化编辑：{name}。",
+      importOk: "已导入 {name}，并作为可变 FreeCAD 文档状态。",
+      importFailed: "导入失败：{message}",
+      scriptRewriteOk: "已为拓扑修改重写 CAD 脚本。",
+      rollbackOk: "已恢复服务器版本 v{version}。",
+      rollbackFailed: "回滚失败：{message}",
+      commandNotUnderstood: "还不能把这句话映射到现有 CAD 参数或类型化编辑。",
       generationFailed: "生成失败：{message}",
       generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
       generationBad: "生成失败。请查看日志。",
@@ -920,14 +1400,18 @@ const I18N = {
     artifact: {
       stepTitle: "STEP 实体",
       stlTitle: "STL 网格",
+      viewerSceneTitle: "交互场景",
       featureTreeTitle: "特征树",
       fcstdTitle: "FreeCAD 文档",
       pdfTitle: "工程图",
       svgTitle: "矢量图",
+      dxfTitle: "DXF 工程图",
       sandboxExport: "来自沙盒的实时导出",
       liveJson: "实时 DesignState JSON",
-      plannedFreecad: "计划接入 FreeCAD 后端",
+      viewerSceneJson: "FreeCAD 交互选择场景",
+      plannedFreecad: "FreeCAD 文档导出",
       plannedTechdraw: "计划接入 TechDraw 后端",
+      techdrawFallback: "TechDraw headless fallback",
       plannedProjection: "计划接入 2D 投影视图",
       planned: "计划中",
       notReady: "未就绪",
@@ -947,12 +1431,26 @@ const I18N = {
       agentGenerationFailed: "Agent 生成失败",
       agentDetail: "已生成预览和产物",
       agentFailedDetail: "查看日志获取失败原因",
+      scriptRewrite: "脚本重写",
+      scriptRewriteDetail: "拓扑修改：{instruction}",
+      rollback: "回滚",
+      rollbackDetail: "已恢复 v{version}",
+      freecadImport: "FreeCAD 导入：{name}",
+      freecadImportDetail: "已将 {name} 导入为可变 FCStd 状态",
       scriptParameter: "脚本参数：{name}",
       scriptParameterDetail: "{name} = {value} {unit}",
+      freecadDocumentPatch: "FreeCAD 文档补丁：{name}",
+      freecadDocumentPatchDetail: "{name} = {value} {unit}",
     },
     log: {
       workbenchStarting: "工作台启动中",
       selectedFeature: "已选择特征：{name}",
+      selectedFreeCadObject: "已选择 FreeCAD 对象：{name}",
+      selectedFreeCadSubelement: "已选择 FreeCAD {kind}：{name}.{reference}",
+      importStarted: "正在导入 FreeCAD 模型：{name}",
+      importDone: "已导入 FreeCAD 模型：{name}",
+      importFailed: "FreeCAD 导入失败：{message}",
+      importUnsupported: "不支持的导入格式：{name}",
       patchFailed: "补丁失败：{message}",
       exportUnavailable: "导出不可用：{message}",
       initialFailed: "初始状态失败：{message}",
@@ -960,8 +1458,15 @@ const I18N = {
       retry: "重试 {attempt}：{message}",
       renderedPreview: "已渲染预览 PNG",
       artifactReady: "产物就绪：{format}",
+      serverArtifactsRestored: "已恢复服务器产物",
+      rolledBack: "已回滚到服务器版本 v{version}",
+      rollbackFailed: "回滚失败：{message}",
       scriptParameterUpdated: "已更新脚本参数：{name} = {value} {unit}",
       scriptPatchFailed: "脚本参数更新失败：{message}",
+      freecadDocumentPatchUpdated: "已更新 FreeCAD 文档：{name} = {value} {unit}",
+      freecadTypedPatchUpdated: "已更新 FreeCAD 文档：{name}",
+      freecadDocumentPatchFailed: "FreeCAD 文档补丁失败：{message}",
+      commandNotUnderstood: "命令未路由：没有匹配到现有参数或类型化编辑。",
       streamEndedWithoutDone: "生成流结束但没有收到最终 done 事件",
       unknownError: "未知错误",
     },
@@ -978,6 +1483,9 @@ const I18N = {
       previewExportReady: "预览 / 导出就绪",
       previewUpdated: "预览已更新",
       submitting: "正在提交给 CAD agent",
+      loadingVersion: "正在加载版本",
+      rollingBack: "正在回滚",
+      importingModel: "正在导入模型",
       waking: "正在唤醒 ({attempt})",
       generationFailed: "生成失败",
       done: "完成",
@@ -1026,6 +1534,7 @@ const state = {
   logs: [t("log.workbenchStarting")],
   history: [],
   artifacts: {},
+  artifactRefs: {},
   previewPng: null,
   engine: "cadquery",
   freecadVersion: "",
@@ -1034,7 +1543,11 @@ const state = {
   previewMode: "design_state",
   generatedPrompt: "",
   generatedParameters: [],
+  documentSummary: null,
   selectedGeneratedParameterName: "",
+  selectedFreeCadObjectName: "",
+  selectedFreeCadSubelement: null,
+  assemblyConnectorAnchor: null,
   viewMode: "iso",
   selectionMode: "feature",
   measureMode: "distance",
@@ -1045,12 +1558,17 @@ const state = {
   bottomTab: "chat",
   viewport: { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 },
   serverSessionId: localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY) || "",
+  activeServerVersionId: "",
   lastServerVersionSignature: "",
   chatHistory: [],
   chatMessages: [
     { role: "assistant", key: "chat.initial" },
   ],
 };
+
+let generatedViewerToken = 0;
+let generatedViewerRuntime = null;
+let threeModulePromise = null;
 
 const parameterOrder = [
   "plate_length", "plate_width", "plate_thickness", "corner_radius",
@@ -1139,6 +1657,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     logs: state.logs,
     history: state.history,
     artifacts: includeHeavyArtifacts ? state.artifacts : {},
+    artifactRefs: state.artifactRefs,
     previewPng: includeHeavyArtifacts ? state.previewPng : null,
     engine: state.engine,
     freecadVersion: state.freecadVersion,
@@ -1146,7 +1665,11 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     previewMode: state.previewMode,
     generatedPrompt: state.generatedPrompt,
     generatedParameters: state.generatedParameters,
+    documentSummary: state.documentSummary,
     selectedGeneratedParameterName: state.selectedGeneratedParameterName,
+    selectedFreeCadObjectName: state.selectedFreeCadObjectName,
+    selectedFreeCadSubelement: state.selectedFreeCadSubelement,
+    assemblyConnectorAnchor: state.assemblyConnectorAnchor,
     viewMode: state.viewMode,
     selectionMode: state.selectionMode,
     measureMode: state.measureMode,
@@ -1156,6 +1679,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     selectedFeatureId: state.selectedFeatureId,
     bottomTab: state.bottomTab,
     serverSessionId: state.serverSessionId,
+    activeServerVersionId: state.activeServerVersionId,
     chatHistory: state.chatHistory,
     chatMessages: state.chatMessages,
   };
@@ -1198,6 +1722,7 @@ function restoreWorkbenchSession() {
     state.logs = Array.isArray(saved.logs) && saved.logs.length ? saved.logs : [t("log.workbenchStarting")];
     state.history = Array.isArray(saved.history) ? saved.history : [];
     state.artifacts = saved.artifacts && typeof saved.artifacts === "object" ? saved.artifacts : {};
+    state.artifactRefs = saved.artifactRefs && typeof saved.artifactRefs === "object" ? saved.artifactRefs : {};
     state.previewPng = saved.previewPng || null;
     state.engine = normalizeEngine(saved.engine);
     state.freecadVersion = saved.freecadVersion || "";
@@ -1205,9 +1730,15 @@ function restoreWorkbenchSession() {
     state.previewMode = saved.previewMode === "generated" ? "generated" : "design_state";
     state.generatedPrompt = saved.generatedPrompt || "";
     state.generatedParameters = Array.isArray(saved.generatedParameters) ? saved.generatedParameters : [];
+    state.documentSummary = saved.documentSummary && typeof saved.documentSummary === "object" ? saved.documentSummary : null;
     state.selectedGeneratedParameterName = saved.selectedGeneratedParameterName || "";
+    state.selectedFreeCadObjectName = saved.selectedFreeCadObjectName || "";
+    state.selectedFreeCadSubelement = saved.selectedFreeCadSubelement && typeof saved.selectedFreeCadSubelement === "object" ? saved.selectedFreeCadSubelement : null;
+    state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
-    state.selectionMode = "feature";
+    state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
+      ? saved.selectionMode
+      : "feature";
     state.measureMode = saved.measureMode || "distance";
     state.showBBox = saved.showBBox !== false;
     state.showDims = saved.showDims !== false;
@@ -1216,6 +1747,7 @@ function restoreWorkbenchSession() {
     state.designState.selected_feature_id = state.selectedFeatureId;
     state.bottomTab = saved.bottomTab || "chat";
     state.serverSessionId = saved.serverSessionId || localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY) || "";
+    state.activeServerVersionId = saved.activeServerVersionId || "";
     if (state.serverSessionId) {
       localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, state.serverSessionId);
     }
@@ -1239,6 +1771,7 @@ function versionMetadata() {
     freecad_version: state.freecadVersion || null,
     generated_prompt: state.generatedPrompt,
     generated_parameters: state.generatedParameters || [],
+    document_summary: state.documentSummary || null,
   };
 }
 
@@ -1251,6 +1784,8 @@ function versionPayload(intent, userInstruction = "", status = "ok", error = "")
     geometry_summary: {},
     patch: state.patch,
     metadata: versionMetadata(),
+    preview_png_b64: state.previewPng || null,
+    artifacts: state.artifacts || {},
     status,
     error: error || null,
   };
@@ -1266,11 +1801,754 @@ function versionSignature(payload) {
     script: payload.script,
     patch: payload.patch,
     metadata: payload.metadata,
+    preview: Boolean(payload.preview_png_b64),
+    artifacts: Object.keys(payload.artifacts || {}).sort(),
     engine: payload.metadata?.engine,
     freecad_version: payload.metadata?.freecad_version,
     status: payload.status,
     error: payload.error,
   });
+}
+
+function artifactRefsFromMetadata(metadata = {}) {
+  const refs = metadata?.artifact_refs;
+  return refs && typeof refs === "object" ? refs : {};
+}
+
+function artifactRef(key) {
+  return state.artifactRefs && typeof state.artifactRefs === "object" ? state.artifactRefs[key] : null;
+}
+
+function artifactMime(key) {
+  return {
+    preview: "image/png",
+    step: "application/step",
+    stl: "model/stl",
+    fcstd: "application/vnd.freecad",
+    viewer_scene: "application/json",
+    techdraw_pdf: "application/pdf",
+    techdraw_svg: "image/svg+xml",
+    techdraw_dxf: "image/vnd.dxf",
+    feature_tree: "application/json",
+  }[key] || "application/octet-stream";
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function fetchArtifactRefB64(ref) {
+  if (!ref?.url) return null;
+  const res = await fetch(ref.url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return bytesToBase64(bytes);
+}
+
+async function hydrateArtifactRefs(refs = {}) {
+  const artifacts = {};
+  let previewPng = null;
+  await Promise.all(Object.entries(refs).map(async ([key, ref]) => {
+    try {
+      const data = await fetchArtifactRefB64(ref);
+      if (!data) return;
+      if (key === "preview") previewPng = data;
+      else artifacts[key] = data;
+    } catch (error) {
+      console.warn("Unable to hydrate artifact", key, error);
+    }
+  }));
+  return { previewPng, artifacts };
+}
+
+function freeCadSelectionAvailable() {
+  return state.previewMode === "generated"
+    && state.engine === "freecad"
+    && Boolean(state.documentSummary)
+    && freeCadDocumentObjects().length > 0;
+}
+
+function freeCadViewerSelectionMode() {
+  if (!freeCadSelectionAvailable()) return "feature";
+  return ["object", "face", "edge", "vertex"].includes(state.selectionMode)
+    ? state.selectionMode
+    : "object";
+}
+
+function freeCadSubelementKindForSelectionMode(mode = freeCadViewerSelectionMode()) {
+  return {
+    face: "Face",
+    edge: "Edge",
+    vertex: "Vertex",
+  }[mode] || "";
+}
+
+function selectionModeForFreeCadSubelementKind(kind) {
+  const normalized = normalizeFreeCadToken(kind);
+  if (normalized === "face") return "face";
+  if (normalized === "edge") return "edge";
+  if (normalized === "vertex") return "vertex";
+  return "object";
+}
+
+function selectedFreeCadSubelementKey() {
+  const selected = state.selectedFreeCadSubelement;
+  if (!selected) return "";
+  return [
+    normalizeFreeCadToken(selected.objectName),
+    normalizeFreeCadToken(selected.reference),
+    normalizeFreeCadToken(selected.kind),
+  ].join(":");
+}
+
+function generatedCadViewerKey() {
+  const stlRef = artifactRef("stl");
+  const viewerSceneRef = artifactRef("viewer_scene");
+  return [
+    state.artifacts.viewer_scene ? `scene:${state.artifacts.viewer_scene.length}` : `scene-ref:${viewerSceneRef?.url || ""}`,
+    state.artifacts.stl ? `inline:${state.artifacts.stl.length}` : `ref:${stlRef?.url || ""}`,
+    state.viewMode,
+    freeCadViewerSelectionMode(),
+    state.showBBox ? "bbox" : "no-bbox",
+    state.exploded ? "exploded" : "normal",
+    normalizeFreeCadToken(state.selectedFreeCadObjectName),
+    selectedFreeCadSubelementKey(),
+    freeCadSelectableShapeObjects().length,
+    freeCadDocumentGeometryText(),
+  ].join("|");
+}
+
+function base64ToArrayBuffer(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function generatedStlArrayBuffer() {
+  if (state.artifacts.stl) return base64ToArrayBuffer(state.artifacts.stl);
+  const b64 = await fetchArtifactRefB64(artifactRef("stl"));
+  return b64 ? base64ToArrayBuffer(b64) : null;
+}
+
+async function generatedViewerSceneData() {
+  const b64 = state.artifacts.viewer_scene || await fetchArtifactRefB64(artifactRef("viewer_scene"));
+  if (!b64) return null;
+  try {
+    const text = new TextDecoder().decode(base64ToArrayBuffer(b64));
+    const scene = JSON.parse(text);
+    return scene?.schema === "freecad.viewer_scene.v1" ? scene : null;
+  } catch (error) {
+    console.warn("Unable to parse FreeCAD viewer scene", error);
+    return null;
+  }
+}
+
+async function loadThreeModules() {
+  if (!threeModulePromise) {
+    threeModulePromise = Promise.all([
+      import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"),
+    ]).then(([THREE, stlModule, controlsModule]) => ({
+      THREE,
+      STLLoader: stlModule.STLLoader,
+      OrbitControls: controlsModule.OrbitControls,
+    }));
+  }
+  return threeModulePromise;
+}
+
+function disposeThreeObject(object) {
+  if (!object?.traverse) return;
+  object.traverse((child) => {
+    if (child.geometry?.dispose) child.geometry.dispose();
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (material.dispose) material.dispose();
+    });
+  });
+}
+
+function disposeGeneratedCadViewer() {
+  generatedViewerToken += 1;
+  if (!generatedViewerRuntime) return;
+  if (generatedViewerRuntime.animationId) cancelAnimationFrame(generatedViewerRuntime.animationId);
+  if (generatedViewerRuntime.resizeObserver) generatedViewerRuntime.resizeObserver.disconnect();
+  if (generatedViewerRuntime.controls?.dispose) generatedViewerRuntime.controls.dispose();
+  if (generatedViewerRuntime.scene) disposeThreeObject(generatedViewerRuntime.scene);
+  if (generatedViewerRuntime.renderer?.dispose) generatedViewerRuntime.renderer.dispose();
+  generatedViewerRuntime = null;
+}
+
+function resizeGeneratedViewer(renderer, camera, container) {
+  const rect = container.getBoundingClientRect();
+  const width = Math.max(240, Math.round(rect.width || 720));
+  const height = Math.max(180, Math.round(rect.height || 450));
+  renderer.setSize(width, height, false);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+}
+
+function generatedCameraVector(THREE, mode, radius) {
+  if (mode === "top") return new THREE.Vector3(0, 0, radius);
+  if (mode === "front") return new THREE.Vector3(0, -radius, radius * 0.08);
+  if (mode === "right") return new THREE.Vector3(radius, 0, radius * 0.08);
+  return new THREE.Vector3(radius * 0.72, -radius, radius * 0.66);
+}
+
+function freeCadTriplet(value) {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const numbers = value.slice(0, 3).map(Number);
+  return numbers.every(Number.isFinite) ? numbers : null;
+}
+
+function freeCadPickPadding() {
+  const size = freeCadTriplet(state.documentSummary?.geometry?.bbox?.size);
+  const maxSize = size ? Math.max(...size.map(Math.abs), 1) : 100;
+  return Math.max(0.5, maxSize * 0.018);
+}
+
+function freeCadBboxInfo(bbox, fallbackCenter = null, padding = freeCadPickPadding()) {
+  const min = freeCadTriplet(bbox?.min);
+  const max = freeCadTriplet(bbox?.max);
+  if (min && max) {
+    const size = min.map((value, index) => Math.max(0, max[index] - value));
+    const center = min.map((value, index) => value + size[index] / 2);
+    return { min, max, size, center };
+  }
+  const center = freeCadTriplet(fallbackCenter);
+  if (!center) return null;
+  const half = padding / 2;
+  return {
+    min: center.map((value) => value - half),
+    max: center.map((value) => value + half),
+    size: [padding, padding, padding],
+    center,
+  };
+}
+
+function freeCadExpandedPickInfo(info, kind, padding = freeCadPickPadding()) {
+  if (!info) return null;
+  const minByKind = {
+    Object: 0.001,
+    Face: padding * 0.5,
+    Edge: padding,
+    Vertex: padding * 1.4,
+  }[kind] || padding;
+  return {
+    ...info,
+    size: info.size.map((value) => Math.max(Math.abs(Number(value) || 0), minByKind)),
+  };
+}
+
+function freeCadSelectionColor(kind) {
+  return {
+    Object: 0x64748b,
+    Face: 0x0b6fe8,
+    Edge: 0xf59e0b,
+    Vertex: 0x22c55e,
+  }[kind] || 0x64748b;
+}
+
+function freeCadSubelementMatchesSelection(objectName, reference, kind) {
+  const selected = state.selectedFreeCadSubelement;
+  return Boolean(selected)
+    && normalizeFreeCadToken(selected.objectName) === normalizeFreeCadToken(objectName)
+    && normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference)
+    && (!kind || normalizeFreeCadToken(selected.kind) === normalizeFreeCadToken(kind));
+}
+
+function addFreeCadBoxTarget(THREE, group, options) {
+  const info = freeCadExpandedPickInfo(options.info, options.kind);
+  if (!info) return null;
+  const geometry = new THREE.BoxGeometry(info.size[0], info.size[1], info.size[2]);
+  const material = new THREE.MeshBasicMaterial({
+    color: options.color,
+    transparent: true,
+    opacity: options.opacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const box = new THREE.Mesh(geometry, material);
+  box.position.set(info.center[0], info.center[1], info.center[2]);
+  box.userData.freeCadSelection = {
+    type: options.type,
+    objectName: options.objectName,
+    reference: options.reference || "",
+    kind: options.kind,
+    priority: options.priority,
+  };
+  box.renderOrder = options.renderOrder || 4;
+  group.add(box);
+
+  if (options.outline) {
+    const edgeGeometry = new THREE.EdgesGeometry(geometry);
+    const edgeMaterial = new THREE.LineBasicMaterial({
+      color: options.color,
+      transparent: true,
+      opacity: options.outlineOpacity,
+    });
+    const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+    edges.position.copy(box.position);
+    edges.renderOrder = (options.renderOrder || 4) + 1;
+    group.add(edges);
+  }
+  return box;
+}
+
+function viewerSceneHasFaceMeshes(scene) {
+  return Array.isArray(scene?.objects)
+    && scene.objects.some((obj) => Array.isArray(obj.faces) && obj.faces.some((face) => Array.isArray(face.vertices) && Array.isArray(face.triangles)));
+}
+
+function viewerSceneHasEdgeGeometry(scene) {
+  return Array.isArray(scene?.objects)
+    && scene.objects.some((obj) => Array.isArray(obj.edges) && obj.edges.some((edge) => Array.isArray(edge.points) && edge.points.length >= 2));
+}
+
+function viewerSceneHasVertexGeometry(scene) {
+  return Array.isArray(scene?.objects)
+    && scene.objects.some((obj) => Array.isArray(obj.vertices) && obj.vertices.some((vertex) => Array.isArray(vertex.point) && vertex.point.length >= 3));
+}
+
+function addViewerSceneFaceMeshes(THREE, group, scene) {
+  if (!viewerSceneHasFaceMeshes(scene)) return [];
+  const targets = [];
+  const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  for (const obj of scene.objects || []) {
+    const objectName = obj.name || obj.label || "";
+    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    for (const face of obj.faces || []) {
+      const reference = face.reference || face.name || "";
+      const vertices = Array.isArray(face.vertices) ? face.vertices : [];
+      const triangles = Array.isArray(face.triangles) ? face.triangles : [];
+      if (!objectName || !reference || !vertices.length || !triangles.length) continue;
+      const positions = [];
+      for (const triangle of triangles) {
+        const indices = Array.isArray(triangle) ? triangle.slice(0, 3).map(Number) : [];
+        if (indices.length !== 3 || !indices.every(Number.isFinite)) continue;
+        for (const index of indices) {
+          const vertex = vertices[index];
+          if (!Array.isArray(vertex) || vertex.length < 3) continue;
+          positions.push(Number(vertex[0]) || 0, Number(vertex[1]) || 0, Number(vertex[2]) || 0);
+        }
+      }
+      if (positions.length < 9) continue;
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Face");
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.computeVertexNormals();
+      const material = new THREE.MeshStandardMaterial({
+        color: selected ? 0x2f80ed : objectSelected ? 0x9bb6d4 : 0x8f9aa6,
+        roughness: 0.58,
+        metalness: 0.04,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: selected ? 0.96 : 0.84,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.freeCadSelection = {
+        type: "subelement",
+        objectName,
+        reference,
+        kind: "Face",
+        priority: 0,
+      };
+      mesh.renderOrder = selected ? 7 : 2;
+      group.add(mesh);
+      targets.push(mesh);
+
+      if (selected || objectSelected) {
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geometry, 28),
+          new THREE.LineBasicMaterial({
+            color: selected ? 0x0b6fe8 : 0x334155,
+            transparent: true,
+            opacity: selected ? 0.85 : 0.34,
+          })
+        );
+        edges.renderOrder = selected ? 9 : 3;
+        group.add(edges);
+      }
+    }
+  }
+  return targets;
+}
+
+function addViewerSceneEdgeTargets(THREE, group, scene) {
+  if (!viewerSceneHasEdgeGeometry(scene)) return [];
+  const targets = [];
+  const mode = freeCadViewerSelectionMode();
+  const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  for (const obj of scene.objects || []) {
+    const objectName = obj.name || obj.label || "";
+    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    for (const edge of obj.edges || []) {
+      const reference = edge.reference || edge.name || "";
+      const points = Array.isArray(edge.points) ? edge.points : [];
+      if (!objectName || !reference || points.length < 2) continue;
+      const positions = [];
+      for (const point of points) {
+        if (!Array.isArray(point) || point.length < 3) continue;
+        positions.push(Number(point[0]) || 0, Number(point[1]) || 0, Number(point[2]) || 0);
+      }
+      if (positions.length < 6) continue;
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Edge");
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({
+        color: selected ? 0xf59e0b : objectSelected || mode === "edge" ? 0xd97706 : 0x475569,
+        transparent: true,
+        opacity: selected ? 0.98 : mode === "edge" || objectSelected ? 0.62 : 0.22,
+      });
+      const line = new THREE.Line(geometry, material);
+      line.userData.freeCadSelection = {
+        type: "subelement",
+        objectName,
+        reference,
+        kind: "Edge",
+        priority: 0,
+      };
+      line.renderOrder = selected ? 10 : 5;
+      group.add(line);
+      targets.push(line);
+    }
+  }
+  return targets;
+}
+
+function addViewerSceneVertexTargets(THREE, group, scene) {
+  if (!viewerSceneHasVertexGeometry(scene)) return [];
+  const targets = [];
+  const mode = freeCadViewerSelectionMode();
+  const radius = Math.max(0.35, freeCadPickPadding() * 0.55);
+  const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  for (const obj of scene.objects || []) {
+    const objectName = obj.name || obj.label || "";
+    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    for (const vertex of obj.vertices || []) {
+      const reference = vertex.reference || vertex.name || "";
+      const point = freeCadTriplet(vertex.point || vertex.center);
+      if (!objectName || !reference || !point) continue;
+      const selected = freeCadSubelementMatchesSelection(objectName, reference, "Vertex");
+      const geometry = new THREE.SphereGeometry(selected ? radius * 1.35 : radius, 10, 6);
+      const material = new THREE.MeshBasicMaterial({
+        color: selected ? 0x22c55e : objectSelected || mode === "vertex" ? 0x16a34a : 0x64748b,
+        transparent: true,
+        opacity: selected ? 0.96 : mode === "vertex" || objectSelected ? 0.72 : 0.28,
+        depthWrite: false,
+      });
+      const sphere = new THREE.Mesh(geometry, material);
+      sphere.position.set(point[0], point[1], point[2]);
+      sphere.userData.freeCadSelection = {
+        type: "subelement",
+        objectName,
+        reference,
+        kind: "Vertex",
+        priority: 0,
+      };
+      sphere.renderOrder = selected ? 11 : 6;
+      group.add(sphere);
+      targets.push(sphere);
+    }
+  }
+  return targets;
+}
+
+function addFreeCadSelectionBoxes(THREE, group, options = {}) {
+  const selectedName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const mode = freeCadViewerSelectionMode();
+  const targetKind = freeCadSubelementKindForSelectionMode(mode);
+  const includeFaceProxies = options.includeFaceProxies !== false;
+  const includeEdgeProxies = options.includeEdgeProxies !== false;
+  const includeVertexProxies = options.includeVertexProxies !== false;
+  const targets = [];
+  freeCadSelectableShapeObjects().forEach((obj) => {
+    const bbox = obj.shape.bbox;
+    const info = freeCadBboxInfo(bbox);
+    if (!info) return;
+    const objectName = freeCadObjectKey(obj);
+    const isSelected = selectedName && normalizeFreeCadToken(objectName) === selectedName;
+    const visible = state.showBBox || isSelected || mode === "object";
+    const box = addFreeCadBoxTarget(THREE, group, {
+      type: "object",
+      objectName,
+      kind: "Object",
+      info,
+      color: isSelected ? 0x0b6fe8 : freeCadSelectionColor("Object"),
+      opacity: isSelected ? 0.16 : visible ? 0.025 : 0,
+      outline: visible,
+      outlineOpacity: isSelected ? 0.96 : 0.58,
+      priority: 10,
+      renderOrder: 4,
+    });
+    if (!box) return;
+    targets.push(box);
+
+    if (!targetKind) return;
+    freeCadSubelements(obj).forEach((item) => {
+      const kind = item.group || item.kind || "";
+      if (kind !== targetKind) return;
+      if (kind === "Face" && !includeFaceProxies) return;
+      if (kind === "Edge" && !includeEdgeProxies) return;
+      if (kind === "Vertex" && !includeVertexProxies) return;
+      const reference = item.reference || item.name || "";
+      if (!reference) return;
+      const pickInfo = freeCadBboxInfo(item.bbox, item.center);
+      const subSelected = freeCadSubelementMatchesSelection(objectName, reference, kind);
+      const subVisible = subSelected || state.showBBox;
+      const subTarget = addFreeCadBoxTarget(THREE, group, {
+        type: "subelement",
+        objectName,
+        reference,
+        kind,
+        info: pickInfo,
+        color: subSelected ? 0x0b6fe8 : freeCadSelectionColor(kind),
+        opacity: subSelected ? 0.34 : subVisible ? 0.075 : 0.012,
+        outline: subSelected || (state.showBBox && kind !== "Face"),
+        outlineOpacity: subSelected ? 0.95 : 0.42,
+        priority: { Face: 1, Edge: 0, Vertex: -1 }[kind] ?? 2,
+        renderOrder: subSelected ? 8 : 6,
+      });
+      if (subTarget) targets.push(subTarget);
+    });
+  });
+  return targets;
+}
+
+function chooseFreeCadViewerHit(hits) {
+  const mode = freeCadViewerSelectionMode();
+  const targetKind = freeCadSubelementKindForSelectionMode(mode);
+  const ranked = hits
+    .map((hit, index) => {
+      const selection = hit.object?.userData?.freeCadSelection || {};
+      let rank = 100;
+      if (targetKind && selection.kind === targetKind) rank = selection.priority ?? 0;
+      else if (!targetKind && selection.type === "object") rank = 0;
+      else if (selection.type === "object") rank = 30;
+      return { hit, rank, index };
+    })
+    .filter((item) => item.rank < 100)
+    .sort((a, b) => a.rank - b.rank || a.hit.distance - b.hit.distance || a.index - b.index);
+  return ranked[0]?.hit || null;
+}
+
+function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
+  if (!targets.length) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const pointer = new THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Line = { threshold: 0.08 };
+  raycaster.setFromCamera(pointer, camera);
+  const hit = chooseFreeCadViewerHit(raycaster.intersectObjects(targets, false));
+  const selection = hit?.object?.userData?.freeCadSelection;
+  if (!selection?.objectName) return;
+  if (selection.type === "subelement" && selection.reference) {
+    selectFreeCadSubelement(selection.objectName, selection.reference, selection.kind);
+    return;
+  }
+  selectFreeCadObject(selection.objectName);
+}
+
+async function mountGeneratedCadViewer() {
+  const container = $("generatedCadViewer");
+  if (!container) {
+    disposeGeneratedCadViewer();
+    return;
+  }
+  const hasViewerSceneArtifact = state.artifacts.viewer_scene || artifactRef("viewer_scene");
+  const hasStlArtifact = state.artifacts.stl || artifactRef("stl");
+  if (!(hasViewerSceneArtifact || hasStlArtifact)) return;
+  const key = container.dataset.viewerKey || "";
+  if (generatedViewerRuntime?.container === container && generatedViewerRuntime.key === key) return;
+  disposeGeneratedCadViewer();
+  const token = ++generatedViewerToken;
+  try {
+    const [modules, viewerScene, stlBuffer] = await Promise.all([
+      loadThreeModules(),
+      generatedViewerSceneData(),
+      generatedStlArrayBuffer(),
+    ]);
+    if (token !== generatedViewerToken || (!viewerScene && !stlBuffer) || !document.body.contains(container)) return;
+    const { THREE, STLLoader, OrbitControls } = modules;
+    const frame = container.closest(".generated-scene-frame");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8fafc);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.innerHTML = "";
+    container.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 1000);
+    resizeGeneratedViewer(renderer, camera, container);
+    camera.up.set(0, 0, 1);
+    const radius = state.exploded ? 8.4 : 7.2;
+    camera.position.copy(generatedCameraVector(THREE, state.viewMode, radius));
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a94a6, 2.2));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+    keyLight.position.set(3, -5, 7);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xd9e8ff, 1.1);
+    fillLight.position.set(-4, 3, 5);
+    scene.add(fillLight);
+
+    let stlGeometry = null;
+    let sceneBbox = freeCadBboxInfo(viewerScene?.bbox || state.documentSummary?.geometry?.bbox);
+    if (!sceneBbox && stlBuffer) {
+      stlGeometry = new STLLoader().parse(stlBuffer);
+      stlGeometry.computeVertexNormals();
+      stlGeometry.computeBoundingBox();
+      if (stlGeometry.boundingBox) {
+        const stlCenter = new THREE.Vector3();
+        const stlSize = new THREE.Vector3();
+        stlGeometry.boundingBox.getCenter(stlCenter);
+        stlGeometry.boundingBox.getSize(stlSize);
+        sceneBbox = {
+          center: [stlCenter.x, stlCenter.y, stlCenter.z],
+          size: [stlSize.x, stlSize.y, stlSize.z],
+        };
+      }
+    }
+    if (!sceneBbox) return;
+    const center = new THREE.Vector3(...sceneBbox.center);
+    const size = new THREE.Vector3(...sceneBbox.size.map((value) => Math.abs(Number(value) || 0)));
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    const modelScale = (state.exploded ? 4.6 : 5.0) / maxDim;
+
+    const group = new THREE.Group();
+    group.scale.setScalar(modelScale);
+    group.position.set(-center.x * modelScale, -center.y * modelScale, -center.z * modelScale);
+    scene.add(group);
+
+    let targets = [];
+    const hasFaceScene = viewerSceneHasFaceMeshes(viewerScene);
+    const hasEdgeScene = viewerSceneHasEdgeGeometry(viewerScene);
+    const hasVertexScene = viewerSceneHasVertexGeometry(viewerScene);
+    if (hasFaceScene || hasEdgeScene || hasVertexScene) {
+      const faceTargets = addViewerSceneFaceMeshes(THREE, group, viewerScene);
+      const edgeTargets = addViewerSceneEdgeTargets(THREE, group, viewerScene);
+      const vertexTargets = addViewerSceneVertexTargets(THREE, group, viewerScene);
+      const proxyTargets = addFreeCadSelectionBoxes(THREE, group, {
+        includeFaceProxies: !faceTargets.length,
+        includeEdgeProxies: !edgeTargets.length,
+        includeVertexProxies: !vertexTargets.length,
+      });
+      targets = [...faceTargets, ...edgeTargets, ...vertexTargets, ...proxyTargets];
+    } else {
+      if (!stlGeometry && stlBuffer) {
+        stlGeometry = new STLLoader().parse(stlBuffer);
+        stlGeometry.computeVertexNormals();
+      }
+      if (stlGeometry) {
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x8f9aa6,
+          roughness: 0.58,
+          metalness: 0.04,
+          side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(stlGeometry, material);
+        group.add(mesh);
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(stlGeometry, 32),
+          new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.42 })
+        );
+        group.add(edges);
+      }
+      targets = addFreeCadSelectionBoxes(THREE, group);
+    }
+    let pointerDown = null;
+    renderer.domElement.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      pointerDown = { x: event.clientX, y: event.clientY };
+    });
+    renderer.domElement.addEventListener("pointerup", (event) => {
+      event.stopPropagation();
+      const moved = pointerDown ? Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) : 0;
+      pointerDown = null;
+      if (moved <= 5) pickFreeCadViewerSelection(event, renderer, camera, targets, THREE);
+    });
+    renderer.domElement.addEventListener("click", (event) => event.stopPropagation());
+    renderer.domElement.addEventListener("wheel", (event) => event.stopPropagation(), { passive: false });
+
+    const resizeObserver = new ResizeObserver(() => resizeGeneratedViewer(renderer, camera, container));
+    resizeObserver.observe(container);
+    generatedViewerRuntime = { key, container, scene, renderer, controls, resizeObserver, animationId: 0 };
+    const animate = () => {
+      if (!generatedViewerRuntime || generatedViewerRuntime.key !== key) return;
+      generatedViewerRuntime.animationId = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    frame?.classList.add("viewer-ready");
+    animate();
+  } catch (error) {
+    console.warn("Unable to mount interactive CAD viewer", error);
+    if (container) {
+      container.innerHTML = `<div class="cad-viewer-status">${escapeHtml(t("pngFallback"))}</div>`;
+    }
+  }
+}
+
+function historyLabelForStoredVersion(version) {
+  if (version.intent === "rollback") return t("history.rollback");
+  if (version.patch?.op === "request_script_rewrite") return t("history.scriptRewrite");
+  if (version.patch?.op === "update_script_parameter") return t("history.scriptParameter", { name: version.patch.name || "" });
+  if (version.patch?.op === "patch_fcstd_document") {
+    const first = version.patch.patches?.[0];
+    return t("history.freecadDocumentPatch", { name: freeCadPatchDisplayName(first) });
+  }
+  if (version.patch?.op === "update_parameter") return t("history.conversation", { name: parameterLabel(version.patch.name) });
+  if (version.intent === "create") return t("history.agentGeneration");
+  if (version.status === "failed") return t("history.agentGenerationFailed");
+  return version.intent || "version";
+}
+
+function historyItemsFromServerVersions(versions = []) {
+  return versions.slice().reverse().map((version) => ({
+    id: version.id,
+    serverVersionId: version.id,
+    version: version.version_number,
+    label: historyLabelForStoredVersion(version),
+    detail: version.user_instruction || version.status || "",
+    artifactRefs: artifactRefsFromMetadata(version.metadata),
+  }));
+}
+
+function syncSavedServerVersion(version, fallbackLabel, fallbackDetail) {
+  if (!version?.id) return;
+  state.activeServerVersionId = version.id;
+  const metadata = version.metadata || {};
+  state.artifactRefs = artifactRefsFromMetadata(metadata);
+  state.documentSummary = metadata.document_summary && typeof metadata.document_summary === "object" ? metadata.document_summary : state.documentSummary;
+  const current = state.history.find((item) => item.serverVersionId === version.id);
+  const target = current || state.history[0];
+  if (target && !target.serverVersionId) {
+    target.serverVersionId = version.id;
+    target.version = version.version_number;
+    target.artifactRefs = artifactRefsFromMetadata(version.metadata);
+    if (!target.label && fallbackLabel) target.label = fallbackLabel;
+    if (!target.detail && fallbackDetail) target.detail = fallbackDetail;
+  }
+  renderBottom();
+  persistWorkbenchSession();
 }
 
 async function ensureServerSession() {
@@ -1290,10 +2568,75 @@ async function recordServerVersion(intent, userInstruction = "", status = "ok", 
   state.lastServerVersionSignature = signature;
   try {
     const sessionId = await ensureServerSession();
-    await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/versions`, payload);
+    const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/versions`, payload);
+    syncSavedServerVersion(saved.version, intent, userInstruction);
+    await refreshFreeCadDocumentSummary(sessionId, saved.version?.id);
+    return saved.version;
   } catch (saveError) {
     console.warn("Unable to persist 4yi-cad server session", saveError);
   }
+  return null;
+}
+
+async function refreshFreeCadDocumentSummary(sessionId = state.serverSessionId, versionId = state.activeServerVersionId) {
+  if (state.engine !== "freecad" || !sessionId || !versionId || !artifactRef("fcstd")) return null;
+  try {
+    const inspected = await fetchJson("/api/freecad/document/inspect", {
+      session_id: sessionId,
+      version_id: versionId,
+    });
+    if (inspected.ok && inspected.document_summary) {
+      state.documentSummary = inspected.document_summary;
+      persistWorkbenchSession();
+      renderTree();
+      renderProperties();
+      renderBottom();
+      return inspected.document_summary;
+    }
+  } catch (error) {
+    console.warn("Unable to inspect FreeCAD document", error);
+  }
+  return null;
+}
+
+async function applyStoredServerVersion(version, versions = null) {
+  if (!version?.design_state || !version.script) return false;
+  const metadata = version.metadata || {};
+  const refs = artifactRefsFromMetadata(metadata);
+  const hydrated = await hydrateArtifactRefs(refs);
+
+  state.designState = version.design_state;
+  state.script = version.script;
+  state.patch = version.patch || null;
+  if (Array.isArray(versions)) state.history = historyItemsFromServerVersions(versions);
+  state.artifactRefs = refs;
+  state.artifacts = hydrated.artifacts || {};
+  state.previewPng = hydrated.previewPng || null;
+  state.engine = normalizeEngine(metadata.engine);
+  state.freecadVersion = metadata.freecad_version || "";
+  state.exportStatus = hasStepStlArtifacts() ? "ready" : "notReady";
+  state.previewMode = metadata.preview_mode === "generated" ? "generated" : "design_state";
+  state.generatedPrompt = metadata.generated_prompt || "";
+  state.generatedParameters = Array.isArray(metadata.generated_parameters) ? metadata.generated_parameters : [];
+  state.documentSummary = metadata.document_summary && typeof metadata.document_summary === "object" ? metadata.document_summary : null;
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
+  state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
+  state.bottomTab = "history";
+  state.chatMessages = [{ role: "assistant", key: "chat.initial" }];
+  state.chatHistory = [];
+  state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
+  state.activeServerVersionId = version.id || "";
+  state.lastServerVersionSignature = versionSignature(
+    versionPayload(version.intent || "modify", version.user_instruction || "", version.status || "ok", version.error || "")
+  );
+  if (Object.keys(refs).length) log(t("log.serverArtifactsRestored"));
+  if (!state.documentSummary && state.engine === "freecad" && refs.fcstd) {
+    void refreshFreeCadDocumentSummary(state.serverSessionId, version.id);
+  }
+  return true;
 }
 
 async function restoreServerSession() {
@@ -1303,37 +2646,9 @@ async function restoreServerSession() {
     const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
     const active = saved.active_version;
     if (!active?.design_state || !active.script) return false;
-    const metadata = active.metadata || {};
-
     state.serverSessionId = sessionId;
     localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, sessionId);
-    state.designState = active.design_state;
-    state.script = active.script;
-    state.patch = active.patch || null;
-    state.history = (saved.versions || []).slice().reverse().map((version) => ({
-      id: version.id,
-      version: version.version_number,
-      label: version.intent || "version",
-      detail: version.user_instruction || version.status || "",
-    }));
-    state.artifacts = {};
-    state.previewPng = null;
-    state.engine = normalizeEngine(metadata.engine);
-    state.freecadVersion = metadata.freecad_version || "";
-    state.exportStatus = "notReady";
-    state.previewMode = metadata.preview_mode === "generated" ? "generated" : "design_state";
-    state.generatedPrompt = metadata.generated_prompt || "";
-    state.generatedParameters = Array.isArray(metadata.generated_parameters) ? metadata.generated_parameters : [];
-    state.selectedGeneratedParameterName = "";
-    state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
-    state.bottomTab = "history";
-    state.chatMessages = [{ role: "assistant", key: "chat.initial" }];
-    state.chatHistory = [];
-    state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
-    state.lastServerVersionSignature = versionSignature(
-      versionPayload(active.intent || "modify", active.user_instruction || "", active.status || "ok", active.error || "")
-    );
-    return true;
+    return await applyStoredServerVersion(active, saved.versions || []);
   } catch (error) {
     console.warn("Unable to restore 4yi-cad server session", error);
     return false;
@@ -1349,6 +2664,165 @@ async function fetchJson(url, body) {
   const json = await res.json();
   if (!res.ok) throw new Error(json.detail || json.error || `HTTP ${res.status}`);
   return json;
+}
+
+function detectFreeCadImportFormat(filename) {
+  const match = String(filename || "").toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = match ? match[1] : "";
+  return new Set(["fcstd", "step", "stp", "iges", "igs", "brep"]).has(ext) ? ext : "";
+}
+
+function openFreeCadImportPicker() {
+  $("freeCadImportInput").click();
+}
+
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return bytesToBase64(bytes);
+}
+
+function firstFreeCadSelectionName() {
+  const shape = freeCadSelectableShapeObjects()[0];
+  const object = shape || freeCadDocumentObjects()[0];
+  return freeCadObjectKey(object);
+}
+
+async function importFreeCadModelFile(file) {
+  if (!file) return false;
+  const format = detectFreeCadImportFormat(file.name);
+  if (!format) {
+    setStatus("patchFailed");
+    log(t("log.importUnsupported", { name: file.name || t("notAvailable") }));
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.importFailed",
+      vars: { message: t("log.importUnsupported", { name: file.name || t("notAvailable") }) },
+    });
+    setBottomTab("chat");
+    return false;
+  }
+
+  $("applyButton").disabled = true;
+  $("importButton").disabled = true;
+  state.previewMode = "generated";
+  state.engine = "freecad";
+  state.freecadVersion = "";
+  state.generatedPrompt = file.name;
+  state.generatedParameters = [];
+  state.documentSummary = null;
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
+  state.previewPng = null;
+  state.artifacts = {};
+  state.artifactRefs = {};
+  state.exportStatus = "rendering";
+  state.patch = { op: "import_model", format, filename: file.name };
+  setBottomTab("logs");
+  setStatus("importingModel");
+  log(t("log.importStarted", { name: file.name }));
+  renderAll();
+
+  try {
+    const dataB64 = await fileToBase64(file);
+    const imported = await fetchJson("/api/freecad/import_model", {
+      format,
+      data_b64: dataB64,
+      filename: file.name,
+      title: file.name,
+      user_instruction: `Import ${file.name}`,
+      session_id: state.serverSessionId || null,
+    });
+    if (!imported.ok) throw new Error(imported.error || t("log.unknownError"));
+
+    const version = imported.version || null;
+    const metadata = version?.metadata || {};
+    state.designState = version?.design_state || state.designState || fallbackDesignState();
+    state.script = version?.script || state.script || "";
+    state.patch = version?.patch || { op: "import_model", format, filename: file.name };
+    state.previewMode = "generated";
+    state.engine = "freecad";
+    state.freecadVersion = imported.freecad_version || metadata.freecad_version || "";
+    state.generatedPrompt = file.name;
+    state.generatedParameters = Array.isArray(imported.parameters) ? imported.parameters : [];
+    state.documentSummary = imported.document_summary || metadata.document_summary || null;
+    state.selectedGeneratedParameterName = "";
+    state.previewPng = imported.preview_png_b64 || null;
+    state.artifacts = imported.exports || {};
+    state.artifactRefs = imported.artifact_refs || metadata.artifact_refs || {};
+    state.exportStatus = hasStepStlArtifacts() ? "ready" : "notReady";
+    state.selectedFreeCadObjectName = firstFreeCadSelectionName();
+    if (imported.session_id) {
+      state.serverSessionId = imported.session_id;
+      localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, state.serverSessionId);
+    }
+    addHistory(
+      t("history.freecadImport", { name: file.name }),
+      t("history.freecadImportDetail", { name: file.name })
+    );
+    if (version?.id) {
+      state.activeServerVersionId = version.id;
+      syncSavedServerVersion(
+        version,
+        t("history.freecadImport", { name: file.name }),
+        t("history.freecadImportDetail", { name: file.name })
+      );
+    }
+    state.chatMessages.unshift({ role: "assistant", key: "chat.importOk", vars: { name: file.name } });
+    log(t("log.importDone", { name: file.name }));
+    setStatus("previewExportReady");
+    setBottomTab("chat");
+    return true;
+  } catch (error) {
+    setStatus("patchFailed");
+    log(t("log.importFailed", { message: error.message }));
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.importFailed",
+      vars: { message: error.message },
+    });
+    setBottomTab("chat");
+    return false;
+  } finally {
+    $("applyButton").disabled = false;
+    $("importButton").disabled = false;
+    renderAll();
+  }
+}
+
+async function rollbackToServerVersion(versionId) {
+  if (!state.serverSessionId || !versionId) return;
+  const target = state.history.find((item) => item.serverVersionId === versionId);
+  $("applyButton").disabled = true;
+  setStatus("rollingBack");
+  try {
+    const sessionId = encodeURIComponent(state.serverSessionId);
+    const rolledBack = await fetchJson(`/api/sessions/${sessionId}/rollback`, {
+      version_id: versionId,
+      user_instruction: target ? t("history.rollbackDetail", { version: target.version }) : null,
+    });
+    const saved = await fetchJson(`/api/sessions/${sessionId}`);
+    await applyStoredServerVersion(rolledBack.version, saved.versions || []);
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.rollbackOk",
+      vars: { version: target?.version || rolledBack.version.version_number },
+    });
+    setStatus("restored");
+    log(t("log.rolledBack", { version: target?.version || rolledBack.version.version_number }));
+  } catch (error) {
+    setStatus("patchFailed");
+    log(t("log.rollbackFailed", { message: error.message }));
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.rollbackFailed",
+      vars: { message: error.message },
+    });
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
 }
 
 function log(message) {
@@ -1437,6 +2911,433 @@ function generatedSelectionLabel(param) {
   return group ? `${param.name} · ${t("generatedParameterGroup", { group })}` : param.name;
 }
 
+function generatedViewClass() {
+  const mode = ["top", "front", "right", "iso"].includes(state.viewMode) ? state.viewMode : "iso";
+  return `generated-view-${mode}`;
+}
+
+function hashToken(value) {
+  return Array.from(String(value || "")).reduce((hash, ch) => ((hash << 5) - hash + ch.charCodeAt(0)) | 0, 0);
+}
+
+function generatedParameterValueMatching(patterns) {
+  const params = state.generatedParameters || [];
+  const match = params.find((param) => {
+    const name = String(param.name || "").toLowerCase();
+    return patterns.some((pattern) => pattern.test(name));
+  });
+  return match?.value;
+}
+
+function generatedDimensionValues() {
+  const bbox = state.documentSummary?.geometry?.bbox?.size;
+  if (Array.isArray(bbox) && bbox.length >= 3) {
+    return { x: bbox[0], y: bbox[1], z: bbox[2] };
+  }
+  return {
+    x: generatedParameterValueMatching([/(^|_)l$/, /length/, /room_l/, /bed_l/, /wd_l/, /dk_l/]),
+    y: generatedParameterValueMatching([/(^|_)w$/, /width/, /room_w/, /bed_w/, /wd_w/, /dk_w/]),
+    z: generatedParameterValueMatching([/(^|_)h$/, /height/, /room_h/, /bed_h/, /wd_h/]),
+  };
+}
+
+function generatedDimensionLabel(axis) {
+  const value = generatedDimensionValues()[axis];
+  return Number.isFinite(Number(value)) ? `${formatNumber(value)} mm` : axis.toUpperCase();
+}
+
+function generatedNumericLabel(value, fallback) {
+  return Number.isFinite(Number(value)) ? `${formatNumber(value)} mm` : fallback;
+}
+
+function generatedDiameterLabel() {
+  const selected = selectedGeneratedParameter();
+  const selectedToken = `${selected?.name || ""} ${selected?.label || ""}`.toLowerCase();
+  if (selected && /(^|_)d$|diam|radius|hole|孔|直径|半径/.test(selectedToken)) {
+    return generatedNumericLabel(selected.value, "dia");
+  }
+  return generatedNumericLabel(generatedParameterValueMatching([/(^|_)d$/, /diam/, /radius/, /hole/]), "dia");
+}
+
+function generatedSelectionMarkerGeometry(param) {
+  const rawName = String(param?.name || "");
+  const token = `${rawName} ${param?.label || ""} ${generatedParameterGroup(param)}`.toLowerCase();
+  if (/(^|_)h$|height|wall_t|厚|高|thick/.test(token)) return { x: 76, y: 51, w: 10, h: 44, kind: "height" };
+  if (/(^|_)l$|length|长/.test(token)) return { x: 50, y: 73, w: 42, h: 10, kind: "length" };
+  if (/(^|_)w$|width|宽/.test(token)) return { x: 34, y: 58, w: 30, h: 10, kind: "width" };
+  if (/(^|_)d$|diam|radius|hole|孔|直径|半径/.test(token)) return { x: 52, y: 50, w: 18, h: 18, kind: "diameter" };
+  const seed = Math.abs(hashToken(rawName));
+  return {
+    x: 24 + (seed % 52),
+    y: 28 + (Math.floor(seed / 17) % 42),
+    w: 18,
+    h: 14,
+    kind: "area",
+  };
+}
+
+function renderGeneratedSelectionMarker(param) {
+  if (!param) return "";
+  const marker = generatedSelectionMarkerGeometry(param);
+  const style = `--marker-x:${marker.x}%;--marker-y:${marker.y}%;--marker-w:${marker.w}%;--marker-h:${marker.h}%`;
+  return `<div class="generated-selection-marker generated-marker-${escapeHtml(marker.kind)}" style="${style}"></div>`;
+}
+
+function renderGeneratedMeasureOverlay() {
+  if (state.measureMode === "diameter") {
+    return `<div class="generated-measure generated-measure-diameter"><span>${escapeHtml(generatedDiameterLabel())}</span></div>`;
+  }
+  if (state.measureMode === "angle") {
+    return `<div class="generated-measure generated-measure-angle"><span>90 deg</span></div>`;
+  }
+  if (!state.showDims) {
+    return `<div class="generated-measure generated-measure-distance"><span>${escapeHtml(generatedDimensionLabel("x"))}</span></div>`;
+  }
+  return "";
+}
+
+function renderGeneratedPreviewOverlays(selected) {
+  return [
+    state.showBBox ? `<div class="generated-bbox-outline"></div>` : "",
+    state.showDims ? `<div class="generated-dim generated-dim-x"><span>${escapeHtml(generatedDimensionLabel("x"))}</span></div>` : "",
+    state.showDims ? `<div class="generated-dim generated-dim-y"><span>${escapeHtml(generatedDimensionLabel("y"))}</span></div>` : "",
+    renderGeneratedMeasureOverlay(),
+    renderGeneratedSelectionMarker(selected),
+  ].join("");
+}
+
+function freeCadDocumentObjects() {
+  return Array.isArray(state.documentSummary?.objects) ? state.documentSummary.objects : [];
+}
+
+function freeCadShapeObjects() {
+  return freeCadDocumentObjects().filter((obj) => obj?.shape);
+}
+
+function freeCadSelectableShapeObjects() {
+  return freeCadShapeObjects().filter((obj) => {
+    const bbox = obj?.shape?.bbox;
+    return Array.isArray(bbox?.min) && Array.isArray(bbox?.max);
+  });
+}
+
+function freeCadObjectKey(obj) {
+  return obj?.name || obj?.label || "";
+}
+
+function freeCadObjectByName(name) {
+  const normalized = normalizeFreeCadToken(name);
+  if (!normalized) return null;
+  return freeCadDocumentObjects().find((obj) => {
+    return normalizeFreeCadToken(obj.name) === normalized
+      || normalizeFreeCadToken(obj.label) === normalized;
+  }) || null;
+}
+
+function firstFreeCadSketchObject() {
+  return freeCadDocumentObjects().find((obj) => freeCadObjectIsSketch(obj)) || null;
+}
+
+function firstFreeCadTechDrawPage() {
+  const pages = Array.isArray(state.documentSummary?.techdraw) ? state.documentSummary.techdraw : [];
+  return pages[0] || null;
+}
+
+function firstFreeCadTechDrawView() {
+  const page = firstFreeCadTechDrawPage();
+  const views = Array.isArray(page?.views) ? page.views : [];
+  return views[0] || null;
+}
+
+function selectedFreeCadObject() {
+  const selected = freeCadObjectByName(state.selectedFreeCadObjectName);
+  if (selected) return selected;
+  if (state.selectedFreeCadObjectName) {
+    state.selectedFreeCadObjectName = "";
+    state.selectedFreeCadSubelement = null;
+    state.assemblyConnectorAnchor = null;
+  }
+  return null;
+}
+
+function generatedViewportSelectionLabel(selectedObject, selectedParam, selectedSubelement = null) {
+  if (selectedObject && selectedSubelement) {
+    return `${freeCadObjectDisplayName(selectedObject)}.${selectedSubelement.reference}`;
+  }
+  if (selectedObject) {
+    return t("objectBadge", { name: freeCadObjectDisplayName(selectedObject) });
+  }
+  return generatedSelectionLabel(selectedParam);
+}
+
+function freeCadFeatureTreeNodes() {
+  return Array.isArray(state.documentSummary?.feature_tree?.nodes)
+    ? state.documentSummary.feature_tree.nodes
+    : [];
+}
+
+function freeCadTreeDisplayNodes() {
+  const nodes = freeCadFeatureTreeNodes();
+  if (nodes.length) {
+    return nodes.map((node) => ({
+      object: node.object || {},
+      kind: node.kind || "document_object",
+      depth: Math.min(3, Array.isArray(node.parents) ? node.parents.length : 0),
+      tip: node.tip || null,
+    }));
+  }
+  return freeCadDocumentObjects().map((obj) => ({
+    object: obj,
+    kind: freeCadObjectIsSketch(obj) ? "sketch" : "document_object",
+    depth: 0,
+    tip: null,
+  }));
+}
+
+function hasFreeCadDocumentState() {
+  return state.previewMode === "generated"
+    && state.engine === "freecad"
+    && Boolean(state.serverSessionId)
+    && Boolean(state.activeServerVersionId)
+    && Boolean(artifactRef("fcstd"))
+    && freeCadDocumentObjects().length > 0;
+}
+
+function freeCadObjectDisplayName(obj) {
+  if (!obj) return t("generatedModel");
+  return obj.label || obj.name || obj.type_id || t("generatedModel");
+}
+
+function freeCadFeatureIcon(kind, obj) {
+  if (kind === "sketch" || freeCadObjectIsSketch(obj)) return "ruler";
+  if (kind === "partdesign_body" || kind === "assembly") return "layers";
+  if (kind === "techdraw") return "edit";
+  return "box";
+}
+
+function freeCadObjectSelector(obj) {
+  if (obj?.name) return { name: obj.name };
+  if (obj?.label) return { label: obj.label };
+  return { type_id: obj?.type_id || "" };
+}
+
+function freeCadPatchDisplayName(patch) {
+  if (!patch) return t("generatedModel");
+  const selector = patch.selector || {};
+  const objectName = selector.label || selector.name || selector.type_id || t("generatedModel");
+  if (patch.op === "create_feature") {
+    return `create:${patch.label || patch.name || patch.type_id || t("generatedModel")}`;
+  }
+  if (patch.op === "delete_feature") return `delete:${objectName}`;
+  if (patch.op === "set_body_tip") {
+    const tip = patch.tip_selector || patch.feature_selector || {};
+    return `${objectName}.Tip=${tip.label || tip.name || tip.type_id || ""}`;
+  }
+  if (patch.op === "set_placement") return `${objectName}.Placement`;
+  if (patch.op === "set_expression") return `${objectName}.${patch.property || "expression"}`;
+  if (patch.op === "add_geometry") {
+    const geometry = patch.geometry || patch.geometries?.[0] || {};
+    return `${objectName}.addGeometry:${geometry.type || geometry.kind || ""}`;
+  }
+  if (patch.op === "add_constraint") {
+    const constraint = patch.constraint || patch.constraints?.[0] || {};
+    return `${objectName}.addConstraint:${constraint.type || constraint.constraint_type || ""}`;
+  }
+  if (patch.op === "remove_constraint") {
+    const constraint = patch.constraint_name || `#${patch.constraint_index ?? ""}`;
+    return `${objectName}.removeConstraint:${constraint}`;
+  }
+  if (patch.op === "create_sketch") {
+    return `createSketch:${patch.label || patch.name || "Sketch"}`;
+  }
+  if (patch.op === "attach_sketch") {
+    const support = patch.support_selector || patch.source_selector || patch.part_selector || {};
+    return `${objectName}.attach:${support.label || support.name || support.type_id || ""}`;
+  }
+  if (patch.op === "add_external_geometry") {
+    const source = patch.source_selector || patch.support_selector || patch.part_selector || {};
+    return `${objectName}.external:${source.label || source.name || patch.reference || ""}`;
+  }
+  if (patch.op === "solver_status") {
+    return `${objectName}.solveSketch`;
+  }
+  if (patch.op === "validate_sketch") {
+    return `${objectName}.validateSketch`;
+  }
+  if (patch.op === "create_assembly") {
+    return `createAssembly:${patch.label || patch.name || t("generatedModel")}`;
+  }
+  if (patch.op === "add_part_to_assembly") {
+    const part = patch.part_selector || patch.feature_selector || {};
+    return `${objectName}.addPart:${part.label || part.name || part.type_id || ""}`;
+  }
+  if (patch.op === "remove_part_from_assembly") {
+    const part = patch.part_selector || patch.feature_selector || {};
+    return `${objectName}.removePart:${part.label || part.name || part.type_id || ""}`;
+  }
+  if (patch.op === "set_assembly_part_placement") {
+    const part = patch.part_selector || patch.feature_selector || {};
+    return `${objectName}.${part.label || part.name || part.type_id || "part"}.Placement`;
+  }
+  if (patch.op === "ground_assembly_part") {
+    const part = patch.part_selector || patch.feature_selector || {};
+    return `${objectName}.ground:${part.label || part.name || part.type_id || ""}`;
+  }
+  if (patch.op === "create_joint") {
+    return `createJoint:${patch.joint_type || patch.type || "joint"}`;
+  }
+  if (patch.op === "update_joint") {
+    return `${objectName}.joint:${patch.joint_type || patch.type || patch.distance || patch.angle_degrees || ""}`;
+  }
+  if (patch.op === "solve_assembly") {
+    return `${objectName}.solve`;
+  }
+  if (patch.op === "create_techdraw_page") {
+    return `createTechDrawPage:${patch.label || patch.name || "Page"}`;
+  }
+  if (patch.op === "add_techdraw_view") {
+    const source = patch.source_selector || patch.part_selector || patch.feature_selector || {};
+    return `TechDrawView:${source.label || source.name || source.type_id || ""}`;
+  }
+  if (patch.op === "add_techdraw_projection_group") {
+    return `TechDrawProjection:${patch.projection_names?.join("/") || patch.projection || "Front"}`;
+  }
+  if (patch.op === "add_techdraw_section_view") {
+    return `TechDrawSection:${patch.label || patch.name || "Section"}`;
+  }
+  if (patch.op === "add_techdraw_detail_view") {
+    return `TechDrawDetail:${patch.label || patch.name || "Detail"}`;
+  }
+  if (patch.op === "add_techdraw_centerline") {
+    return `TechDrawCenterline:${patch.references?.join("/") || ""}`;
+  }
+  if (patch.op === "add_techdraw_cosmetic_vertex") {
+    return `TechDrawCosmeticVertex:${patch.label || patch.name || ""}`;
+  }
+  if (patch.op === "add_techdraw_cosmetic_line") {
+    return `TechDrawCosmeticLine:${patch.label || patch.name || ""}`;
+  }
+  if (patch.op === "export_techdraw_pdf") {
+    return "TechDrawPDF";
+  }
+  if (patch.op === "add_techdraw_dimension") {
+    return `TechDrawDimension:${patch.dimension_type || patch.type || "Distance"}`;
+  }
+  if (patch.op === "set_constraint_value") {
+    const constraint = patch.constraint_name || `#${patch.constraint_index ?? ""}`;
+    return `${objectName}.constraint${constraint}`;
+  }
+  return `${objectName}.${patch.property || ""}`;
+}
+
+function freeCadFeatureKindText() {
+  const counts = new Map();
+  freeCadFeatureTreeNodes().forEach((node) => {
+    const kind = node.kind || "document_object";
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  });
+  return [...counts.entries()].map(([kind, count]) => `${kind}:${count}`).join(" · ");
+}
+
+function freeCadBodyTipText() {
+  const tips = freeCadFeatureTreeNodes()
+    .filter((node) => node.kind === "partdesign_body" && node.tip)
+    .map((node) => `${freeCadObjectDisplayName(node.object)} -> ${freeCadObjectDisplayName(node.tip)}`);
+  return tips.join(" · ");
+}
+
+function freeCadAssemblyText() {
+  const assemblies = Array.isArray(state.documentSummary?.assemblies)
+    ? state.documentSummary.assemblies
+    : [];
+  return assemblies
+    .map((assembly) => {
+      const name = assembly.label || assembly.name || "Assembly";
+      return `${name}: ${assembly.part_count || 0} parts, ${assembly.joint_count || 0} joints`;
+    })
+    .join(" · ");
+}
+
+function freeCadTechDrawText() {
+  const pages = Array.isArray(state.documentSummary?.techdraw)
+    ? state.documentSummary.techdraw
+    : [];
+  return pages
+    .map((page) => {
+      const name = page.label || page.name || "Page";
+      return `${name}: ${page.view_count || 0} views, ${page.dimension_count || 0} dims`;
+    })
+    .join(" · ");
+}
+
+function freeCadDocumentGeometryText() {
+  const geometry = state.documentSummary?.geometry || {};
+  const bbox = geometry.bbox?.size;
+  const parts = [];
+  if (Array.isArray(bbox)) parts.push(`bbox ${bbox.map(formatNumber).join(" x ")} mm`);
+  if (Number.isFinite(Number(geometry.volume))) parts.push(`volume ${formatNumber(geometry.volume)}`);
+  if (geometry.valid !== undefined && geometry.valid !== null) parts.push(`valid ${geometry.valid ? "true" : "false"}`);
+  return parts.join(" · ");
+}
+
+function freeCadObjectGeometryText(obj) {
+  const shape = obj?.shape || {};
+  const bbox = shape.bbox?.size;
+  const parts = [];
+  if (Array.isArray(bbox)) parts.push(`bbox ${bbox.map(formatNumber).join(" x ")} mm`);
+  if (Number.isFinite(Number(shape.volume))) parts.push(`volume ${formatNumber(shape.volume)}`);
+  if (shape.valid !== undefined && shape.valid !== null) parts.push(`valid ${shape.valid ? "true" : "false"}`);
+  if (Number.isFinite(Number(shape.face_count)) || Number.isFinite(Number(shape.edge_count))) {
+    parts.push(`faces ${shape.face_count ?? 0} · edges ${shape.edge_count ?? 0}`);
+  }
+  return parts.join(" · ");
+}
+
+function freeCadSubelements(obj) {
+  const subelements = obj?.shape?.subelements || {};
+  const rows = [];
+  [
+    ["faces", "Face"],
+    ["edges", "Edge"],
+    ["vertices", "Vertex"],
+  ].forEach(([key, label]) => {
+    const items = Array.isArray(subelements[key]) ? subelements[key] : [];
+    items.slice(0, 18).forEach((item) => {
+      rows.push({ ...item, group: label, reference: item.reference || item.name });
+    });
+  });
+  return rows;
+}
+
+function selectedFreeCadSubelementRef() {
+  const selected = state.selectedFreeCadSubelement;
+  if (!selected || !state.selectedFreeCadObjectName) return null;
+  if (normalizeFreeCadToken(selected.objectName) !== normalizeFreeCadToken(state.selectedFreeCadObjectName)) return null;
+  return selected;
+}
+
+function freeCadSubelementSummaryText(item) {
+  const center = Array.isArray(item?.center) ? `center ${item.center.map(formatNumber).join(",")}` : "";
+  const bbox = Array.isArray(item?.bbox?.size) ? `bbox ${item.bbox.size.map(formatNumber).join(" x ")}` : "";
+  return center || bbox || item?.shape_type || "";
+}
+
+function freeCadSubelementByRef(obj, reference) {
+  const normalized = normalizeFreeCadToken(reference);
+  if (!obj || !normalized) return null;
+  return freeCadSubelements(obj).find((item) => normalizeFreeCadToken(item.reference || item.name) === normalized) || null;
+}
+
+function freeCadPropertyNames(obj) {
+  return (Array.isArray(obj?.properties) ? obj.properties : [])
+    .map((prop) => String(prop.name || ""))
+    .filter(Boolean);
+}
+
+function normalizeFreeCadToken(value) {
+  return String(value || "").toLowerCase().replace(/[\s_.:-]+/g, "");
+}
+
 function relatedGeneratedParameters(selected, params) {
   if (!selected) return params;
   const group = generatedParameterGroup(selected);
@@ -1458,7 +3359,11 @@ function exportStatusLabel(status = state.exportStatus) {
 }
 
 function hasStepStlArtifacts() {
-  return Boolean(state.artifacts.step && state.artifacts.stl);
+  return Boolean((state.artifacts.step || artifactRef("step")) && (state.artifacts.stl || artifactRef("stl")));
+}
+
+function hasInteractiveViewerArtifact() {
+  return Boolean(state.artifacts.viewer_scene || artifactRef("viewer_scene") || state.artifacts.stl || artifactRef("stl"));
 }
 
 function artifactExportStatusLabel() {
@@ -1497,6 +3402,8 @@ function renderStaticText() {
   $("propertiesTitle").textContent = t("properties");
   $("commandInput").placeholder = t("commandPlaceholder");
   $("applyButton").textContent = t("apply");
+  $("importButtonText").textContent = t("importModel");
+  $("importButton").title = t("importModelTitle");
   $("localeToggle").textContent = t("langToggle");
   $("toolbar").setAttribute("aria-label", t("toolbarLabel"));
   setStatus(state.statusKey || "loading", state.statusVars || {});
@@ -1520,9 +3427,17 @@ function renderToolbar() {
     ["right", "toolbar.right", "box"],
     ["iso", "toolbar.iso", "ruler"],
   ];
-  const modes = [
-    ["feature", "toolbar.feature", "pointer"],
-  ];
+  const freeCadMode = freeCadSelectionAvailable();
+  const modes = freeCadMode
+    ? [
+        ["object", "toolbar.object", "pointer"],
+        ["face", "toolbar.face", "box"],
+        ["edge", "toolbar.edge", "ruler"],
+        ["vertex", "toolbar.vertex", "pointer"],
+      ]
+    : [
+        ["feature", "toolbar.feature", "pointer"],
+      ];
   const measures = [
     ["distance", "toolbar.distance", "ruler"],
     ["diameter", "toolbar.diameter", "ruler"],
@@ -1536,7 +3451,7 @@ function renderToolbar() {
     toolButton(t("toolbar.dims"), "ruler", state.showDims, "toggleDims()"),
     toolButton(t("toolbar.explode"), "layers", state.exploded, "toggleExplode()"),
     "<span class='tool-separator'></span>",
-    ...modes.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, state.selectionMode === value, `setSelectionMode('${value}')`)),
+    ...modes.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, freeCadViewerSelectionMode() === value || state.selectionMode === value, `setSelectionMode('${value}')`)),
     "<span class='tool-separator'></span>",
     ...measures.map(([value, labelKey, iconName]) => toolButton(t(labelKey), iconName, state.measureMode === value, `setMeasureMode('${value}')`)),
   ].join("");
@@ -1551,14 +3466,22 @@ function renderTree() {
   if (!ds) return;
   if (state.previewMode === "generated") {
     const params = state.generatedParameters || [];
+    const docNodes = freeCadTreeDisplayNodes().slice(0, 24);
     const selectedParam = selectedGeneratedParameter();
+    const selectedObj = selectedFreeCadObject();
     $("featureTree").innerHTML = `
       <button class="tree-item" style="padding-left:8px" type="button" onclick="showGeneratedModel()">
         <span>⌄</span>${icon("code")}<span class="name">${escapeHtml(t("generatedDesign"))}</span>
       </button>
-      <button class="tree-item ${selectedParam ? "" : "active"}" style="padding-left:34px" type="button" onclick="showGeneratedModel()">
+      <button class="tree-item ${selectedParam || selectedObj ? "" : "active"}" style="padding-left:34px" type="button" onclick="showGeneratedModel()">
         <span style="width:12px"></span>${icon("box")}<span class="name">${escapeHtml(state.generatedPrompt || t("agentModel"))}</span>
       </button>
+      ${docNodes.map((node) => `
+        <button class="tree-item ${freeCadObjectKey(node.object) && normalizeFreeCadToken(freeCadObjectKey(node.object)) === normalizeFreeCadToken(state.selectedFreeCadObjectName) ? "active" : ""}" style="padding-left:${60 + node.depth * 16}px" type="button" onclick="selectFreeCadObject(${escapeHtml(jsString(freeCadObjectKey(node.object)))})" title="${escapeHtml(node.kind)}">
+          <span style="width:12px"></span>${icon(freeCadFeatureIcon(node.kind, node.object))}<span class="name">${escapeHtml(freeCadObjectDisplayName(node.object))}</span>
+          ${node.tip ? `<span>${escapeHtml(freeCadObjectDisplayName(node.tip))}</span>` : ""}
+        </button>
+      `).join("")}
       <button class="tree-item" style="padding-left:60px" type="button" onclick="showGeneratedParameters()">
         <span style="width:12px"></span>${icon("ruler")}<span class="name">${escapeHtml(t("scriptParameters"))}</span><span>${params.length}</span>
       </button>
@@ -1571,8 +3494,10 @@ function renderTree() {
         <span style="width:12px"></span>${icon("code")}<span class="name">${escapeHtml(scriptTitle())}</span>
       </button>
     `;
-    $("activeFeature").textContent = t("generatedModel");
-    $("latestPatch").textContent = params.length ? `script_parameters:${params.length}` : "agent_generation";
+    $("activeFeature").textContent = selectedObj ? freeCadObjectDisplayName(selectedObj) : t("generatedModel");
+    $("latestPatch").textContent = state.patch?.op === "patch_fcstd_document"
+      ? `fcstd_patch:${state.patch.patches?.length || 0}`
+      : params.length ? `script_parameters:${params.length}` : "agent_generation";
     return;
   }
   const enabled = enabledFeatureIds();
@@ -1618,25 +3543,67 @@ function renderViewport() {
   const feature = selectedFeature();
   const generated = state.previewMode === "generated";
   const generatedParam = generated ? selectedGeneratedParameter() : null;
+  const generatedObject = generated ? selectedFreeCadObject() : null;
+  const generatedSubelement = generated ? selectedFreeCadSubelementRef() : null;
+  const generatedSubelementItem = generatedObject && generatedSubelement
+    ? freeCadSubelementByRef(generatedObject, generatedSubelement.reference)
+    : null;
   $("subtitle").textContent = generated ? t("generatedPreviewSubtitle") : t("designStateVersion", { version: ds.version });
-  $("selectionBadge").textContent = generated ? generatedSelectionLabel(generatedParam) : t("featureBadge", { name: featureName(feature) });
+  $("selectionBadge").textContent = generated ? generatedViewportSelectionLabel(generatedObject, generatedParam, generatedSubelement) : t("featureBadge", { name: featureName(feature) });
   $("headBadge").textContent = generated ? t("agentPreview") : ds.rollback_feature_id ? t("rollbackPreview") : t("headPreview");
-  $("measureTitle").textContent = generated ? (generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
-  $("measureText").textContent = generated ? (generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromEngine", { engine: engineLabel() }) : t("waitingGeneratedPreview")) : measurementText();
+  $("measureTitle").textContent = generated ? (generatedSubelement ? t("selectedReference") : generatedObject ? t("selectedObject") : generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
+  $("measureText").textContent = generated
+    ? (generatedSubelement ? (freeCadSubelementSummaryText(generatedSubelementItem) || generatedSubelement.reference) : generatedObject ? (freeCadObjectGeometryText(generatedObject) || freeCadObjectDisplayName(generatedObject)) : generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromEngine", { engine: engineLabel() }) : t("waitingGeneratedPreview"))
+    : measurementText();
   const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
   $("axisReadout").textContent = generated ? t("stepStlStatus", { status: artifactExportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
   $("viewportContent").innerHTML = generated ? renderGeneratedPreview() : renderModelSvg();
   applyViewportTransform();
+  if (generated) {
+    void mountGeneratedCadViewer();
+  } else {
+    disposeGeneratedCadViewer();
+  }
 }
 
 function renderGeneratedPreview() {
   const selected = selectedGeneratedParameter();
+  const selectedObject = selectedFreeCadObject();
+  const selectedSubelement = selectedFreeCadSubelementRef();
+  const selectedSubelementItem = selectedObject && selectedSubelement
+    ? freeCadSubelementByRef(selectedObject, selectedSubelement.reference)
+    : null;
   const callout = selected ? `<div class="generated-selection-callout">
     <strong>${escapeHtml(generatedSelectionLabel(selected))}</strong>
     <span>${escapeHtml(generatedParameterValueText(selected))}</span>
+  </div>` : selectedObject && selectedSubelement ? `<div class="generated-selection-callout">
+    <strong>${escapeHtml(`${freeCadObjectDisplayName(selectedObject)}.${selectedSubelement.reference}`)}</strong>
+    <span>${escapeHtml([selectedSubelement.kind, freeCadSubelementSummaryText(selectedSubelementItem)].filter(Boolean).join(" · "))}</span>
+  </div>` : selectedObject ? `<div class="generated-selection-callout">
+    <strong>${escapeHtml(freeCadObjectDisplayName(selectedObject))}</strong>
+    <span>${escapeHtml(freeCadObjectGeometryText(selectedObject) || selectedObject.type_id || "")}</span>
   </div>` : "";
-  if (state.previewPng) {
-    return `<div class="generated-preview">${callout}<img src="${dataUrl("image/png", state.previewPng)}" alt="Generated CAD preview" /></div>`;
+  const previewSrc = state.previewPng
+    ? dataUrl("image/png", state.previewPng)
+    : artifactRef("preview")?.url;
+  const hasMesh = hasInteractiveViewerArtifact();
+  if (previewSrc || hasMesh) {
+    const classes = `generated-preview ${generatedViewClass()} ${state.exploded ? "generated-exploded" : ""}`;
+    const fallbackImage = previewSrc
+      ? `<img src="${escapeHtml(previewSrc)}" alt="Generated CAD preview" />`
+      : `<div class="generated-placeholder"><strong>${escapeHtml(t("generatedPreviewTitle"))}</strong></div>`;
+    return `<div class="${classes}">
+      ${callout}
+      <div class="generated-image-frame generated-scene-frame" data-view-mode="${escapeHtml(state.viewMode)}">
+        ${hasMesh ? `<div class="cad-viewer" id="generatedCadViewer" data-viewer-key="${escapeHtml(generatedCadViewerKey())}">
+          <div class="cad-viewer-status">${escapeHtml(t("interactiveMesh"))}</div>
+        </div>` : ""}
+        <div class="generated-png-fallback">
+          ${fallbackImage}
+        </div>
+        ${renderGeneratedPreviewOverlays(selected)}
+      </div>
+    </div>`;
   }
   return `<div class="generated-preview"><div class="generated-placeholder">
     <strong>${escapeHtml(t("generatedPreviewTitle"))}</strong>
@@ -1846,8 +3813,10 @@ function renderProperties() {
         <div class="rename-row">
           <input class="text-input" value="${escapeHtml(state.generatedPrompt || t("agentModel"))}" disabled />
           <button class="icon-button" type="button" title="${escapeHtml(t("backToDesignState"))}" onclick="showParametricDesign()">${icon("undo")}</button>
-        </div>
       </div>
+    </div>
+      ${renderFreeCadDocumentSummarySection()}
+      ${renderFreeCadObjectPropertySection()}
       ${renderGeneratedParameterSection()}
       <section class="section">
         <h3>${icon("code")} ${escapeHtml(t("generatedSource"))}</h3>
@@ -1861,9 +3830,9 @@ function renderProperties() {
       <section class="section">
         <h3>${icon("box")} ${escapeHtml(t("artifacts"))}</h3>
         <div class="kv-list">
-          <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${state.previewPng ? escapeHtml(t("meshRender")) : escapeHtml(t("waiting"))}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("viewport"))}</span><strong>${hasInteractiveViewerArtifact() ? escapeHtml(t("interactiveMesh")) : state.previewPng ? escapeHtml(t("pngFallback")) : escapeHtml(t("waiting"))}</strong></div>
           <div class="kv"><span>STEP / STL</span><strong>${escapeHtml(artifactExportStatusLabel())}</strong></div>
-          <div class="kv"><span>${escapeHtml(t("featureTree"))}</span><strong>${escapeHtml(t("notAvailable"))}</strong></div>
+          <div class="kv"><span>${escapeHtml(t("featureTree"))}</span><strong>${freeCadTreeDisplayNodes().length ? escapeHtml(t("readyValue")) : escapeHtml(t("notAvailable"))}</strong></div>
         </div>
       </section>
     `;
@@ -1902,6 +3871,383 @@ function renderProperties() {
   $("renameInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") renameFeature();
   });
+}
+
+function renderFreeCadDocumentSummarySection() {
+  if (state.engine !== "freecad" || !state.documentSummary) return "";
+  const objects = freeCadDocumentObjects();
+  const geometry = state.documentSummary.geometry || {};
+  const featureNodes = freeCadFeatureTreeNodes();
+  const kindText = freeCadFeatureKindText();
+  const tipText = freeCadBodyTipText();
+  const assemblyText = freeCadAssemblyText();
+  const techDrawText = freeCadTechDrawText();
+  return `<section class="section">
+    <h3>${icon("layers")} ${escapeHtml(t("featureTree"))}</h3>
+    <div class="kv-list">
+      <div class="kv"><span>Objects</span><strong>${objects.length}</strong></div>
+      <div class="kv"><span>Feature nodes</span><strong>${featureNodes.length || objects.length}</strong></div>
+      <div class="kv"><span>Shape objects</span><strong>${geometry.shape_object_count ?? 0}</strong></div>
+      <div class="kv"><span>Geometry</span><strong>${escapeHtml(freeCadDocumentGeometryText() || t("notAvailable"))}</strong></div>
+      ${kindText ? `<div class="kv"><span>Kinds</span><strong>${escapeHtml(kindText)}</strong></div>` : ""}
+      ${tipText ? `<div class="kv"><span>Body tips</span><strong>${escapeHtml(tipText)}</strong></div>` : ""}
+      ${assemblyText ? `<div class="kv"><span>Assemblies</span><strong>${escapeHtml(assemblyText)}</strong></div>` : ""}
+      ${techDrawText ? `<div class="kv"><span>TechDraw</span><strong>${escapeHtml(techDrawText)}</strong></div>` : ""}
+    </div>
+  </section>`;
+}
+
+function renderFreeCadObjectPropertySection() {
+  const obj = selectedFreeCadObject();
+  if (state.engine !== "freecad" || !obj) return "";
+  const shape = obj.shape || {};
+  const placement = obj.placement || {};
+  const editable = freeCadEditableProperties(obj).slice(0, 18);
+  const readonly = freeCadReadonlyProperties(obj).slice(0, 10);
+  const topology = [
+    ["Solids", shape.solid_count],
+    ["Shells", shape.shell_count],
+    ["Faces", shape.face_count],
+    ["Edges", shape.edge_count],
+    ["Vertices", shape.vertex_count],
+  ].filter(([, value]) => value !== undefined && value !== null);
+  return `
+    <section class="section">
+      <h3>${icon("box")} ${escapeHtml(t("objectProperties"))}</h3>
+      <div class="selected-object-summary">
+        <strong>${escapeHtml(freeCadObjectDisplayName(obj))}</strong>
+        <span>${escapeHtml(obj.type_id || obj.name || "")}</span>
+      </div>
+      <div class="kv-list">
+        <div class="kv"><span>Name</span><strong>${escapeHtml(obj.name || "")}</strong></div>
+        ${obj.label && obj.label !== obj.name ? `<div class="kv"><span>Label</span><strong>${escapeHtml(obj.label)}</strong></div>` : ""}
+        ${freeCadObjectGeometryText(obj) ? `<div class="kv"><span>${escapeHtml(t("shapeSummary"))}</span><strong>${escapeHtml(freeCadObjectGeometryText(obj))}</strong></div>` : ""}
+        ${shape.failure_class ? `<div class="kv"><span>${escapeHtml(t("geometryChecks"))}</span><strong>${escapeHtml(shape.failure_class)}</strong></div>` : ""}
+      </div>
+    </section>
+    ${Array.isArray(placement.base) ? `<section class="section">
+      <h3>${icon("ruler")} ${escapeHtml(t("placement"))}</h3>
+      ${["X", "Y", "Z"].map((axis, index) => freeCadPlacementRow(obj, axis, index)).join("")}
+    </section>` : ""}
+    <section class="section">
+      <h3>${icon("sliders")} ${escapeHtml(t("editableProperties"))}</h3>
+      ${editable.length ? editable.map((prop) => freeCadPropertyRow(obj, prop)).join("") : `<p class="section-note">${escapeHtml(t("noEditableProperties"))}</p>`}
+    </section>
+    ${renderFreeCadSketchPropertySection(obj)}
+    ${renderFreeCadSubelementSection(obj)}
+    ${topology.length ? `<section class="section">
+      <h3>${icon("layers")} ${escapeHtml(t("topologySummary"))}</h3>
+      <div class="kv-list">${topology.map(([label, value]) => `<div class="kv"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>
+    </section>` : ""}
+    ${readonly.length ? `<section class="section">
+      <h3>${icon("code")} ${escapeHtml(t("readonlyProperties"))}</h3>
+      ${readonly.map((prop) => `<div class="readonly-property"><span title="${escapeHtml(prop.name)}">${escapeHtml(prop.name)}</span><strong title="${escapeHtml(freeCadPropertyValueText(prop.value))}">${escapeHtml(freeCadPropertyValueText(prop.value))}</strong></div>`).join("")}
+    </section>` : ""}
+  `;
+}
+
+function renderFreeCadSubelementSection(obj) {
+  const refs = freeCadSubelements(obj);
+  if (!refs.length) return "";
+  const objectName = freeCadObjectKey(obj);
+  const selected = selectedFreeCadSubelementRef();
+  const selectedItem = selected ? freeCadSubelementByRef(obj, selected.reference) : null;
+  const actions = selected ? renderFreeCadSubelementActions(obj, selected, selectedItem) : "";
+  const selectedSummary = selected ? `<div class="selected-object-summary">
+    <strong>${escapeHtml(t("selectedReference"))}: ${escapeHtml(selected.reference)}</strong>
+    <span>${escapeHtml([selected.kind, freeCadSubelementSummaryText(selectedItem)].filter(Boolean).join(" · "))}</span>
+  </div>` : "";
+  return `<section class="section">
+    <h3>${icon("pointer")} Subelements</h3>
+    ${selectedSummary}
+    ${actions}
+    <div class="subelement-grid">
+      ${refs.map((item) => {
+        const reference = item.reference || item.name || "";
+        const active = selected
+          && normalizeFreeCadToken(selected.objectName) === normalizeFreeCadToken(objectName)
+          && normalizeFreeCadToken(selected.reference) === normalizeFreeCadToken(reference);
+        return `<button class="subelement-row ${active ? "active" : ""}" type="button" onclick="selectFreeCadSubelement(${escapeHtml(jsString(objectName))}, ${escapeHtml(jsString(reference))}, ${escapeHtml(jsString(item.group || item.kind || ""))})" title="${escapeHtml(freeCadSubelementSummaryText(item))}">
+          <strong>${escapeHtml(reference)}</strong>
+          <span>${escapeHtml(freeCadSubelementSummaryText(item) || item.shape_type || "")}</span>
+        </button>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+function freeCadSubelementActionButton(labelKey, iconName, onclick, disabled = false, disabledTitleKey = "") {
+  const title = disabled && disabledTitleKey ? t(disabledTitleKey) : t(labelKey);
+  return `<button class="typed-action-button" type="button" title="${escapeHtml(title)}" ${disabled ? "disabled" : `onclick="${escapeHtml(onclick)}"`}>
+    ${icon(iconName)} ${escapeHtml(t(labelKey))}
+  </button>`;
+}
+
+function freeCadSubelementKind(selected, selectedItem) {
+  return selected?.kind || selectedItem?.group || selectedItem?.kind || "";
+}
+
+function freeCadPairedEdgeReference(obj, reference) {
+  return freeCadSubelements(obj).find((item) => {
+    return (item.group || item.kind) === "Edge"
+      && normalizeFreeCadToken(item.reference || item.name) !== normalizeFreeCadToken(reference);
+  })?.reference || "";
+}
+
+function freeCadSubelementPoint(item) {
+  return freeCadTriplet(item?.point) || freeCadTriplet(item?.center);
+}
+
+function firstFreeCadAssembly() {
+  const assemblies = Array.isArray(state.documentSummary?.assemblies) ? state.documentSummary.assemblies : [];
+  return assemblies[0] || null;
+}
+
+function freeCadConnectorKind(kind, reference) {
+  const normalized = normalizeFreeCadToken(kind || reference);
+  if (normalized === "edge" || /^edge/i.test(reference || "")) return "Edge";
+  if (normalized === "vertex" || /^vertex/i.test(reference || "")) return "Vertex";
+  return "";
+}
+
+function freeCadConnectorFromSelection(obj, reference, kind, item = null) {
+  const connectorKind = freeCadConnectorKind(kind, reference);
+  if (!obj || !reference || !connectorKind) return null;
+  const point = freeCadSubelementPoint(item);
+  return {
+    objectName: freeCadObjectKey(obj),
+    objectLabel: freeCadObjectDisplayName(obj),
+    selector: freeCadObjectSelector(obj),
+    reference,
+    kind: connectorKind,
+    point,
+  };
+}
+
+function freeCadConnectorDisplayName(connector) {
+  if (!connector) return "";
+  return `${connector.objectLabel || connector.objectName || ""}.${connector.reference || ""}`;
+}
+
+function freeCadConnectorSame(left, right) {
+  return Boolean(left && right)
+    && normalizeFreeCadToken(left.objectName) === normalizeFreeCadToken(right.objectName)
+    && normalizeFreeCadToken(left.reference) === normalizeFreeCadToken(right.reference);
+}
+
+function freeCadConnectorObjectSame(left, right) {
+  return Boolean(left && right)
+    && normalizeFreeCadToken(left.objectName) === normalizeFreeCadToken(right.objectName);
+}
+
+function assemblyConnectorPayload(connector) {
+  const payload = { selector: connector.selector || { name: connector.objectName } };
+  if (connector.kind === "Vertex") payload.vertex = connector.reference;
+  else payload.element = connector.reference;
+  return payload;
+}
+
+function assemblyConnectorDistance(left, right) {
+  const a = freeCadTriplet(left?.point);
+  const b = freeCadTriplet(right?.point);
+  if (!a || !b) return null;
+  const distance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  return Number.isFinite(distance) ? distance : null;
+}
+
+function renderFreeCadSubelementActions(obj, selected, selectedItem) {
+  const kind = freeCadSubelementKind(selected, selectedItem);
+  const reference = selected.reference || selectedItem?.reference || "";
+  const objectName = freeCadObjectKey(obj);
+  if (!reference || !objectName) return "";
+  const normalizedKind = normalizeFreeCadToken(kind || reference);
+  const connector = freeCadConnectorFromSelection(obj, reference, kind, selectedItem);
+  const anchor = state.assemblyConnectorAnchor;
+  const canCreateJoint = Boolean(connector && anchor && !freeCadConnectorSame(anchor, connector) && !freeCadConnectorObjectSame(anchor, connector));
+  const hasSketch = Boolean(firstFreeCadSketchObject());
+  const hasTechDrawView = Boolean(firstFreeCadTechDrawPage() && firstFreeCadTechDrawView());
+  const buttons = [];
+  const objectArg = jsString(objectName);
+  const refArg = jsString(reference);
+  if (connector) {
+    const connectorSummary = anchor ? `<div class="selected-object-summary">
+      <strong>${escapeHtml(t("assemblyConnectorA"))}: ${escapeHtml(freeCadConnectorDisplayName(anchor))}</strong>
+      <span>${escapeHtml(anchor.kind || "")}</span>
+    </div>` : "";
+    buttons.push(freeCadSubelementActionButton(
+      "setAssemblyConnectorA",
+      "pointer",
+      `setAssemblyConnectorAnchor(${objectArg}, ${refArg})`
+    ));
+    if (anchor) {
+      buttons.push(freeCadSubelementActionButton(
+        "clearAssemblyConnectorA",
+        "undo",
+        "clearAssemblyConnectorAnchor()"
+      ));
+      [
+        ["fixed", "createFixedJoint"],
+        ["revolute", "createRevoluteJoint"],
+        ["slider", "createSliderJoint"],
+        ["cylindrical", "createCylindricalJoint"],
+        ["distance", "createDistanceJoint"],
+        ["angle", "createAngleJoint"],
+      ].forEach(([jointType, labelKey]) => {
+        buttons.push(freeCadSubelementActionButton(
+          labelKey,
+          "layers",
+          `createAssemblyJointFromSelectedConnectors(${jsString(jointType)}, ${objectArg}, ${refArg})`,
+          !canCreateJoint,
+          !anchor ? "needsConnectorA" : "needsDifferentObject"
+        ));
+      });
+    }
+    if (connectorSummary) {
+      buttons.unshift(connectorSummary);
+    }
+  }
+  if (normalizedKind === "face" || /^face/i.test(reference)) {
+    buttons.push(freeCadSubelementActionButton(
+      "createSketchOnFace",
+      "ruler",
+      `createSketchOnSelectedFace(${objectArg}, ${refArg})`
+    ));
+    buttons.push(freeCadSubelementActionButton(
+      "attachSketchToFace",
+      "pointer",
+      `attachSketchToSelectedFace(${objectArg}, ${refArg})`,
+      !hasSketch,
+      "needsSketch"
+    ));
+  }
+  if (normalizedKind === "edge" || /^edge/i.test(reference)) {
+    const paired = freeCadPairedEdgeReference(obj, reference);
+    buttons.push(freeCadSubelementActionButton(
+      "addExternalGeometry",
+      "ruler",
+      `addSelectedExternalGeometry(${objectArg}, ${refArg})`,
+      !hasSketch,
+      "needsSketch"
+    ));
+    buttons.push(freeCadSubelementActionButton(
+      "addTechDrawDimension",
+      "edit",
+      `addSelectedTechDrawDimension(${objectArg}, ${refArg})`,
+      !hasTechDrawView,
+      "needsTechDrawView"
+    ));
+    buttons.push(freeCadSubelementActionButton(
+      "addTechDrawCenterline",
+      "layers",
+      `addSelectedTechDrawCenterline(${objectArg}, ${refArg}, ${jsString(paired)})`,
+      !hasTechDrawView || !paired,
+      !hasTechDrawView ? "needsTechDrawView" : "notAvailable"
+    ));
+  }
+  if (normalizedKind === "vertex" || /^vertex/i.test(reference)) {
+    buttons.push(freeCadSubelementActionButton(
+      "addTechDrawCosmeticVertex",
+      "pointer",
+      `addSelectedTechDrawCosmeticVertex(${objectArg}, ${refArg})`,
+      !hasTechDrawView || !freeCadSubelementPoint(selectedItem),
+      !hasTechDrawView ? "needsTechDrawView" : "notAvailable"
+    ));
+  }
+  if (!buttons.length) return "";
+  return `<div class="feature-actions" aria-label="${escapeHtml(t("typedActions"))}">${buttons.join("")}</div>`;
+}
+
+function renderFreeCadSketchPropertySection(obj) {
+  const sketch = obj?.sketch;
+  if (!sketch) return "";
+  const constraints = Array.isArray(sketch.constraints) ? sketch.constraints : [];
+  const editableConstraints = constraints
+    .filter((constraint) => Number.isFinite(Number(constraint.value)))
+    .slice(0, 16);
+  return `<section class="section">
+    <h3>${icon("ruler")} Sketcher</h3>
+    <div class="kv-list">
+      <div class="kv"><span>Geometry</span><strong>${escapeHtml(sketch.geometry_count ?? 0)}</strong></div>
+      <div class="kv"><span>External geometry</span><strong>${escapeHtml(sketch.external_geometry_count ?? 0)}</strong></div>
+      <div class="kv"><span>Constraints</span><strong>${escapeHtml(sketch.constraint_count ?? constraints.length)}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("solverStatus"))}</span><strong>${escapeHtml(freeCadSketchSolverText(sketch))}</strong></div>
+    </div>
+    <div class="feature-actions">
+      <button class="icon-button" type="button" title="Validate sketch" onclick="validateFreeCadSketch(${escapeHtml(jsString(freeCadObjectKey(obj)))})">${icon("eye")}</button>
+    </div>
+    ${editableConstraints.length ? editableConstraints.map((constraint) => freeCadConstraintRow(obj, constraint)).join("") : ""}
+  </section>`;
+}
+
+function freeCadSketchSolverText(sketch) {
+  const solver = sketch?.solver || {};
+  if (solver.solver_status !== undefined && solver.solver_status !== null) return String(solver.solver_status);
+  if (sketch.fully_constrained !== undefined && sketch.fully_constrained !== null) return sketch.fully_constrained ? "fully constrained" : "under constrained";
+  if (sketch.degrees_of_freedom !== undefined && sketch.degrees_of_freedom !== null) return `${sketch.degrees_of_freedom} DOF`;
+  return t("notAvailable");
+}
+
+function freeCadEditableProperties(obj) {
+  return (Array.isArray(obj?.properties) ? obj.properties : []).filter((prop) => {
+    if (!prop?.name || !Number.isFinite(Number(prop.value))) return false;
+    if (["Visibility"].includes(prop.name)) return false;
+    const type = String(prop.type || "");
+    if (/Bool|Enumeration|String|Link|PythonObject|File|Color|Material/i.test(type)) return false;
+    return true;
+  });
+}
+
+function freeCadReadonlyProperties(obj) {
+  const editableNames = new Set(freeCadEditableProperties(obj).map((prop) => prop.name));
+  return (Array.isArray(obj?.properties) ? obj.properties : []).filter((prop) => {
+    return prop?.name && !editableNames.has(prop.name) && prop.value !== "<omitted>" && prop.value !== "<unreadable>";
+  });
+}
+
+function freeCadPropertyUnit(prop) {
+  const token = `${prop?.name || ""} ${prop?.type || ""}`.toLowerCase();
+  if (/angle|degree/.test(token)) return "deg";
+  if (/length|width|height|radius|diameter|distance|offset|position|placement/.test(token)) return t("unitMm");
+  return "";
+}
+
+function freeCadPropertyValueText(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => Number.isFinite(Number(item)) ? formatNumber(item) : String(item)).join(", ")}]`;
+  if (value && typeof value === "object") return JSON.stringify(value);
+  if (Number.isFinite(Number(value))) return formatNumber(value);
+  return String(value ?? "");
+}
+
+function freeCadPropertyRow(obj, prop) {
+  const objectName = freeCadObjectKey(obj);
+  const id = `freecad-prop-${safeDomId(objectName)}-${safeDomId(prop.name)}`;
+  return `<div class="param-row">
+    <label for="${escapeHtml(id)}" title="${escapeHtml(prop.name)}">${escapeHtml(prop.name)} <span>${escapeHtml(prop.group || "")}</span></label>
+    <input class="param-input" id="${escapeHtml(id)}" type="number" step="0.5" value="${escapeHtml(formatNumber(prop.value))}" onchange="commitFreeCadObjectProperty(${escapeHtml(jsString(objectName))}, ${escapeHtml(jsString(prop.name))}, this.value)" />
+    <span class="unit">${escapeHtml(freeCadPropertyUnit(prop))}</span>
+  </div>`;
+}
+
+function freeCadPlacementRow(obj, axis, index) {
+  const objectName = freeCadObjectKey(obj);
+  const value = Number(obj?.placement?.base?.[index] || 0);
+  const id = `freecad-placement-${safeDomId(objectName)}-${axis}`;
+  return `<div class="param-row">
+    <label for="${escapeHtml(id)}">${escapeHtml(axis)}</label>
+    <input class="param-input" id="${escapeHtml(id)}" type="number" step="0.5" value="${escapeHtml(formatNumber(value))}" onchange="commitFreeCadPlacementComponent(${escapeHtml(jsString(objectName))}, ${index}, this.value)" />
+    <span class="unit">${escapeHtml(t("unitMm"))}</span>
+  </div>`;
+}
+
+function freeCadConstraintRow(obj, constraint) {
+  const objectName = freeCadObjectKey(obj);
+  const label = constraint.name || `${constraint.type || "Constraint"} #${constraint.index}`;
+  const id = `freecad-constraint-${safeDomId(objectName)}-${safeDomId(constraint.index)}`;
+  return `<div class="param-row">
+    <label for="${escapeHtml(id)}" title="${escapeHtml(label)}">${escapeHtml(label)} <span>#${escapeHtml(constraint.index)}</span></label>
+    <input class="param-input" id="${escapeHtml(id)}" type="number" step="0.5" value="${escapeHtml(formatNumber(constraint.value))}" onchange="commitFreeCadConstraintValue(${escapeHtml(jsString(objectName))}, ${Number(constraint.index)}, this.value)" />
+    <span class="unit">${escapeHtml(t("unitMm"))}</span>
+  </div>`;
 }
 
 function renderGeneratedParameterSection() {
@@ -1988,7 +4334,13 @@ function renderBottom() {
   }
   if (state.bottomTab === "history") {
     $("bottomContent").innerHTML = `<div class="history-list">${state.history.map((item) => `
-      <article class="history-item"><header><span>${escapeHtml(item.label)}</span><span>v${item.version}</span></header><p>${escapeHtml(item.detail)}</p></article>
+      <article class="history-item">
+        <div>
+          <header><span>${escapeHtml(item.label)}</span><span>v${item.version}</span></header>
+          <p>${escapeHtml(item.detail)}</p>
+        </div>
+        ${item.serverVersionId ? `<button class="history-action" type="button" onclick="rollbackToServerVersion(${escapeHtml(jsString(item.serverVersionId))})" ${item.serverVersionId === state.activeServerVersionId ? "disabled" : ""}>${escapeHtml(t("restore"))}</button>` : ""}
+      </article>
     `).join("")}</div>`;
     return;
   }
@@ -1997,6 +4349,7 @@ function renderBottom() {
       engine: state.engine,
       freecad_version: state.freecadVersion || null,
       patch: state.patch || { op: "noop" },
+      document_geometry: state.documentSummary?.geometry || null,
     };
     $("bottomContent").innerHTML = `<div class="script-grid">
       <pre>${escapeHtml(JSON.stringify(scriptMeta, null, 2))}</pre>
@@ -2013,18 +4366,21 @@ function renderBottom() {
 
 function artifactCards() {
   const artifacts = [
-    ["step", "artifact.stepTitle", ".step", "artifact.sandboxExport", "ready", true],
-    ["stl", "artifact.stlTitle", ".stl", "artifact.sandboxExport", "ready", true],
-    ["feature_tree", "artifact.featureTreeTitle", ".json", "artifact.liveJson", "ready", true],
-    ["fcstd", "artifact.fcstdTitle", ".FCStd", "artifact.plannedFreecad", "planned", false],
-    ["pdf", "artifact.pdfTitle", ".pdf", "artifact.plannedTechdraw", "planned", false],
-    ["svg", "artifact.svgTitle", ".svg", "artifact.plannedProjection", "planned", false],
+	    ["step", "artifact.stepTitle", ".step", "artifact.sandboxExport", "ready", true],
+	    ["stl", "artifact.stlTitle", ".stl", "artifact.sandboxExport", "ready", true],
+	    ["viewer_scene", "artifact.viewerSceneTitle", ".json", "artifact.viewerSceneJson", "ready", true, "viewer-scene.json"],
+	    ["feature_tree", "artifact.featureTreeTitle", ".json", "artifact.liveJson", "ready", true],
+    ["fcstd", "artifact.fcstdTitle", ".FCStd", "artifact.plannedFreecad", "ready", true],
+    ["techdraw_pdf", "artifact.pdfTitle", ".pdf", "artifact.techdrawFallback", "ready", true, "drawing.pdf"],
+    ["techdraw_svg", "artifact.svgTitle", ".svg", "artifact.techdrawFallback", "ready", true, "drawing.svg"],
+    ["techdraw_dxf", "artifact.dxfTitle", ".dxf", "artifact.techdrawFallback", "ready", true, "drawing.dxf"],
   ];
-  return artifacts.map(([key, titleKey, ext, detailKey, readyStatus, implemented]) => {
+  return artifacts.map(([key, titleKey, ext, detailKey, readyStatus, implemented, filename]) => {
     const value = key === "feature_tree" ? btoa(unescape(encodeURIComponent(JSON.stringify(exportStateSnapshot(), null, 2)))) : state.artifacts[key];
-    const status = value ? readyStatus : (implemented ? "notReady" : "planned");
-    const href = value ? dataUrl(key === "stl" ? "model/stl" : key === "feature_tree" ? "application/json" : "application/step", value) : "";
-    const download = key === "feature_tree" ? "feature-tree.json" : `model.${key}`;
+    const ref = key === "feature_tree" ? null : artifactRef(key);
+    const status = value || ref ? readyStatus : (implemented ? "notReady" : "planned");
+    const href = value ? dataUrl(artifactMime(key), value) : (ref?.url || "");
+    const download = filename || (key === "feature_tree" ? "feature-tree.json" : key === "fcstd" ? "model.FCStd" : `model.${key}`);
     return `<article class="artifact-card">
       <div>
         <div class="artifact-title"><span>${escapeHtml(t(titleKey))}</span><span class="artifact-ext">${escapeHtml(ext)}</span></div>
@@ -2043,7 +4399,8 @@ function exportStateSnapshot() {
     design_state: state.previewMode === "design_state" ? state.designState : null,
     generated_prompt: state.previewMode === "generated" ? state.generatedPrompt : null,
     script: state.script,
-    artifacts: Object.keys(state.artifacts),
+    document_summary: state.documentSummary || null,
+    artifacts: Array.from(new Set([...Object.keys(state.artifacts), ...Object.keys(state.artifactRefs || {})])),
   };
 }
 
@@ -2087,8 +4444,18 @@ function toggleBBox() { state.showBBox = !state.showBBox; renderAll(); }
 function toggleDims() { state.showDims = !state.showDims; renderAll(); }
 function toggleExplode() { state.exploded = !state.exploded; renderAll(); }
 function setSelectionMode(value) {
-  if (value !== "feature") return;
+  const validModes = ["feature", "object", "face", "edge", "vertex"];
+  if (!validModes.includes(value)) return;
+  if (!freeCadSelectionAvailable() && value !== "feature") return;
   state.selectionMode = value;
+  if (value === "object" || value === "feature") {
+    state.selectedFreeCadSubelement = null;
+  } else {
+    const selectedKind = freeCadSubelementKindForSelectionMode(value);
+    if (state.selectedFreeCadSubelement?.kind && state.selectedFreeCadSubelement.kind !== selectedKind) {
+      state.selectedFreeCadSubelement = null;
+    }
+  }
   renderAll();
 }
 function setMeasureMode(value) { state.measureMode = value; renderAll(); }
@@ -2142,9 +4509,13 @@ async function commitGeneratedParameter(name, rawValue) {
     state.engine = normalizeEngine(rendered.engine);
     state.freecadVersion = rendered.freecad_version || "";
     state.generatedParameters = rendered.parameters || [];
+    state.documentSummary = rendered.document_summary || null;
     state.selectedGeneratedParameterName = name;
+    state.selectedFreeCadObjectName = "";
+    state.selectedFreeCadSubelement = null;
     state.previewPng = rendered.preview_png_b64 || null;
     state.artifacts = rendered.exports || {};
+    state.artifactRefs = {};
     state.exportStatus = "ready";
     addHistory(
       t("history.scriptParameter", { name }),
@@ -2172,12 +4543,114 @@ async function commitGeneratedParameter(name, rawValue) {
   }
 }
 
+async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
+  if (!parsedPatch?.patches?.length || !state.serverSessionId || !state.activeServerVersionId) return false;
+  const previous = {
+    script: state.script,
+    previewPng: state.previewPng,
+    artifacts: { ...state.artifacts },
+    artifactRefs: { ...state.artifactRefs },
+    engine: state.engine,
+    freecadVersion: state.freecadVersion,
+    generatedParameters: [...(state.generatedParameters || [])],
+    documentSummary: state.documentSummary,
+    exportStatus: state.exportStatus,
+    patch: state.patch,
+    activeServerVersionId: state.activeServerVersionId,
+    selectedFreeCadSubelement: state.selectedFreeCadSubelement,
+    assemblyConnectorAnchor: state.assemblyConnectorAnchor,
+  };
+
+  $("applyButton").disabled = true;
+  state.patch = { op: "patch_fcstd_document", patches: parsedPatch.patches };
+  state.exportStatus = "rendering";
+  state.previewPng = null;
+  setStatus("updatingPreview");
+  renderAll();
+
+  try {
+    const patched = await fetchJson("/api/freecad/document/patch", {
+      session_id: state.serverSessionId,
+      version_id: previous.activeServerVersionId,
+      patches: parsedPatch.patches,
+      user_instruction: userInstruction,
+    });
+    if (!patched.ok) throw new Error(patched.error || t("log.unknownError"));
+    const version = patched.version || null;
+    state.previewMode = "generated";
+    state.engine = "freecad";
+    state.freecadVersion = patched.freecad_version || "";
+    state.script = version?.script || state.script;
+    state.patch = version?.patch || {
+      op: "patch_fcstd_document",
+      patches: parsedPatch.patches,
+      results: patched.patch_results || [],
+    };
+    state.generatedParameters = Array.isArray(patched.parameters) ? patched.parameters : [];
+    state.selectedGeneratedParameterName = "";
+    state.documentSummary = patched.document_summary || null;
+    if (state.selectedFreeCadObjectName && !freeCadObjectByName(state.selectedFreeCadObjectName)) {
+      state.selectedFreeCadObjectName = "";
+      state.selectedFreeCadSubelement = null;
+    }
+    if (state.assemblyConnectorAnchor && !freeCadConnectorStillExists(state.assemblyConnectorAnchor)) {
+      state.assemblyConnectorAnchor = null;
+    }
+    state.previewPng = patched.preview_png_b64 || null;
+    state.artifacts = patched.exports || {};
+    state.artifactRefs = patched.artifact_refs || {};
+    state.exportStatus = hasStepStlArtifacts() ? "ready" : "notReady";
+    addHistory(
+      t("history.freecadDocumentPatch", { name: parsedPatch.name }),
+      userInstruction
+    );
+    if (version?.id) {
+      state.activeServerVersionId = version.id;
+      syncSavedServerVersion(version, t("history.freecadDocumentPatch", { name: parsedPatch.name }), userInstruction);
+    }
+    log(freeCadPatchHasValue(parsedPatch)
+      ? t("log.freecadDocumentPatchUpdated", {
+          name: parsedPatch.name,
+          value: formatNumber(parsedPatch.value),
+          unit: parsedPatch.unit || "",
+        })
+      : t("log.freecadTypedPatchUpdated", { name: parsedPatch.name || parsedPatch.intent || t("freecadScript") })
+    );
+    setStatus("previewExportReady");
+    return true;
+  } catch (error) {
+    state.script = previous.script;
+    state.previewPng = previous.previewPng;
+    state.artifacts = previous.artifacts;
+    state.artifactRefs = previous.artifactRefs;
+    state.engine = previous.engine;
+    state.freecadVersion = previous.freecadVersion;
+    state.generatedParameters = previous.generatedParameters;
+    state.documentSummary = previous.documentSummary;
+    state.selectedFreeCadSubelement = previous.selectedFreeCadSubelement;
+    state.assemblyConnectorAnchor = previous.assemblyConnectorAnchor;
+    state.exportStatus = previous.exportStatus;
+    state.patch = previous.patch;
+    state.activeServerVersionId = previous.activeServerVersionId;
+    setStatus("patchFailed");
+    log(t("log.freecadDocumentPatchFailed", { message: error.message }));
+    return false;
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
+}
+
 async function applyPatches(patches, label, detail) {
   state.previewMode = "design_state";
   state.engine = "cadquery";
   state.freecadVersion = "";
   state.generatedPrompt = "";
+  state.documentSummary = null;
   state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
   setStatus("applyingPatch");
   try {
     const patched = await fetchJson("/api/design/patch", {
@@ -2209,7 +4682,11 @@ async function renderDesign() {
     state.engine = normalizeEngine(rendered.engine);
     state.freecadVersion = rendered.freecad_version || "";
     if (rendered.preview_png_b64) state.previewPng = rendered.preview_png_b64;
-    if (rendered.exports) state.artifacts = { ...state.artifacts, ...rendered.exports };
+    if (rendered.exports) {
+      state.artifacts = { ...state.artifacts, ...rendered.exports };
+      for (const key of Object.keys(rendered.exports)) delete state.artifactRefs[key];
+    }
+    if (rendered.preview_png_b64) delete state.artifactRefs.preview;
     state.exportStatus = rendered.ok ? "ready" : "unavailable";
     if (!rendered.ok) log(t("log.exportUnavailable", { message: rendered.error || t("log.unknownError") }));
     setStatus(rendered.ok ? "previewExportReady" : "previewUpdated");
@@ -2236,6 +4713,10 @@ function showParametricDesign() {
   state.engine = "cadquery";
   state.freecadVersion = "";
   state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
+  state.selectionMode = "feature";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   renderAll();
 }
@@ -2243,6 +4724,10 @@ function showParametricDesign() {
 function showGeneratedModel() {
   state.previewMode = "generated";
   state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
+  if (freeCadSelectionAvailable()) state.selectionMode = "object";
   renderAll();
 }
 
@@ -2256,11 +4741,374 @@ function showGeneratedParameters() {
 function focusGeneratedParameter(name) {
   state.previewMode = "generated";
   state.selectedGeneratedParameterName = name;
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
   renderAll();
   const input = $(`generated-param-${safeDomId(name)}`);
   if (input) {
     input.focus();
     input.select();
+  }
+}
+
+function selectFreeCadObject(name) {
+  const obj = freeCadObjectByName(name);
+  if (!obj) return;
+  state.previewMode = "generated";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = null;
+  if (freeCadSelectionAvailable()) state.selectionMode = "object";
+  log(t("log.selectedFreeCadObject", { name: freeCadObjectDisplayName(obj) }));
+  renderAll();
+}
+
+function selectFreeCadSubelement(objectName, reference, kind) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !reference) return;
+  state.previewMode = "generated";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectionMode = selectionModeForFreeCadSubelementKind(kind);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: kind || "",
+    selector: freeCadObjectSelector(obj),
+  };
+  log(t("log.selectedFreeCadSubelement", {
+    kind: kind || "subelement",
+    name: freeCadObjectDisplayName(obj),
+    reference,
+  }));
+  renderAll();
+}
+
+async function validateFreeCadSketch(objectName) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj)) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  const patch = {
+    patches: [{
+      op: "validate_sketch",
+      selector: freeCadObjectSelector(obj),
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.validateSketch`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function freeCadGeneratedName(parts, fallback) {
+  const text = parts.filter(Boolean).join("_").replace(/[^\w]/g, "_").replace(/^(\d)/, "_$1").slice(0, 72);
+  return text || fallback;
+}
+
+async function createSketchOnSelectedFace(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !/^face/i.test(reference || "")) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: "Face",
+    selector: freeCadObjectSelector(obj),
+  };
+  const sketchName = freeCadGeneratedName([freeCadObjectKey(obj), reference, "Sketch"], "Sketch");
+  const patch = {
+    patches: [{
+      op: "create_sketch",
+      name: sketchName,
+      support_selector: freeCadObjectSelector(obj),
+      reference,
+      map_mode: "FlatFace",
+    }],
+    name: `createSketch:${freeCadObjectDisplayName(obj)}.${reference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function attachSketchToSelectedFace(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const sketchObj = firstFreeCadSketchObject();
+  if (!obj || !sketchObj || !/^face/i.test(reference || "")) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: "Face",
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches: [{
+      op: "attach_sketch",
+      selector: freeCadObjectSelector(sketchObj),
+      support_selector: freeCadObjectSelector(obj),
+      reference,
+      map_mode: "FlatFace",
+    }],
+    name: `${freeCadObjectDisplayName(sketchObj)}.attach:${reference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function addSelectedExternalGeometry(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const sketchObj = firstFreeCadSketchObject();
+  if (!obj || !sketchObj || !reference) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches: [{
+      op: "add_external_geometry",
+      selector: freeCadObjectSelector(sketchObj),
+      source_selector: freeCadObjectSelector(obj),
+      references: [reference],
+    }],
+    name: `${freeCadObjectDisplayName(sketchObj)}.external:${reference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function addSelectedTechDrawDimension(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const page = firstFreeCadTechDrawPage();
+  const view = firstFreeCadTechDrawView();
+  if (!obj || !page || !view || !reference) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: /^vertex/i.test(reference) ? "Vertex" : /^face/i.test(reference) ? "Face" : "Edge",
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches: [{
+      op: "add_techdraw_dimension",
+      page_selector: freeCadObjectSelector(page),
+      view_selector: freeCadObjectSelector(view),
+      name: freeCadGeneratedName([reference, "Dim"], "Dimension"),
+      dimension_type: "Distance",
+      dimension_mode: "single",
+      reference,
+    }],
+    name: `TechDrawDimension:${reference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function addSelectedTechDrawCenterline(objectName, reference, pairedReference) {
+  const obj = freeCadObjectByName(objectName);
+  const view = firstFreeCadTechDrawView();
+  if (!obj || !view || !reference || !pairedReference) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: "Edge",
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches: [{
+      op: "add_techdraw_centerline",
+      view_selector: freeCadObjectSelector(view),
+      references: [reference, pairedReference],
+    }],
+    name: `TechDrawCenterline:${reference}/${pairedReference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function addSelectedTechDrawCosmeticVertex(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const view = firstFreeCadTechDrawView();
+  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const point = freeCadSubelementPoint(item);
+  if (!obj || !view || !reference || !point) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: "Vertex",
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches: [{
+      op: "add_techdraw_cosmetic_vertex",
+      view_selector: freeCadObjectSelector(view),
+      point,
+    }],
+    name: `TechDrawCosmeticVertex:${reference}`,
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function setAssemblyConnectorAnchor(objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const connector = freeCadConnectorFromSelection(obj, reference, item?.group || item?.kind || "", item);
+  if (!connector) return false;
+  state.previewMode = "generated";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: connector.kind,
+    selector: freeCadObjectSelector(obj),
+  };
+  state.selectionMode = selectionModeForFreeCadSubelementKind(connector.kind);
+  state.assemblyConnectorAnchor = connector;
+  persistWorkbenchSession();
+  renderAll();
+  return true;
+}
+
+function clearAssemblyConnectorAnchor() {
+  state.assemblyConnectorAnchor = null;
+  persistWorkbenchSession();
+  renderAll();
+}
+
+function freeCadConnectorStillExists(connector) {
+  if (!connector?.objectName || !connector.reference) return false;
+  const obj = freeCadObjectByName(connector.objectName);
+  return Boolean(obj && freeCadSubelementByRef(obj, connector.reference));
+}
+
+async function createAssemblyJointFromSelectedConnectors(jointType, objectName, reference) {
+  const obj = freeCadObjectByName(objectName);
+  const item = obj ? freeCadSubelementByRef(obj, reference) : null;
+  const connector = freeCadConnectorFromSelection(obj, reference, item?.group || item?.kind || "", item);
+  const anchor = state.assemblyConnectorAnchor;
+  if (!connector || !anchor || !freeCadConnectorStillExists(anchor)) return false;
+  if (freeCadConnectorSame(anchor, connector) || freeCadConnectorObjectSame(anchor, connector)) return false;
+  const assembly = firstFreeCadAssembly();
+  const assemblyName = assembly?.name || "Assembly";
+  const assemblySelector = assembly ? freeCadObjectSelector(assembly) : { name: assemblyName };
+  const patches = [];
+  if (!assembly) {
+    patches.push({
+      op: "create_assembly",
+      name: assemblyName,
+    });
+  }
+  [anchor, connector].forEach((item) => {
+    patches.push({
+      op: "add_part_to_assembly",
+      selector: assemblySelector,
+      part_selector: item.selector || { name: item.objectName },
+    });
+  });
+  const jointPatch = {
+    op: "create_joint",
+    selector: assemblySelector,
+    joint_type: jointType,
+    name: freeCadGeneratedName([jointType, anchor.objectName, connector.objectName, "Joint"], "Joint"),
+    connector1: assemblyConnectorPayload(anchor),
+    connector2: assemblyConnectorPayload(connector),
+    solve: true,
+  };
+  if (jointType === "distance") {
+    const distance = assemblyConnectorDistance(anchor, connector);
+    if (distance !== null) jointPatch.distance = distance;
+  }
+  if (jointType === "angle") {
+    jointPatch.angle_degrees = 0;
+  }
+  patches.push(jointPatch);
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = {
+    objectName: freeCadObjectKey(obj),
+    reference,
+    kind: connector.kind,
+    selector: freeCadObjectSelector(obj),
+  };
+  const patch = {
+    patches,
+    name: `${jointType}Joint:${freeCadConnectorDisplayName(anchor)}->${freeCadConnectorDisplayName(connector)}`,
+  };
+  const ok = await applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+  if (ok) {
+    state.assemblyConnectorAnchor = null;
+    persistWorkbenchSession();
+    renderAll();
+  }
+  return ok;
+}
+
+async function commitFreeCadObjectProperty(objectName, propertyName, rawValue) {
+  const obj = freeCadObjectByName(objectName);
+  const value = Number(rawValue);
+  if (!obj || !propertyName || !Number.isFinite(value)) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  const patch = freeCadPropertyPatchResult(obj, propertyName, value);
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadPlacementComponent(objectName, index, rawValue) {
+  const obj = freeCadObjectByName(objectName);
+  const value = Number(rawValue);
+  if (!obj || !Number.isFinite(value) || index < 0 || index > 2) return false;
+  const base = Array.isArray(obj.placement?.base) ? obj.placement.base.map(Number) : [0, 0, 0];
+  base[index] = value;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  const patch = {
+    patches: [{
+      op: "set_placement",
+      selector: freeCadObjectSelector(obj),
+      base,
+      axis: Array.isArray(obj.placement?.axis) ? obj.placement.axis : [0, 0, 1],
+      angle_degrees: Number.isFinite(Number(obj.placement?.angle_degrees)) ? Number(obj.placement.angle_degrees) : 0,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.Placement`,
+    value,
+    unit: t("unitMm"),
+  };
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadConstraintValue(objectName, constraintIndex, rawValue) {
+  const obj = freeCadObjectByName(objectName);
+  const value = Number(rawValue);
+  if (!obj || !Number.isFinite(value) || !Number.isFinite(Number(constraintIndex))) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  const patch = freeCadConstraintPatchResult(obj, Number(constraintIndex), value);
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function freeCadPatchHasValue(parsedPatch) {
+  return Number.isFinite(Number(parsedPatch?.value));
+}
+
+function freeCadPatchDetail(parsedPatch) {
+  if (freeCadPatchHasValue(parsedPatch)) {
+    return t("history.freecadDocumentPatchDetail", {
+      name: parsedPatch.name,
+      value: formatNumber(parsedPatch.value),
+      unit: parsedPatch.unit || "",
+    });
+  }
+  return parsedPatch?.name || parsedPatch?.intent || t("freecadScript");
+}
+
+async function parseServerFreeCadDocumentPatch(text) {
+  if (!hasFreeCadDocumentState() || !state.documentSummary) return null;
+  try {
+    const result = await fetchJson("/api/freecad/document/intent", {
+      text,
+      document_summary: state.documentSummary,
+    });
+    return result?.ok && Array.isArray(result.patches) && result.patches.length ? result : null;
+  } catch (error) {
+    log(t("log.freecadDocumentPatchFailed", { message: error.message }));
+    return null;
   }
 }
 
@@ -2297,8 +5145,34 @@ function parseConversationalPatch(text) {
   return { op: "update_parameter", name: found[0], value: clampParameter(found[0], value) };
 }
 
+function shouldRequestScriptRewrite(text) {
+  if (!state.script) return false;
+  const normalized = text.toLowerCase();
+  if (/modeling\s+method|construction\s+method|建模(方法|方式)|改用/.test(normalized)) return true;
+  const topologyVerb = /\b(add|insert|remove|delete|drill|bore|cut|replace|switch|convert)\b|新增|添加|增加|加入|插入|删除|去掉|移除|钻|开孔/;
+  const topologyNoun = /(holes?|boss|rib|slot|pocket|cutout|counterbore|countersink|pattern|feature|sketch|loft|sweep|revolve|shell|孔|凸台|筋|肋|槽|开口|沉孔|阵列|特征|草图|放样|扫掠|旋转|抽壳)/;
+  if (topologyVerb.test(normalized) && topologyNoun.test(normalized)) return true;
+  if (/\b(change|set|make)\b.*\b(?:to\s+)?\d+\s+holes?\b/.test(normalized)) return true;
+  if (/改成\s*\d+\s*个孔|改为\s*\d+\s*个孔/.test(normalized)) return true;
+  return false;
+}
+
+function buildScriptRewritePrompt(instruction) {
+  return [
+    "Rewrite the current CAD script for this topology-level edit.",
+    `User edit: ${instruction}`,
+    `Current engine: ${state.engine}. Use the same engine unless the edit explicitly requires another engine.`,
+    "Return one complete script by calling the appropriate CAD tool. Preserve named parameters and existing dimensions where practical.",
+    "Current script:",
+    "```python",
+    state.script,
+    "```",
+  ].join("\n");
+}
+
 function shouldRouteToAgent(text) {
   const normalized = text.toLowerCase();
+  if (shouldRequestScriptRewrite(text)) return true;
   if (/\b(freecad|fcstd|techdraw)\b/.test(normalized)) return true;
   if (/\b(step|stl|iges|brep|obj|gltf)\b|导出|输出|导入/.test(normalized)) return true;
   if (/生成|创建|新建|建模|制作|做一个|画一个|\b(create|generate|make|model|export|import)\b/.test(normalized)) return true;
@@ -2321,6 +5195,194 @@ function parseGeneratedParameterPatch(text) {
   return target ? { name: target.name, value } : null;
 }
 
+function parseFreeCadDocumentPatch(text) {
+  if (!hasFreeCadDocumentState()) return null;
+  return parseSelectedSubelementFreeCadPatch(text) || parseExactFreeCadPatch(text) || parseInferredFreeCadPatch(text);
+}
+
+function parseSelectedSubelementFreeCadPatch(text) {
+  const selected = selectedFreeCadSubelementRef();
+  if (!selected?.reference || !selected?.selector) return null;
+  const normalized = text.toLowerCase();
+  if (/\bexternal\s+geometry\b|外部几何/.test(normalized)) {
+    const sketch = bestFreeCadObjectMatch(text);
+    const sketchObj = sketch && freeCadObjectIsSketch(sketch) ? sketch : firstFreeCadSketchObject();
+    if (!sketchObj) return null;
+    return {
+      patches: [{
+        op: "add_external_geometry",
+        selector: freeCadObjectSelector(sketchObj),
+        source_selector: selected.selector,
+        references: [selected.reference],
+      }],
+      name: `${freeCadObjectDisplayName(sketchObj)}.external:${selected.reference}`,
+    };
+  }
+  if (/\battach\b.*\bsketch\b|附着.*草图|草图.*附着/.test(normalized)) {
+    const sketch = bestFreeCadObjectMatch(text);
+    const sketchObj = sketch && freeCadObjectIsSketch(sketch) ? sketch : firstFreeCadSketchObject();
+    if (!sketchObj || !/^face/i.test(selected.reference)) return null;
+    return {
+      patches: [{
+        op: "attach_sketch",
+        selector: freeCadObjectSelector(sketchObj),
+        support_selector: selected.selector,
+        reference: selected.reference,
+        map_mode: "FlatFace",
+      }],
+      name: `${freeCadObjectDisplayName(sketchObj)}.attach:${selected.reference}`,
+    };
+  }
+  if (/\btechdraw\b|\bdimension\b|工程图|技术图|标注|尺寸/.test(normalized)) {
+    const page = firstFreeCadTechDrawPage();
+    const view = firstFreeCadTechDrawView();
+    if (!page || !view) return null;
+    const mode = /chain|链式/.test(normalized) ? "chain" : (/coordinate|坐标/.test(normalized) ? "coordinate" : "single");
+    return {
+      patches: [{
+        op: "add_techdraw_dimension",
+        page_selector: freeCadObjectSelector(page),
+        view_selector: freeCadObjectSelector(view),
+        name: `${selected.reference}Dim`,
+        dimension_type: /^edge/i.test(selected.reference) ? "Distance" : "Distance",
+        dimension_mode: mode,
+        reference: selected.reference,
+      }],
+      name: `TechDrawDimension:${selected.reference}`,
+    };
+  }
+  return null;
+}
+
+function parseExactFreeCadPatch(text) {
+  const propertyMatch = text.match(/\b([A-Za-z_][\w.-]*)\s*\.\s*([A-Za-z_]\w*)\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (propertyMatch) {
+    const obj = freeCadObjectByToken(propertyMatch[1]);
+    if (!obj) return null;
+    const property = freeCadPropertyByToken(obj, propertyMatch[2]);
+    if (!property) return null;
+    const value = Number(propertyMatch[3]);
+    return freeCadPropertyPatchResult(obj, property, value);
+  }
+
+  const constraintMatch = text.match(/\b([A-Za-z_][\w.-]*)\s*(?:\.|:)?\s*(?:constraint|约束)\s*\[?#?(\d+)\]?\s*=\s*(-?\d+(?:\.\d+)?)/i);
+  if (constraintMatch) {
+    const obj = freeCadObjectByToken(constraintMatch[1]);
+    if (!obj || !freeCadObjectIsSketch(obj)) return null;
+    const index = Number(constraintMatch[2]);
+    const value = Number(constraintMatch[3]);
+    return freeCadConstraintPatchResult(obj, index, value);
+  }
+  return null;
+}
+
+function parseInferredFreeCadPatch(text) {
+  const value = extractCommandValue(text);
+  if (value === null) return null;
+  const obj = bestFreeCadObjectMatch(text) || (freeCadShapeObjects().length === 1 ? freeCadShapeObjects()[0] : null);
+  if (!obj) return null;
+
+  const constraintIndex = requestedConstraintIndex(text);
+  if (constraintIndex !== null && freeCadObjectIsSketch(obj)) {
+    return freeCadConstraintPatchResult(obj, constraintIndex, value);
+  }
+
+  const property = inferFreeCadProperty(text, obj);
+  return property ? freeCadPropertyPatchResult(obj, property, value) : null;
+}
+
+function freeCadPropertyPatchResult(obj, property, value) {
+  return {
+    patches: [{
+      op: "set_property",
+      selector: freeCadObjectSelector(obj),
+      property,
+      value,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.${property}`,
+    value,
+    unit: t("unitMm"),
+  };
+}
+
+function freeCadConstraintPatchResult(obj, constraintIndex, value) {
+  return {
+    patches: [{
+      op: "set_constraint_value",
+      selector: freeCadObjectSelector(obj),
+      constraint_index: constraintIndex,
+      value,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.constraint#${constraintIndex}`,
+    value,
+    unit: t("unitMm"),
+  };
+}
+
+function freeCadObjectByToken(token) {
+  const normalized = normalizeFreeCadToken(token);
+  return freeCadDocumentObjects().find((obj) => {
+    return normalizeFreeCadToken(obj.name) === normalized
+      || normalizeFreeCadToken(obj.label) === normalized;
+  }) || null;
+}
+
+function bestFreeCadObjectMatch(text) {
+  const normalized = normalizeFreeCadToken(text);
+  let best = null;
+  for (const obj of freeCadDocumentObjects()) {
+    let score = 0;
+    const name = normalizeFreeCadToken(obj.name);
+    const label = normalizeFreeCadToken(obj.label);
+    if (name && normalized.includes(name)) score += 100 + name.length;
+    if (label && normalized.includes(label)) score += 90 + label.length;
+    if (score && (!best || score > best.score)) best = { obj, score };
+  }
+  return best?.obj || null;
+}
+
+function freeCadPropertyByToken(obj, token) {
+  const normalized = normalizeFreeCadToken(token);
+  return freeCadPropertyNames(obj).find((name) => normalizeFreeCadToken(name) === normalized) || null;
+}
+
+function inferFreeCadProperty(text, obj) {
+  const normalized = normalizeFreeCadToken(text);
+  const direct = freeCadPropertyNames(obj).find((name) => {
+    const token = normalizeFreeCadToken(name);
+    return token && normalized.includes(token);
+  });
+  if (direct) return direct;
+
+  const dimension = requestedDimension(text.toLowerCase());
+  const aliases = [
+    ["Length", ["length", "long", "长度", "长"]],
+    ["Width", ["width", "wide", "宽度", "宽"]],
+    ["Height", ["height", "高度", "高"]],
+    ["Radius", ["radius", "半径", "圆角"]],
+    ["Diameter", ["diameter", "diam", "直径", "孔径"]],
+    ["Angle", ["angle", "角度"]],
+  ];
+  const candidates = freeCadPropertyNames(obj);
+  for (const [property, words] of aliases) {
+    if (dimension && !words.some((word) => normalizeFreeCadToken(word) === normalizeFreeCadToken(dimension))) {
+      if (!words.some((word) => normalized.includes(normalizeFreeCadToken(word)))) continue;
+    }
+    const existing = candidates.find((name) => normalizeFreeCadToken(name) === normalizeFreeCadToken(property));
+    if (existing) return existing;
+  }
+  return null;
+}
+
+function requestedConstraintIndex(text) {
+  const match = text.match(/(?:constraint|约束)\s*\[?#?(\d+)\]?/i);
+  return match ? Number(match[1]) : null;
+}
+
+function freeCadObjectIsSketch(obj) {
+  return /Sketcher::SketchObject/i.test(String(obj?.type_id || "")) || Boolean(obj?.sketch);
+}
+
 function bestGeneratedParameterMatch(text, params) {
   const normalized = text.toLowerCase();
   const compactText = normalized.replace(/[\s_-]+/g, "");
@@ -2335,6 +5397,7 @@ function bestGeneratedParameterMatch(text, params) {
 
     if (normalized.includes(lowerName) || compactText.includes(compactName)) score += 120;
     score += componentScore(normalized, lowerName);
+    score += generatedParameterAliasScore(normalized, lowerName);
     if (dimension) score += dimensionScore(lowerName, label, dimension);
     if (dimension === "length" || dimension === "width" || dimension === "depth") {
       score += primarySizeBonus(param, params);
@@ -2346,9 +5409,25 @@ function bestGeneratedParameterMatch(text, params) {
   return best && best.score >= 30 ? best.param : null;
 }
 
+function generatedParameterAliasScore(normalized, name) {
+  if (!name) return 0;
+  if (/中心孔|center\s*hole/.test(normalized)) {
+    return name === "center_hole_d" ? 120 : 0;
+  }
+  if (/孔径|孔|holes?/.test(normalized)) {
+    if (name === "hole_d") return 120;
+    if (name === "center_hole_d") return 20;
+  }
+  if (/凸台|boss/.test(normalized)) {
+    if (/高度|高|height/.test(normalized) && name === "boss_h") return 120;
+    if (/直径|孔径|diam|diameter|d\b/.test(normalized) && name === "boss_d") return 120;
+  }
+  return 0;
+}
+
 function requestedDimension(normalized) {
   const checks = [
-    ["diameter", /直径|孔径|diam|diameter/],
+    ["diameter", /直径|孔径|孔|diam|diameter|holes?/],
     ["radius", /半径|圆角|radius|rad/],
     ["thickness", /厚度|厚|thick|thickness/],
     ["height", /高度|高|height/],
@@ -2428,12 +5507,39 @@ async function submitCommand(event) {
   const input = $("commandInput");
   const text = input.value.trim();
   if (!text) return;
-  const useAgent = shouldRouteToAgent(text);
-  const generatedPatch = !useAgent && state.previewMode === "generated" ? parseGeneratedParameterPatch(text) : null;
-  const patch = !useAgent && state.previewMode !== "generated" ? parseConversationalPatch(text) : null;
+  const rewriteScript = shouldRequestScriptRewrite(text);
+  const serverFreeCadPatch = !rewriteScript ? await parseServerFreeCadDocumentPatch(text) : null;
+  const freeCadPatch = serverFreeCadPatch || (!rewriteScript ? parseFreeCadDocumentPatch(text) : null);
+  const generatedPatch = !freeCadPatch && !rewriteScript && state.previewMode === "generated"
+    ? parseGeneratedParameterPatch(text)
+    : null;
+  const patch = !freeCadPatch && !generatedPatch && !rewriteScript && state.previewMode !== "generated"
+    ? parseConversationalPatch(text)
+    : null;
+  const useAgent = !freeCadPatch && !generatedPatch && !patch && (rewriteScript || shouldRouteToAgent(text));
   input.value = "";
   state.chatMessages.unshift({ role: "user", text });
   setBottomTab("chat");
+  if (freeCadPatch) {
+    const detail = freeCadPatchDetail(freeCadPatch);
+    const ok = await applyFreeCadDocumentPatch(freeCadPatch, detail);
+    if (ok) {
+      state.chatMessages.unshift({
+        role: "assistant",
+        key: freeCadPatchHasValue(freeCadPatch) ? "chat.appliedFreeCadDocumentPatch" : "chat.appliedFreeCadTypedPatch",
+        vars: freeCadPatchHasValue(freeCadPatch)
+          ? {
+              name: freeCadPatch.name,
+              value: formatNumber(freeCadPatch.value),
+              unit: freeCadPatch.unit || "",
+            }
+          : { name: freeCadPatch.name || freeCadPatch.intent || t("freecadScript") },
+      });
+      setBottomTab("chat");
+      renderAll();
+    }
+    return;
+  }
   if (generatedPatch) {
     const ok = await commitGeneratedParameter(generatedPatch.name, generatedPatch.value);
     if (ok) {
@@ -2463,21 +5569,35 @@ async function submitCommand(event) {
     setBottomTab("chat");
     return;
   }
-  await generateFromPrompt(text);
+  if (useAgent) {
+    await generateFromPrompt(text, { mode: rewriteScript ? "rewrite" : "create" });
+    return;
+  }
+  state.chatMessages.unshift({ role: "assistant", key: "chat.commandNotUnderstood" });
+  log(t("log.commandNotUnderstood"));
+  setBottomTab("chat");
+  renderAll();
 }
 
-async function generateFromPrompt(prompt) {
+async function generateFromPrompt(prompt, options = {}) {
+  const mode = options.mode === "rewrite" ? "rewrite" : "create";
+  const requestPrompt = mode === "rewrite" ? buildScriptRewritePrompt(prompt) : prompt;
   $("applyButton").disabled = true;
   state.previewMode = "generated";
   state.generatedPrompt = prompt;
   state.generatedParameters = [];
+  state.documentSummary = null;
   state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.assemblyConnectorAnchor = null;
   state.previewPng = null;
   state.artifacts = {};
+  state.artifactRefs = {};
   state.engine = "cadquery";
   state.freecadVersion = "";
   state.exportStatus = "notReady";
-  state.patch = null;
+  state.patch = mode === "rewrite" ? { op: "request_script_rewrite", instruction: prompt } : null;
   setBottomTab("logs");
   setStatus("submitting");
   let resp;
@@ -2486,14 +5606,17 @@ async function generateFromPrompt(prompt) {
       resp = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, history: state.chatHistory }),
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          history: mode === "rewrite" ? [] : state.chatHistory,
+        }),
       });
       if (resp.status !== 503) break;
       setStatus("waking", { attempt: attempt + 1 });
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const sawDone = await readSse(resp, prompt);
+    const sawDone = await readSse(resp, prompt, { mode });
     if (!sawDone) {
       setStatus("failed");
       log(t("log.streamEndedWithoutDone"));
@@ -2511,7 +5634,7 @@ async function generateFromPrompt(prompt) {
   }
 }
 
-async function readSse(resp, prompt) {
+async function readSse(resp, prompt, context = {}) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -2521,7 +5644,7 @@ async function readSse(resp, prompt) {
     const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
     if (!dataLine) return;
     const ev = JSON.parse(dataLine.slice(6));
-    handleAgentEvent(ev);
+    handleAgentEvent(ev, context);
     if (ev.type === "script") lastScript = ev.script;
     if (ev.type === "done") sawDone = true;
   };
@@ -2544,13 +5667,17 @@ async function readSse(resp, prompt) {
   return sawDone;
 }
 
-function handleAgentEvent(ev) {
+function handleAgentEvent(ev, context = {}) {
   if (ev.type === "status") setStatus(ev.message);
   if (ev.type === "script") {
     state.script = ev.script;
     state.engine = normalizeEngine(ev.engine);
     state.freecadVersion = ev.freecad_version || "";
     state.generatedParameters = Array.isArray(ev.parameters) ? ev.parameters : [];
+    state.documentSummary = null;
+    state.selectedFreeCadObjectName = "";
+    state.selectedFreeCadSubelement = null;
+    state.assemblyConnectorAnchor = null;
     if (!state.generatedParameters.some((param) => param.name === state.selectedGeneratedParameterName)) {
       state.selectedGeneratedParameterName = "";
     }
@@ -2569,6 +5696,7 @@ function handleAgentEvent(ev) {
     state.engine = normalizeEngine(ev.engine || state.engine);
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     state.artifacts[ev.format] = ev.data_b64;
+    delete state.artifactRefs[ev.format];
     if (hasStepStlArtifacts()) state.exportStatus = "ready";
     log(t("log.artifactReady", { format: ev.format }));
   }
@@ -2580,10 +5708,17 @@ function handleAgentEvent(ev) {
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
     setStatus(ev.ok ? "done" : "failed");
-    addHistory(ev.ok ? t("history.agentGeneration") : t("history.agentGenerationFailed"), ev.ok ? t("history.agentDetail") : t("history.agentFailedDetail"));
-    state.chatMessages.unshift({ role: "assistant", key: ev.ok ? "chat.generationOk" : "chat.generationBad" });
+    const rewrite = context.mode === "rewrite";
+    addHistory(
+      ev.ok ? (rewrite ? t("history.scriptRewrite") : t("history.agentGeneration")) : t("history.agentGenerationFailed"),
+      ev.ok ? (rewrite ? t("history.scriptRewriteDetail", { instruction: state.generatedPrompt }) : t("history.agentDetail")) : t("history.agentFailedDetail")
+    );
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: ev.ok ? (rewrite ? "chat.scriptRewriteOk" : "chat.generationOk") : "chat.generationBad",
+    });
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
-    void recordServerVersion(ev.ok ? "create" : "repair", state.generatedPrompt, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
+    void recordServerVersion(ev.ok ? (rewrite ? "modify" : "create") : "repair", state.generatedPrompt, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
   }
   renderBottom();
   persistWorkbenchSession();
@@ -2629,8 +5764,13 @@ async function init() {
   installViewportGestures();
   if (restoreWorkbenchSession()) {
     setStatus("restored");
+    if (state.serverSessionId && (!state.previewPng || !hasStepStlArtifacts())) {
+      if (await restoreServerSession()) {
+        renderAll();
+        return;
+      }
+    }
     renderAll();
-    void recordServerVersion("modify", "browser session restore");
     return;
   }
   if (await restoreServerSession()) {
@@ -2692,12 +5832,21 @@ window.setMeasureMode = setMeasureMode;
 window.setBottomTab = setBottomTab;
 window.commitParameter = commitParameter;
 window.commitGeneratedParameter = commitGeneratedParameter;
+window.openFreeCadImportPicker = openFreeCadImportPicker;
+window.importFreeCadModelFile = importFreeCadModelFile;
 window.renameFeature = renameFeature;
 window.toggleFeature = toggleFeature;
 window.showParametricDesign = showParametricDesign;
 window.showGeneratedModel = showGeneratedModel;
 window.showGeneratedParameters = showGeneratedParameters;
 window.focusGeneratedParameter = focusGeneratedParameter;
+window.selectFreeCadObject = selectFreeCadObject;
+window.selectFreeCadSubelement = selectFreeCadSubelement;
+window.validateFreeCadSketch = validateFreeCadSketch;
+window.commitFreeCadObjectProperty = commitFreeCadObjectProperty;
+window.commitFreeCadPlacementComponent = commitFreeCadPlacementComponent;
+window.commitFreeCadConstraintValue = commitFreeCadConstraintValue;
+window.rollbackToServerVersion = rollbackToServerVersion;
 window.toggleLocale = toggleLocale;
 
 init();

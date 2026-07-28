@@ -1,8 +1,4 @@
-"""SQLite-backed CAD session/version store.
-
-This is intentionally a metadata/state store. Large CAD artifacts stay out of
-SQLite until the app has a real artifact volume/object store and worker isolation.
-"""
+"""SQLite-backed CAD session/version metadata store."""
 
 from __future__ import annotations
 
@@ -60,6 +56,9 @@ class SessionStore:
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         raise NotImplementedError
 
+    def get_version(self, session_id: str, version_id: str) -> StoredVersion | None:
+        raise NotImplementedError
+
     def add_version(
         self,
         *,
@@ -73,6 +72,15 @@ class SessionStore:
         metadata: dict[str, Any] | None = None,
         status: str = "ok",
         error: str | None = None,
+    ) -> StoredVersion:
+        raise NotImplementedError
+
+    def update_version_metadata(
+        self,
+        *,
+        session_id: str,
+        version_id: str,
+        metadata: dict[str, Any],
     ) -> StoredVersion:
         raise NotImplementedError
 
@@ -157,6 +165,32 @@ class SqliteSessionStore(SessionStore):
             "active_version": _version_to_dict(active_version) if active_version else None,
             "versions": [_version_summary(version) for version in versions],
         }
+
+    def get_version(self, session_id: str, version_id: str) -> StoredVersion | None:
+        with self._connect() as con:
+            row = con.execute(
+                """
+                select
+                    id,
+                    session_id,
+                    version_number,
+                    parent_version_id,
+                    intent,
+                    user_instruction,
+                    design_state_json,
+                    script,
+                    geometry_summary_json,
+                    patch_json,
+                    metadata_json,
+                    status,
+                    error,
+                    created_at
+                from design_versions
+                where session_id = ? and id = ?
+                """,
+                (session_id, version_id),
+            ).fetchone()
+        return _version_from_row(row) if row is not None else None
 
     def add_version(
         self,
@@ -247,6 +281,33 @@ class SqliteSessionStore(SessionStore):
                 """,
                 (version.id, now, session_id),
             )
+        return version
+
+    def update_version_metadata(
+        self,
+        *,
+        session_id: str,
+        version_id: str,
+        metadata: dict[str, Any],
+    ) -> StoredVersion:
+        with self._connect() as con:
+            row = con.execute(
+                "select id from design_versions where session_id = ? and id = ?",
+                (session_id, version_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(version_id)
+            con.execute(
+                """
+                update design_versions
+                set metadata_json = ?
+                where session_id = ? and id = ?
+                """,
+                (_json_dump(metadata), session_id, version_id),
+            )
+        version = self.get_version(session_id, version_id)
+        if version is None:
+            raise KeyError(version_id)
         return version
 
     def _connect(self) -> sqlite3.Connection:

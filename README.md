@@ -12,21 +12,27 @@ Single FastAPI process, single origin, single container.
   `OPENAI_API_KEY`, `TEXT_MODEL`, `PORT`); fail-fast, no `api.openai.com` fallback.
 - `app/gateway.py` — OpenAI-compatible client → `${OPENAI_BASE_URL}/chat/completions`
   (tool-calling; `/responses` is not used).
-- `app/agent/loop.py` — prompt → `run_cadquery` tool call → sandboxed execute →
-  streamed events (MVP: no self-correction).
+- `app/agent/loop.py` — prompt → CAD tool call (`run_cadquery` or `run_freecad`) →
+  sandboxed execute → streamed events with retry/self-correction.
 - `app/cad/runner.py` — **sandbox**: scrubbed env (no gateway token), CPU/mem
   rlimits, wall-clock deadline. Runs the worker in an isolated subprocess.
 - `app/cad/worker.py` — execs the CadQuery script, exports STEP+STL, renders a
   preview PNG. Untrusted-code-facing; the container is the isolation boundary.
 - `app/cad/freecad.py` + `app/cad/freecad_worker.py` — P2.0 headless FreeCADCmd
-  smoke path, still single-container: FastAPI invokes a sandboxed Python worker,
-  which invokes `FreeCADCmd` to run FreeCAD Python and export STEP/STL.
+  path, still single-container: import STEP/IGES/BREP/FCStd, load/edit/save FCStd,
+  export STEP/STL/FCStd, inspect geometry/feature-tree state, and apply typed
+  FreeCAD document patch ops, including typed Sketcher create/attach/external
+  geometry/solver and geometry/constraint edits, native Assembly
+  container/member/joint/solve edits, and typed TechDraw page/view/projection
+  group/section/detail/centerline/cosmetic/dimension edits with SVG/DXF/PDF
+  artifact paths.
 - `app/cad/preview.py` — PyVista offscreen render (xvfb/mesa).
 - `app/main.py` — `/healthz` (trivial, always 200), `/api/generate` (SSE),
   `/api/freecad/smoke` (diagnostic), SPA.
 - `app/session_store.py` — P1.5 SQLite session/version metadata store:
   `DesignState` JSON, scripts, patches, geometry summaries, and version metadata.
-  Large STEP/STL/PNG artifacts are not stored in SQLite.
+- `app/artifact_store.py` — filesystem artifact store for PNG/STEP/STL/FCStd/TechDraw,
+  referenced from version metadata instead of being stored in SQLite.
 - `index.html` — vanilla SPA at the repo root, served same-origin; **client holds
   conversation history** and replays it to the stateless server; retries on 503
   (cold start). Living at the root also makes the deploy scanner see one fullstack
@@ -39,7 +45,9 @@ therefore still keeps a local session cache, and the server mirrors lightweight
 session/version facts into SQLite for reload/recovery. `CAD_SESSION_DB_PATH`
 controls the SQLite file location; without a persistent volume, the default
 `/tmp/4yi-cad/sessions.sqlite3` is a convenience cache, not durable production
-storage. Exports still stream inline as base64 and are not stored server-side.
+storage. `CAD_ARTIFACT_ROOT` controls server-side artifact storage; the default
+`/tmp/4yi-cad/artifacts` also needs a persistent volume or object-storage backend
+before production use.
 
 Do not store secrets or cross-session artifacts in SQLite until the CAD worker is
 isolated from the web process; model-generated Python currently runs in the same
@@ -63,8 +71,12 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 ```
 
 Local FreeCAD smoke is optional. If `FreeCADCmd` is installed locally (or
-`FREECADCMD_BINARY=/path/to/FreeCADCmd` is set), the skipped smoke test exercises
-real STEP/STL export:
+`FREECADCMD_BINARY=/path/to/FreeCADCmd` is set), the FreeCAD smoke tests exercise
+    real STEP/STL/FCStd export, FCStd load/patch/save, typed feature-tree ops,
+    Sketcher create/attach/external geometry/solver coverage, Assembly
+    member/joint/solver coverage, TechDraw page/view/projection/section/detail/
+    cosmetic/dimension plus SVG/DXF/PDF artifact-path coverage, and document
+    inspection with diffable typed state:
 
 ```bash
 .venv/bin/pytest tests/test_freecad_worker.py -q

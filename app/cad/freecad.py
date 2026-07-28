@@ -35,3 +35,87 @@ def run_freecad_sandboxed(
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )
+
+
+def run_freecad_import_sandboxed(
+    import_format: str,
+    data_b64: str,
+    *,
+    filename: str | None = None,
+    timeout_s: float = 180,
+    cpu_seconds: int | None = 120,
+    address_space_mb: int | None = 4096,
+) -> SandboxResult:
+    return run_sandboxed(
+        {
+            "operation": "import_model",
+            "format": import_format,
+            "data_b64": data_b64,
+            "filename": filename,
+        },
+        timeout_s=timeout_s,
+        cpu_seconds=cpu_seconds,
+        address_space_mb=address_space_mb,
+        worker_argv=FREECAD_WORKER_ARGV,
+    )
+
+
+def run_freecad_document_edit_sandboxed(
+    script: str,
+    fcstd_b64: str,
+    *,
+    timeout_s: float = 180,
+    cpu_seconds: int | None = 120,
+    address_space_mb: int | None = 4096,
+) -> SandboxResult:
+    return run_sandboxed(
+        {
+            "operation": "edit_document",
+            "script": script,
+            "fcstd_b64": fcstd_b64,
+        },
+        timeout_s=timeout_s,
+        cpu_seconds=cpu_seconds,
+        address_space_mb=address_space_mb,
+        worker_argv=FREECAD_WORKER_ARGV,
+    )
+
+
+def run_freecad_document_inspect_sandboxed(
+    fcstd_b64: str,
+    *,
+    timeout_s: float = 180,
+    cpu_seconds: int | None = 120,
+    address_space_mb: int | None = 4096,
+) -> SandboxResult:
+    return run_sandboxed(
+        {
+            "operation": "inspect_document",
+            "fcstd_b64": fcstd_b64,
+        },
+        timeout_s=timeout_s,
+        cpu_seconds=cpu_seconds,
+        address_space_mb=address_space_mb,
+        worker_argv=FREECAD_WORKER_ARGV,
+    )
+
+
+def run_freecad_document_patch_sandboxed(
+    patches: list[dict],
+    fcstd_b64: str,
+    *,
+    timeout_s: float = 180,
+    cpu_seconds: int | None = 120,
+    address_space_mb: int | None = 4096,
+) -> SandboxResult:
+    return run_sandboxed(
+        {
+            "operation": "patch_document",
+            "patches": patches,
+            "fcstd_b64": fcstd_b64,
+        },
+        timeout_s=timeout_s,
+        cpu_seconds=cpu_seconds,
+        address_space_mb=address_space_mb,
+        worker_argv=FREECAD_WORKER_ARGV,
+    )

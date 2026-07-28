@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -77,6 +78,19 @@ def _rlimit_preexec(cpu_seconds: int | None, address_space_mb: int | None):
     return _apply
 
 
+def _returncode_error(returncode: int) -> str:
+    if returncode >= 0:
+        return f"worker exited with code {returncode}"
+    signum = -returncode
+    try:
+        signal_name = signal.Signals(signum).name
+    except ValueError:
+        signal_name = f"signal {signum}"
+    if signal_name == "SIGXCPU":
+        return f"worker terminated by signal {signum} ({signal_name}); CPU time limit exceeded"
+    return f"worker terminated by signal {signum} ({signal_name})"
+
+
 def run_sandboxed(
     request: dict,
     *,
@@ -129,7 +143,7 @@ def run_sandboxed(
     if proc.returncode != 0:
         return SandboxResult(
             success=False,
-            error=f"worker exited with code {proc.returncode}",
+            error=_returncode_error(proc.returncode),
             stdout=proc.stdout,
             stderr=proc.stderr,
         )

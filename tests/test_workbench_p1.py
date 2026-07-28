@@ -29,7 +29,57 @@ def test_p1_workbench_exposes_core_surfaces():
         "restoreWorkbenchSession",
         "recordServerVersion",
         "restoreServerSession",
+        "artifactRefs",
+        "hydrateArtifactRefs",
+        "rollbackToServerVersion",
+        "selectedFreeCadObjectName",
+        "freeCadImportInput",
+        "openFreeCadImportPicker",
+        "importFreeCadModelFile",
+        "detectFreeCadImportFormat",
+        "/api/freecad/import_model",
+        "generatedCadViewer",
+        "mountGeneratedCadViewer",
+        "viewer_scene",
+        "generatedViewerSceneData",
+        "addViewerSceneFaceMeshes",
+        "addViewerSceneEdgeTargets",
+        "addViewerSceneVertexTargets",
+        "viewerSceneHasEdgeGeometry",
+        "viewerSceneHasVertexGeometry",
+        "hasInteractiveViewerArtifact",
+        "selectFreeCadObject",
+        "selectFreeCadSubelement",
+        "renderFreeCadSubelementActions",
+        "createSketchOnSelectedFace",
+        "attachSketchToSelectedFace",
+        "addSelectedExternalGeometry",
+        "addSelectedTechDrawDimension",
+        "addSelectedTechDrawCenterline",
+        "addSelectedTechDrawCosmeticVertex",
+        "assemblyConnectorAnchor",
+        "setAssemblyConnectorAnchor",
+        "clearAssemblyConnectorAnchor",
+        "createAssemblyJointFromSelectedConnectors",
+        "assemblyConnectorPayload",
+        "createFixedJoint",
+        "createRevoluteJoint",
+        "createDistanceJoint",
+        "commitFreeCadObjectProperty",
+        "commitFreeCadPlacementComponent",
+        "commitFreeCadConstraintValue",
+        "interactiveMesh",
+        "freeCadViewerSelectionMode",
+        "pickFreeCadViewerSelection",
+        "freeCadSubelementKindForSelectionMode",
+        "toolbar.face",
+        "toolbar.edge",
+        "toolbar.vertex",
+        "setSelectionMode",
+        "shouldRequestScriptRewrite",
+        "request_script_rewrite",
         "/api/sessions",
+        "/rollback",
         "commitParameter",
         "submitCommand",
         "4yi-cad Workbench",
@@ -51,16 +101,19 @@ def test_p1_workbench_restores_browser_session_before_fetching_initial_state():
     assert html.index("if (await restoreServerSession())") < html.index("/api/design/initial")
 
 
+def test_generated_hole_edit_prefers_local_parameter_patch():
+    html = _html()
+
+    assert "generatedParameterAliasScore" in html
+    assert 'name === "hole_d"' in html
+    assert 'key: "chat.commandNotUnderstood"' in html
+    assert "if (useAgent) {" in html
+
+
 def test_p1_workbench_does_not_expose_topology_or_arbitrary_feature_history_controls():
     html = _html()
 
     for marker in (
-        "toolbar.face",
-        "toolbar.edge",
-        "modes.face",
-        "modes.edge",
-        "setSelectionMode('face')",
-        "setSelectionMode('edge')",
         "rollbackFeature",
         "deleteFeature",
         "actions.rollback",

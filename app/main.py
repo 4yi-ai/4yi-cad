@@ -13,14 +13,16 @@ the module and answering /healthz never require config.
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agent.loop import ExecResult, run_generation
+from app.artifact_store import ArtifactStore, FileArtifactStore
 from app.cad.design_state import (
     CadPatch,
     DesignState,
@@ -29,13 +31,22 @@ from app.cad.design_state import (
     geometry_summary,
     render_cadquery_script,
 )
-from app.cad.freecad import MINIMAL_FREECAD_SMOKE_SCRIPT, run_freecad_sandboxed
+from app.cad.freecad import (
+    MINIMAL_FREECAD_SMOKE_SCRIPT,
+    run_freecad_document_edit_sandboxed,
+    run_freecad_document_inspect_sandboxed,
+    run_freecad_document_patch_sandboxed,
+    run_freecad_import_sandboxed,
+    run_freecad_sandboxed,
+)
 from app.cad.script_params import (
     ScriptParameterPatch,
     apply_script_parameter_patches,
     extract_script_parameters,
 )
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
+from app.freecad_intents import parse_freecad_intent
+from app.freecad_state import storage_status, typed_state_diff
 from app.session_store import SessionStore, SqliteSessionStore
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
@@ -83,8 +94,174 @@ class SessionVersionRequest(BaseModel):
     geometry_summary: dict = Field(default_factory=dict)
     patch: dict | None = None
     metadata: dict = Field(default_factory=dict)
+    preview_png_b64: str | None = None
+    artifacts: dict[str, str] = Field(default_factory=dict)
     status: Literal["ok", "failed"] = "ok"
     error: str | None = Field(default=None, max_length=8000)
+
+
+class RollbackSessionRequest(BaseModel):
+    version_id: str = Field(..., min_length=1)
+    user_instruction: str | None = Field(default=None, max_length=4000)
+
+
+class FreeCadImportModelRequest(BaseModel):
+    format: str = Field(..., min_length=1, max_length=16)
+    data_b64: str = Field(..., min_length=1)
+    filename: str | None = Field(default=None, max_length=240)
+    session_id: str | None = Field(default=None, min_length=1)
+    title: str | None = Field(default=None, max_length=160)
+    user_instruction: str | None = Field(default=None, max_length=4000)
+
+
+class FreeCadDocumentEditRequest(BaseModel):
+    script: str = Field(..., min_length=1)
+    fcstd_b64: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+    version_id: str | None = Field(default=None, min_length=1)
+    user_instruction: str | None = Field(default=None, max_length=4000)
+
+
+class FreeCadDocumentInspectRequest(BaseModel):
+    fcstd_b64: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+    version_id: str | None = Field(default=None, min_length=1)
+
+
+class FreeCadIntentRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    document_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreeCadObjectSelector(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    label: str | None = Field(default=None, min_length=1, max_length=160)
+    type_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class FreeCadDocumentPatchItem(BaseModel):
+    op: Literal[
+        "create_feature",
+        "delete_feature",
+        "set_body_tip",
+        "set_placement",
+        "set_expression",
+        "create_sketch",
+        "attach_sketch",
+        "add_geometry",
+        "add_external_geometry",
+        "add_constraint",
+        "remove_constraint",
+        "solver_status",
+        "create_assembly",
+        "add_part_to_assembly",
+        "remove_part_from_assembly",
+        "set_assembly_part_placement",
+        "ground_assembly_part",
+        "create_joint",
+        "update_joint",
+        "solve_assembly",
+        "create_techdraw_page",
+        "add_techdraw_view",
+        "add_techdraw_projection_group",
+        "add_techdraw_section_view",
+        "add_techdraw_detail_view",
+        "add_techdraw_centerline",
+        "add_techdraw_cosmetic_vertex",
+        "add_techdraw_cosmetic_line",
+        "export_techdraw_pdf",
+        "add_techdraw_dimension",
+        "set_property",
+        "set_constraint_value",
+    ]
+    selector: FreeCadObjectSelector | None = None
+    parent_selector: FreeCadObjectSelector | None = None
+    assembly_selector: FreeCadObjectSelector | None = None
+    body_selector: FreeCadObjectSelector | None = None
+    part_selector: FreeCadObjectSelector | None = None
+    part1_selector: FreeCadObjectSelector | None = None
+    part2_selector: FreeCadObjectSelector | None = None
+    page_selector: FreeCadObjectSelector | None = None
+    view_selector: FreeCadObjectSelector | None = None
+    base_view_selector: FreeCadObjectSelector | None = None
+    sketch_selector: FreeCadObjectSelector | None = None
+    support_selector: FreeCadObjectSelector | None = None
+    source_selector: FreeCadObjectSelector | None = None
+    feature_selector: FreeCadObjectSelector | None = None
+    tip_selector: FreeCadObjectSelector | None = None
+    joint_selector: FreeCadObjectSelector | None = None
+    target_selector: FreeCadObjectSelector | None = None
+    type_id: str | None = Field(default=None, min_length=1, max_length=160)
+    type: str | None = Field(default=None, min_length=1, max_length=80)
+    joint_type: str | None = Field(default=None, min_length=1, max_length=80)
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    label: str | None = Field(default=None, min_length=1, max_length=160)
+    property: str | None = Field(default=None, min_length=1, max_length=160)
+    properties: dict[str, Any] | None = None
+    geometry: dict[str, Any] | None = None
+    geometries: list[dict[str, Any]] | None = Field(default=None, max_length=20)
+    external_geometry: dict[str, Any] | None = None
+    external_geometries: list[dict[str, Any]] | None = Field(default=None, max_length=40)
+    constraint: dict[str, Any] | None = None
+    constraints: list[dict[str, Any]] | None = Field(default=None, max_length=40)
+    value: Any = None
+    distance: float | None = None
+    expression: str | None = Field(default=None, min_length=1, max_length=1000)
+    expressions: dict[str, str] | None = None
+    placement: dict[str, Any] | None = None
+    attachment_offset: dict[str, Any] | None = None
+    connector1: dict[str, Any] | None = None
+    connector2: dict[str, Any] | None = None
+    connectors: list[dict[str, Any]] | None = Field(default=None, max_length=2)
+    solve: bool | None = None
+    template_path: str | None = Field(default=None, min_length=1, max_length=1000)
+    map_mode: str | None = Field(default=None, min_length=1, max_length=80)
+    direction: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    x_direction: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    rotation_vector: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    x: float | None = None
+    y: float | None = None
+    scale: float | None = None
+    rotation: float | None = None
+    projection: str | None = Field(default=None, min_length=1, max_length=80)
+    projections: list[str] | None = Field(default=None, max_length=8)
+    projection_names: list[str] | None = Field(default=None, max_length=8)
+    projection_type: str | None = Field(default=None, min_length=1, max_length=80)
+    auto_distribute: bool | None = None
+    spacing_x: float | None = None
+    spacing_y: float | None = None
+    dimension_type: str | None = Field(default=None, min_length=1, max_length=80)
+    measure_type: str | None = Field(default=None, min_length=1, max_length=80)
+    reference: str | None = Field(default=None, min_length=1, max_length=160)
+    references: list[str] | None = Field(default=None, max_length=20)
+    element: str | None = Field(default=None, min_length=1, max_length=160)
+    subelement: str | None = Field(default=None, min_length=1, max_length=160)
+    base: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    axis: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    origin: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    section_normal: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    section_origin: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    section_symbol: str | None = Field(default=None, min_length=1, max_length=20)
+    anchor_point: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    point: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    position: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    start: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    end: list[float] | None = Field(default=None, min_length=3, max_length=3)
+    angle_degrees: float | None = None
+    angle_radians: float | None = None
+    radius: float | None = None
+    centerline_mode: bool | None = None
+    mode: Any = None
+    constraint_index: int | None = Field(default=None, ge=0)
+    constraint_name: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class FreeCadDocumentPatchRequest(BaseModel):
+    patches: list[FreeCadDocumentPatchItem] = Field(..., min_length=1, max_length=80)
+    fcstd_b64: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+    version_id: str | None = Field(default=None, min_length=1)
+    user_instruction: str | None = Field(default=None, max_length=4000)
 
 
 def _get_gateway(app: FastAPI):
@@ -122,6 +299,248 @@ def _get_session_store(app: FastAPI) -> SessionStore:
     return store
 
 
+def _get_artifact_store(app: FastAPI) -> ArtifactStore:
+    store = getattr(app.state, "artifact_store", None)
+    if store is None:
+        store = FileArtifactStore()
+        app.state.artifact_store = store
+    return store
+
+
+def _metadata_with_artifact_refs(
+    metadata: dict,
+    artifact_refs: dict[str, dict],
+) -> dict:
+    next_metadata = dict(metadata or {})
+    if artifact_refs:
+        next_metadata["artifact_refs"] = artifact_refs
+    return next_metadata
+
+
+def _metadata_with_freecad_diagnostics(metadata: dict, result: ExecResult) -> dict:
+    next_metadata = dict(metadata or {})
+    diagnostics = dict(result.diagnostics or {})
+    if diagnostics:
+        next_metadata["freecad_diagnostics"] = diagnostics
+        if diagnostics.get("techdraw_pdf_status") is not None:
+            next_metadata["techdraw_pdf_status"] = diagnostics["techdraw_pdf_status"]
+        if diagnostics.get("techdraw_export_status") is not None:
+            next_metadata["techdraw_export_status"] = diagnostics["techdraw_export_status"]
+    return next_metadata
+
+
+def _freecad_exec_result_from_sandbox(res, fallback_error: str) -> ExecResult:
+    if not res.success or not isinstance(res.result, dict):
+        return ExecResult(
+            ok=False,
+            engine="freecad",
+            error=res.error or fallback_error,
+        )
+
+    r = res.result
+    return ExecResult(
+        ok=bool(r.get("ok")),
+        preview_png_b64=r.get("preview_png_b64"),
+        exports=r.get("exports") or {},
+        error=r.get("error"),
+        engine="freecad",
+        freecad_version=r.get("freecad_version"),
+        diagnostics={
+            key: r.get(key)
+            for key in ["techdraw_pdf_status", "techdraw_export_status", "freecad_exit_code"]
+            if r.get(key) is not None
+        },
+    )
+
+
+def _freecad_inspection_from_sandbox(res, fallback_error: str) -> dict:
+    if not res.success or not isinstance(res.result, dict):
+        return {
+            "ok": False,
+            "engine": "freecad",
+            "error": res.error or fallback_error,
+            "document_summary": None,
+            "freecad_version": None,
+        }
+
+    r = res.result
+    return {
+        "ok": bool(r.get("ok")),
+        "engine": "freecad",
+        "error": r.get("error"),
+        "document_summary": r.get("document_summary"),
+        "freecad_version": r.get("freecad_version"),
+    }
+
+
+def _freecad_document_state() -> dict:
+    state = default_design_state().model_dump()
+    state["engine"] = "freecad"
+    state["document_state"] = "fcstd_artifact"
+    return state
+
+
+def _freecad_import_marker_script(import_format: str, filename: str | None) -> str:
+    source = filename or f"uploaded.{import_format}"
+    return (
+        f"# Imported {import_format.upper()} model from {source}.\n"
+        "# The FCStd artifact is the authoritative mutable FreeCAD document state.\n"
+        "doc = FreeCAD.ActiveDocument\n"
+        "result = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]\n"
+    )
+
+
+def _freecad_patch_marker_script(patches: list[dict]) -> str:
+    return (
+        "# Applied structured FreeCAD document patches.\n"
+        "# The FCStd artifact is the authoritative mutable FreeCAD document state.\n"
+        f"# Patch count: {len(patches)}\n"
+        "doc = FreeCAD.ActiveDocument\n"
+        "result = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]\n"
+    )
+
+
+def _artifact_b64(artifact_store: ArtifactStore, session_id: str, version_id: str, name: str) -> str:
+    artifact = artifact_store.get_artifact(
+        session_id=session_id,
+        version_id=version_id,
+        artifact_name=name,
+    )
+    if artifact is None:
+        raise HTTPException(status_code=422, detail=f"source version has no {name} artifact")
+    return base64.b64encode(artifact.path.read_bytes()).decode("ascii")
+
+
+def _resolve_fcstd_b64(
+    store: SessionStore,
+    artifact_store: ArtifactStore,
+    *,
+    fcstd_b64: str | None,
+    session_id: str | None,
+    version_id: str | None,
+) -> tuple[str, object | None, str | None]:
+    source_version = None
+    resolved_version_id = version_id
+
+    if fcstd_b64 is not None:
+        if session_id and version_id:
+            source_version = store.get_version(session_id, version_id)
+        return fcstd_b64, source_version, resolved_version_id
+
+    if not session_id:
+        raise HTTPException(
+            status_code=422,
+            detail="fcstd_b64 or session_id is required",
+        )
+
+    if resolved_version_id is None:
+        session = store.get_session(session_id)
+        if session is None:
+            raise KeyError(session_id)
+        resolved_version_id = session["session"]["active_version_id"]
+    if not resolved_version_id:
+        raise HTTPException(status_code=422, detail="session has no active version")
+
+    source_version = store.get_version(session_id, resolved_version_id)
+    if source_version is None:
+        raise KeyError(resolved_version_id)
+    return (
+        _artifact_b64(artifact_store, session_id, resolved_version_id, "fcstd"),
+        source_version,
+        resolved_version_id,
+    )
+
+
+async def _inspect_fcstd_b64(fcstd_b64: str | None) -> dict:
+    if not fcstd_b64:
+        return {
+            "ok": False,
+            "engine": "freecad",
+            "error": "missing FCStd artifact for inspection",
+            "document_summary": None,
+            "freecad_version": None,
+        }
+    res = await asyncio.to_thread(
+        run_freecad_document_inspect_sandboxed,
+        fcstd_b64,
+        timeout_s=180,
+        cpu_seconds=120,
+        address_space_mb=4096,
+    )
+    return _freecad_inspection_from_sandbox(res, "FreeCAD document inspection failed")
+
+
+def _metadata_with_document_summary(metadata: dict, inspection: dict) -> dict:
+    next_metadata = dict(metadata or {})
+    if inspection.get("ok") and inspection.get("document_summary"):
+        next_metadata["document_summary"] = inspection["document_summary"]
+        next_metadata["document_summary_schema"] = 6
+        next_metadata.pop("document_summary_error", None)
+    elif inspection.get("error"):
+        next_metadata["document_summary_error"] = inspection["error"]
+    return next_metadata
+
+
+def _metadata_with_typed_state_diff(
+    metadata: dict,
+    before_summary: dict | None,
+    inspection: dict,
+) -> dict:
+    next_metadata = dict(metadata or {})
+    after_summary = inspection.get("document_summary") if inspection.get("ok") else None
+    if before_summary and after_summary:
+        next_metadata["document_state_diff"] = typed_state_diff(before_summary, after_summary)
+    return next_metadata
+
+
+def _freecad_geometry_metadata(
+    *,
+    exports: dict[str, str],
+    inspection: dict,
+    extra: dict | None = None,
+) -> dict:
+    summary = dict(extra or {})
+    summary.update(
+        {
+            "engine": "freecad",
+            "exports": sorted(exports),
+        }
+    )
+    if inspection.get("ok") and inspection.get("document_summary"):
+        summary["document_geometry"] = inspection["document_summary"].get("geometry")
+    elif inspection.get("error"):
+        summary["document_summary_error"] = inspection["error"]
+    return summary
+
+
+def _freecad_response(
+    result: ExecResult,
+    *,
+    session_id: str | None = None,
+    version=None,
+) -> dict:
+    metadata = version.metadata if version else {}
+    return {
+        "ok": result.ok,
+        "session_id": session_id,
+        "version": version.__dict__ if version else None,
+        "engine": "freecad",
+        "freecad_version": result.freecad_version,
+        "parameters": extract_script_parameters(version.script) if version else [],
+        "preview_png_b64": result.preview_png_b64,
+        "exports": result.exports,
+        "artifact_refs": (metadata or {}).get("artifact_refs") if version else {},
+        "diagnostics": result.diagnostics,
+        "techdraw_pdf_status": result.diagnostics.get("techdraw_pdf_status"),
+        "techdraw_export_status": result.diagnostics.get("techdraw_export_status"),
+        "document_summary": (metadata or {}).get("document_summary") if version else None,
+        "document_summary_error": (metadata or {}).get("document_summary_error")
+        if version
+        else None,
+        "error": result.error,
+    }
+
+
 async def default_execute(script: str) -> ExecResult:
     """Production executor: run the CAD worker in the sandbox, off the event loop."""
     from app.cad.runner import run_sandboxed
@@ -155,22 +574,7 @@ async def default_freecad_execute(script: str) -> ExecResult:
         cpu_seconds=120,
         address_space_mb=4096,
     )
-    if not res.success or not isinstance(res.result, dict):
-        return ExecResult(
-            ok=False,
-            engine="freecad",
-            error=res.error or "FreeCAD sandbox execution failed",
-        )
-
-    r = res.result
-    return ExecResult(
-        ok=bool(r.get("ok")),
-        preview_png_b64=r.get("preview_png_b64"),
-        exports=r.get("exports") or {},
-        error=r.get("error"),
-        engine="freecad",
-        freecad_version=r.get("freecad_version"),
-    )
+    return _freecad_exec_result_from_sandbox(res, "FreeCAD sandbox execution failed")
 
 
 async def _sse_with_heartbeat(agen):
@@ -207,16 +611,38 @@ def create_app(
     execute=None,
     freecad_execute=None,
     session_store: SessionStore | None = None,
+    artifact_store: ArtifactStore | None = None,
 ) -> FastAPI:
     app = FastAPI(title="4yi-cad")
     app.state.gateway = gateway
     app.state.execute = execute
     app.state.freecad_execute = freecad_execute
     app.state.session_store = session_store
+    app.state.artifact_store = artifact_store
 
     @app.get("/healthz")
     async def healthz():
         return {"status": "ok"}
+
+    @app.get("/api/production/smoke")
+    async def production_smoke():
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        storage = storage_status(
+            str(getattr(store, "db_path", "custom-session-store")),
+            str(getattr(artifact_store, "root", "custom-artifact-store")),
+        )
+        durable = all(item.get("durable_configured") for item in storage.values())
+        writable = all(item.get("writable") for item in storage.values())
+        return {
+            "ok": bool(writable),
+            "durable_storage_configured": bool(durable),
+            "storage": storage,
+            "freecad_worker": {
+                "mode": "single_container_subprocess",
+                "hardened_worker_service": False,
+            },
+        }
 
     @app.post("/api/sessions")
     async def create_session(req: CreateSessionRequest | None = None):
@@ -241,6 +667,7 @@ def create_app(
     @app.post("/api/sessions/{session_id}/versions")
     async def add_session_version(session_id: str, req: SessionVersionRequest):
         store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
         summary = req.geometry_summary or geometry_summary(req.design_state)
         try:
             version = store.add_version(
@@ -255,8 +682,96 @@ def create_app(
                 status=req.status,
                 error=req.error,
             )
+            artifact_refs = artifact_store.save_version_artifacts(
+                session_id=session_id,
+                version_id=version.id,
+                preview_png_b64=req.preview_png_b64,
+                exports=req.artifacts,
+            )
+            if artifact_refs:
+                version = store.update_version_metadata(
+                    session_id=session_id,
+                    version_id=version.id,
+                    metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="session not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        return {"version": version.__dict__}
+
+    @app.get("/api/sessions/{session_id}/versions/{version_id}")
+    async def get_session_version(session_id: str, version_id: str):
+        store = _get_session_store(app)
+        try:
+            version = store.get_version(session_id, version_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        if version is None:
+            raise HTTPException(status_code=404, detail="version not found")
+        return {"version": version.__dict__}
+
+    @app.get("/api/sessions/{session_id}/versions/{version_id}/artifacts/{artifact_name}")
+    async def get_session_artifact(session_id: str, version_id: str, artifact_name: str):
+        artifact_store = _get_artifact_store(app)
+        try:
+            artifact = artifact_store.get_artifact(
+                session_id=session_id,
+                version_id=version_id,
+                artifact_name=artifact_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        return FileResponse(
+            str(artifact.path),
+            media_type=artifact.media_type,
+            filename=artifact.filename,
+        )
+
+    @app.post("/api/sessions/{session_id}/rollback")
+    async def rollback_session(session_id: str, req: RollbackSessionRequest):
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        try:
+            target = store.get_version(session_id, req.version_id)
+            if target is None:
+                raise KeyError(req.version_id)
+            metadata = dict(target.metadata or {})
+            metadata["rollback_source_version_id"] = target.id
+            version = store.add_version(
+                session_id=session_id,
+                intent="rollback",
+                user_instruction=req.user_instruction
+                or f"Rollback to v{target.version_number}",
+                design_state=target.design_state,
+                script=target.script,
+                geometry_summary=target.geometry_summary,
+                patch={
+                    "op": "rollback_to_version",
+                    "version_id": target.id,
+                    "version_number": target.version_number,
+                },
+                metadata=metadata,
+                status=target.status,
+                error=target.error,
+            )
+            artifact_refs = artifact_store.copy_version_artifacts(
+                session_id=session_id,
+                source_version_id=target.id,
+                dest_version_id=version.id,
+            )
+            if artifact_refs:
+                version = store.update_version_metadata(
+                    session_id=session_id,
+                    version_id=version.id,
+                    metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="version not found") from exc
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
         return {"version": version.__dict__}
@@ -283,6 +798,318 @@ def create_app(
             "exports": sorted((result.get("exports") or {}).keys()),
             "preview": bool(result.get("preview_png_b64")),
             "error": result.get("error"),
+        }
+
+    @app.post("/api/freecad/import_model")
+    async def freecad_import_model(req: FreeCadImportModelRequest):
+        res = await asyncio.to_thread(
+            run_freecad_import_sandboxed,
+            req.format,
+            req.data_b64,
+            filename=req.filename,
+            timeout_s=180,
+            cpu_seconds=120,
+            address_space_mb=4096,
+        )
+        result = _freecad_exec_result_from_sandbox(res, "FreeCAD import failed")
+        if not result.ok:
+            return _freecad_response(result)
+        inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        try:
+            session_id = req.session_id
+            metadata = {
+                "preview_mode": "generated",
+                "engine": "freecad",
+                "freecad_version": result.freecad_version,
+                "document_state": "fcstd_artifact",
+                "source_format": req.format,
+                "source_filename": req.filename,
+                "generated_parameters": [],
+            }
+            if session_id is None:
+                session = store.create_session(
+                    title=req.title or req.filename or "Imported FreeCAD model"
+                )
+                session_id = session.id
+            else:
+                session = store.get_session(session_id)
+                if session is None:
+                    raise KeyError(session_id)
+            metadata = _metadata_with_freecad_diagnostics(metadata, result)
+            metadata = _metadata_with_document_summary(metadata, inspection)
+            version = store.add_version(
+                session_id=session_id,
+                intent="create",
+                user_instruction=req.user_instruction or f"Import {req.format.upper()} model",
+                design_state=_freecad_document_state(),
+                script=_freecad_import_marker_script(req.format, req.filename),
+                geometry_summary=_freecad_geometry_metadata(
+                    exports=result.exports,
+                    inspection=inspection,
+                    extra={"source_format": req.format},
+                ),
+                metadata=metadata,
+                status="ok",
+            )
+            artifact_refs = artifact_store.save_version_artifacts(
+                session_id=session_id,
+                version_id=version.id,
+                preview_png_b64=result.preview_png_b64,
+                exports=result.exports,
+            )
+            if artifact_refs:
+                version = store.update_version_metadata(
+                    session_id=session_id,
+                    version_id=version.id,
+                    metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="session not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+
+        return _freecad_response(result, session_id=session_id, version=version)
+
+    @app.post("/api/freecad/document/edit")
+    async def freecad_document_edit(req: FreeCadDocumentEditRequest):
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        session_id = req.session_id
+        try:
+            fcstd_b64, source_version, resolved_version_id = _resolve_fcstd_b64(
+                store,
+                artifact_store,
+                fcstd_b64=req.fcstd_b64,
+                session_id=session_id,
+                version_id=req.version_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="version not found") from exc
+
+        res = await asyncio.to_thread(
+            run_freecad_document_edit_sandboxed,
+            req.script,
+            fcstd_b64,
+            timeout_s=180,
+            cpu_seconds=120,
+            address_space_mb=4096,
+        )
+        result = _freecad_exec_result_from_sandbox(res, "FreeCAD document edit failed")
+        if not result.ok:
+            return _freecad_response(result, session_id=session_id)
+        inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+
+        version = None
+        if session_id:
+            try:
+                metadata = dict(source_version.metadata if source_version else {})
+                metadata.update(
+                    {
+                        "preview_mode": "generated",
+                        "engine": "freecad",
+                        "freecad_version": result.freecad_version,
+                        "document_state": "fcstd_artifact",
+                        "source_version_id": source_version.id
+                        if source_version
+                        else resolved_version_id,
+                        "generated_parameters": extract_script_parameters(req.script),
+                    }
+                )
+                metadata = _metadata_with_freecad_diagnostics(metadata, result)
+                metadata = _metadata_with_document_summary(metadata, inspection)
+                metadata = _metadata_with_typed_state_diff(
+                    metadata,
+                    (source_version.metadata or {}).get("document_summary")
+                    if source_version
+                    else None,
+                    inspection,
+                )
+                version = store.add_version(
+                    session_id=session_id,
+                    intent="modify",
+                    user_instruction=req.user_instruction or "Edit FreeCAD document",
+                    design_state=source_version.design_state
+                    if source_version
+                    else _freecad_document_state(),
+                    script=req.script,
+                    geometry_summary=_freecad_geometry_metadata(
+                        exports=result.exports,
+                        inspection=inspection,
+                        extra={
+                            "source_version_id": source_version.id
+                            if source_version
+                            else resolved_version_id,
+                        },
+                    ),
+                    patch={
+                        "op": "edit_fcstd_document",
+                        "source_version_id": source_version.id
+                        if source_version
+                        else resolved_version_id,
+                    },
+                    metadata=metadata,
+                    status="ok",
+                )
+                artifact_refs = artifact_store.save_version_artifacts(
+                    session_id=session_id,
+                    version_id=version.id,
+                    preview_png_b64=result.preview_png_b64,
+                    exports=result.exports,
+                )
+                if artifact_refs:
+                    version = store.update_version_metadata(
+                        session_id=session_id,
+                        version_id=version.id,
+                        metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                    )
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="session not found") from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+
+        return _freecad_response(result, session_id=session_id, version=version)
+
+    @app.post("/api/freecad/document/patch")
+    async def freecad_document_patch(req: FreeCadDocumentPatchRequest):
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        session_id = req.session_id
+        patches = [patch.model_dump(exclude_none=True) for patch in req.patches]
+        try:
+            fcstd_b64, source_version, resolved_version_id = _resolve_fcstd_b64(
+                store,
+                artifact_store,
+                fcstd_b64=req.fcstd_b64,
+                session_id=session_id,
+                version_id=req.version_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="version not found") from exc
+
+        res = await asyncio.to_thread(
+            run_freecad_document_patch_sandboxed,
+            patches,
+            fcstd_b64,
+            timeout_s=180,
+            cpu_seconds=120,
+            address_space_mb=4096,
+        )
+        result = _freecad_exec_result_from_sandbox(res, "FreeCAD document patch failed")
+        patch_results = (res.result or {}).get("patch_results") if res.result else []
+        if not result.ok:
+            response = _freecad_response(result, session_id=session_id)
+            response["patch_results"] = patch_results or []
+            return response
+        inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+
+        version = None
+        if session_id:
+            try:
+                source_version_id = source_version.id if source_version else resolved_version_id
+                metadata = dict(source_version.metadata if source_version else {})
+                metadata.update(
+                    {
+                        "preview_mode": "generated",
+                        "engine": "freecad",
+                        "freecad_version": result.freecad_version,
+                        "document_state": "fcstd_artifact",
+                        "source_version_id": source_version_id,
+                        "document_patch_results": patch_results or [],
+                        "generated_parameters": [],
+                    }
+                )
+                metadata = _metadata_with_freecad_diagnostics(metadata, result)
+                metadata = _metadata_with_document_summary(metadata, inspection)
+                metadata = _metadata_with_typed_state_diff(
+                    metadata,
+                    (source_version.metadata or {}).get("document_summary")
+                    if source_version
+                    else None,
+                    inspection,
+                )
+                version = store.add_version(
+                    session_id=session_id,
+                    intent="modify",
+                    user_instruction=req.user_instruction or "Patch FreeCAD document",
+                    design_state=source_version.design_state
+                    if source_version
+                    else _freecad_document_state(),
+                    script=_freecad_patch_marker_script(patches),
+                    geometry_summary=_freecad_geometry_metadata(
+                        exports=result.exports,
+                        inspection=inspection,
+                        extra={"source_version_id": source_version_id},
+                    ),
+                    patch={
+                        "op": "patch_fcstd_document",
+                        "source_version_id": source_version_id,
+                        "patches": patches,
+                        "results": patch_results or [],
+                    },
+                    metadata=metadata,
+                    status="ok",
+                )
+                artifact_refs = artifact_store.save_version_artifacts(
+                    session_id=session_id,
+                    version_id=version.id,
+                    preview_png_b64=result.preview_png_b64,
+                    exports=result.exports,
+                )
+                if artifact_refs:
+                    version = store.update_version_metadata(
+                        session_id=session_id,
+                        version_id=version.id,
+                        metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                    )
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="session not found") from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+
+        response = _freecad_response(result, session_id=session_id, version=version)
+        response["patch_results"] = patch_results or []
+        if version is None:
+            response["document_summary"] = inspection.get("document_summary")
+            response["document_summary_error"] = inspection.get("error")
+        return response
+
+    @app.post("/api/freecad/document/intent")
+    async def freecad_document_intent(req: FreeCadIntentRequest):
+        return parse_freecad_intent(req.text, req.document_summary)
+
+    @app.post("/api/freecad/document/inspect")
+    async def freecad_document_inspect(req: FreeCadDocumentInspectRequest):
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        try:
+            fcstd_b64, _source_version, resolved_version_id = _resolve_fcstd_b64(
+                store,
+                artifact_store,
+                fcstd_b64=req.fcstd_b64,
+                session_id=req.session_id,
+                version_id=req.version_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="version not found") from exc
+
+        inspection = await _inspect_fcstd_b64(fcstd_b64)
+        return {
+            "ok": inspection["ok"],
+            "session_id": req.session_id,
+            "version_id": resolved_version_id,
+            "engine": "freecad",
+            "freecad_version": inspection.get("freecad_version"),
+            "document_summary": inspection.get("document_summary"),
+            "error": inspection.get("error"),
         }
 
     @app.post("/api/generate")

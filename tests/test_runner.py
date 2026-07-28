@@ -13,7 +13,12 @@ The security invariants under test (plan review I2):
 """
 
 import json
+import os
+import signal
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 from app.cad.runner import SandboxResult, run_sandboxed
 
@@ -109,6 +114,23 @@ def test_worker_nonzero_exit_is_failure_not_hang():
     assert res.error
 
 
+def test_worker_signal_exit_reports_signal_name(monkeypatch):
+    sigxcpu = getattr(signal, "SIGXCPU", None)
+    if sigxcpu is None:
+        pytest.skip("SIGXCPU is not available on this platform")
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=-int(sigxcpu), stdout="", stderr="")
+
+    monkeypatch.setattr("app.cad.runner.subprocess.run", fake_run)
+
+    res = run_sandboxed({}, timeout_s=5, worker_argv=[PY, "-c", "print('{}')"])
+
+    assert res.success is False
+    assert "SIGXCPU" in res.error
+    assert "CPU time limit exceeded" in res.error
+
+
 def test_subprocess_setup_error_is_failure_not_exception(monkeypatch):
     def raise_setup_error(*args, **kwargs):
         raise subprocess.SubprocessError("preexec failed")
@@ -135,3 +157,62 @@ def test_request_is_delivered_to_worker_on_stdin():
 
     assert res.success is True
     assert res.result == {"echo": "box(1,2,3)"}
+
+
+def test_nested_freecadcmd_runtime_inherits_scrubbed_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "xclaw-bsl-secret")
+    monkeypatch.setenv("XCLAW_CONSUMER_ORG_ID", "org-123")
+
+    fake_freecadcmd = tmp_path / "fake_freecadcmd.py"
+    fake_freecadcmd.write_text(
+        "#!" + PY + "\n" + """
+import json
+import os
+import pathlib
+
+out = pathlib.Path(os.environ["FOURYI_FREECAD_OUT"])
+(out / "model.step").write_text("STEP")
+(out / "model.stl").write_text("solid x\\nendsolid x\\n")
+(out / "model.FCStd").write_text("FCStd")
+payload = {
+    "ok": True,
+    "step_path": str(out / "model.step"),
+    "stl_path": str(out / "model.stl"),
+    "fcstd_path": str(out / "model.FCStd"),
+    "patch_results": [{
+        "env": {
+            "has_openai_key": "OPENAI_API_KEY" in os.environ,
+            "has_xclaw": any(key.startswith("XCLAW_") for key in os.environ),
+        }
+    }],
+    "freecad_version": "fake",
+}
+print("__4YI_FREECAD_RESULT__" + json.dumps(payload))
+""",
+        encoding="utf-8",
+    )
+    os.chmod(fake_freecadcmd, 0o755)
+    monkeypatch.setenv("FREECADCMD_BINARY", str(fake_freecadcmd))
+
+    worker = [
+        PY,
+        "-c",
+        (
+            "import json;"
+            "import app.cad.freecad_worker as fw;"
+            "fw.render_preview_isolated=lambda path: None;"
+            "res=fw.run_freecad_script('result = None', timeout=5);"
+            "print(json.dumps({'ok':res['ok'], 'env':res['patch_results'][0]['env']}))"
+        ),
+    ]
+
+    res = run_sandboxed({}, timeout_s=10, worker_argv=worker)
+
+    assert res.success is True
+    assert res.result == {
+        "ok": True,
+        "env": {
+            "has_openai_key": False,
+            "has_xclaw": False,
+        },
+    }
