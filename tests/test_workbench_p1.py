@@ -48,6 +48,8 @@ def test_p1_workbench_exposes_core_surfaces():
         "mountGeneratedCadViewer",
         "viewer_scene",
         "generatedViewerSceneData",
+        "freeCadViewerObjectStyle",
+        "freeCadStyleColorValue",
         "addViewerSceneFaceMeshes",
         "addViewerSceneEdgeTargets",
         "addViewerSceneVertexTargets",
@@ -318,6 +320,21 @@ def test_generated_agent_followups_rewrite_current_model_by_default():
     assert 'const sawDone = await readSse(resp, prompt, { mode, instruction: prompt });' in html
     assert "const userInstruction = context.instruction || state.generatedPrompt;" in html
     assert 'recordServerVersion(ev.ok ? (rewrite ? "modify" : "create") : "repair", userInstruction' in html
+
+
+def test_viewer_scene_styles_drive_frontend_materials():
+    html = _html()
+
+    assert "function freeCadViewerObjectStyle(obj)" in html
+    assert "function freeCadStyleColorValue(style, hexKey, rgbKey, fallback)" in html
+    assert "semantic_role" in html
+    assert "edge_color" in html
+    assert "point_color" in html
+    assert "const objectStyle = freeCadViewerObjectStyle(obj);" in html
+    assert "color: selected ? 0x2f80ed : objectStyle.color" in html
+    assert "color: selected ? 0xf59e0b : objectStyle.edgeColor" in html
+    assert "color: selected ? 0x22c55e : objectStyle.pointColor" in html
+    assert "Math.max(objectStyle.opacity, 0.88)" in html
 
 
 def test_new_session_button_resets_current_workbench_session():

@@ -24,8 +24,10 @@
 - Generated/imported FreeCAD documents now use a FreeCAD-like web surface rather
   than a static PNG-only preview: the model tree binds to `document_summary`
   objects, the viewport can mount an STL-backed interactive scene with object
-  bounding-box selection, and the right panel edits selected object properties,
-  placement, and Sketcher constraint values through typed document patch ops.
+  bounding-box selection, `viewer_scene` preserves object-level style metadata
+  for semantically colored CAD-readable scenes, and the right panel edits
+  selected object properties, placement, and Sketcher constraint values through
+  typed document patch ops.
 - Typed FreeCAD patch ops currently include `create_feature`, `delete_feature`,
   `set_body_tip`, `set_placement`, `set_expression`, `create_sketch`,
   `attach_sketch`, `add_external_geometry`, `solver_status`, `add_geometry`,
@@ -50,8 +52,8 @@
   for server-side diffs.
 - Still open: richer Sketcher geometry/constraint coverage, richer Assembly
   LCS/element selection, motion/simulation, BOM, exploded views, stronger
-  geometry checks, object-store/PVC durability, and a separate hardened FreeCAD
-  worker service.
+  geometry checks, object-store/PVC durability, a separate hardened FreeCAD
+  worker service, and deeper visual controls for multi-object FreeCAD scenes.
 
 ## Web Workbench Plan
 
@@ -276,6 +278,10 @@ before or with Track B, not after:
 
 - **Interactive viewport (WS)**: rotate / measure / pick faces on the 3D model
   (upgrade from static PNG; reuses the shipped `xclaw-router` WS path).
+- **Styled FreeCAD scenes (baseline implemented)**: preserve object-level colors,
+  transparency, display modes, and semantic labels from generated FreeCAD scripts through
+  `viewer_scene`, so site/community/assembly outputs are visually readable
+  without becoming render-heavy marketing images.
 - **Parametric panel**: surface the `DesignState.parameters` dimensions as sliders/inputs so
   users tweak without re-prompting.
 - **Multimodal input**: reference image → model (CADialogue direction).
@@ -350,8 +356,13 @@ cad-worker/freecad-worker        ── big CPU/mem + EBS
 
 **P2.6 — Scale, billing, UX**
 23. Generation billing hookup (compute credits per org).
-24. Parametric panel polish **or** interactive WS viewport.
-25. Optional: multimodal image input; template library.
+24. FreeCAD scene styling schema baseline: agent prompt/cookbook sets
+    `ViewObject` colors/transparency/display modes for major objects; worker
+    exports style metadata in `viewer_scene`; frontend renders those styles with
+    CAD-readable object outlines and selection highlighting. Follow-up work:
+    user-editable style controls and richer saved style presets.
+25. Parametric panel polish **or** interactive WS viewport.
+26. Optional: multimodal image input; template library.
 
 Each task: red→green TDD (unit tests with fakes; heavy FreeCAD/preview via container
 smoke). Adversarial review + verification-before-completion per task.
@@ -367,6 +378,10 @@ smoke). Adversarial review + verification-before-completion per task.
   lose core parameters/features.
 - **Assembly**: two parts + fixed/revolute/slider/cylindrical/distance/angle joint
   coverage → positioned assembly, solver status, exported STEP opens in a viewer.
+- **Styled FreeCAD scene**: generated multi-object site/community model includes
+  named plot/building/road/water/green/play objects with distinct colors or
+  transparency in `viewer_scene`; viewer preserves selection/readability and does
+  not require dense decorative geometry.
 - **Drawing**: a part → TechDraw → SVG/DXF/PDF artifacts with correct projection,
   section/detail, cosmetic/centerline, and dimension state when the PDF converter
   is available.

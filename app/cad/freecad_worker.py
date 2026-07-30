@@ -514,6 +514,172 @@ def viewer_object_placement(obj):
         return None
 
 
+def viewer_color_triplet(value):
+    if value is None or isinstance(value, str):
+        return None
+    try:
+        raw = list(value)[:3]
+    except Exception:
+        return None
+    if len(raw) != 3:
+        return None
+    rgb = []
+    for item in raw:
+        try:
+            channel = float(item)
+        except Exception:
+            return None
+        if not math.isfinite(channel):
+            return None
+        if channel > 1.0:
+            channel = channel / 255.0
+        rgb.append(max(0.0, min(1.0, channel)))
+    return rgb
+
+
+def viewer_hex_color(rgb):
+    if not isinstance(rgb, (list, tuple)) or len(rgb) < 3:
+        return None
+    try:
+        channels = [max(0, min(255, int(round(float(value) * 255)))) for value in rgb[:3]]
+    except Exception:
+        return None
+    return "#{:02x}{:02x}{:02x}".format(*channels)
+
+
+def style_from_hex(color, *, edge_color=None, point_color=None, opacity=0.84, role="generic", source="semantic_default"):
+    def parse_hex(value):
+        match = re.match(r"^#?([0-9a-fA-F]{6})$", safe_text(value))
+        if not match:
+            return None, None
+        raw = match.group(1)
+        rgb = [int(raw[index:index + 2], 16) / 255.0 for index in (0, 2, 4)]
+        return "#" + raw.lower(), rgb
+
+    color_hex, color_rgb = parse_hex(color)
+    edge_hex, edge_rgb = parse_hex(edge_color or color)
+    point_hex, point_rgb = parse_hex(point_color or edge_color or color)
+    style = {
+        "schema": "freecad.viewer_object_style.v1",
+        "source": source,
+        "semantic_role": role,
+        "color": color_hex or "#8f9aa6",
+        "color_rgb": color_rgb or [0.56, 0.60, 0.65],
+        "edge_color": edge_hex or "#334155",
+        "edge_color_rgb": edge_rgb or [0.20, 0.25, 0.33],
+        "point_color": point_hex or edge_hex or "#334155",
+        "point_color_rgb": point_rgb or edge_rgb or [0.20, 0.25, 0.33],
+        "opacity": max(0.05, min(1.0, float(opacity))),
+    }
+    return style
+
+
+SEMANTIC_VIEWER_STYLES = (
+    ("water", (r"water", r"lake", r"pond", r"pool", r"river", r"canal", r"湖", r"水", r"池"), "#38bdf8", "#0369a1", "#0ea5e9", 0.54),
+    ("green", (r"green", r"park", r"garden", r"lawn", r"landscape", r"grass", r"plant", r"绿", r"园", r"景观"), "#86c47a", "#3f7f4f", "#16a34a", 0.70),
+    ("play", (r"play", r"playground", r"sport", r"court", r"children", r"kid", r"儿童", r"游乐", r"运动"), "#f4b860", "#b45309", "#f59e0b", 0.76),
+    ("road", (r"road", r"path", r"drive", r"street", r"lane", r"walk", r"pavement", r"路", r"道路", r"车道", r"步道"), "#56616f", "#263241", "#475569", 0.82),
+    ("amenity", (r"club", r"clubhouse", r"hall", r"amenity", r"retail", r"lobby", r"会所", r"配套", r"商业"), "#d8a35d", "#9a5d1f", "#c97a24", 0.84),
+    ("building", (r"building", r"tower", r"villa", r"apartment", r"residential", r"podium", r"house", r"楼", r"住宅", r"别墅", r"高层"), "#b9c2cc", "#334155", "#475569", 0.90),
+    ("plot", (r"plot", r"site", r"parcel", r"base", r"ground", r"terrain", r"地块", r"场地", r"基地"), "#d7e5cf", "#75856f", "#6b7c62", 0.66),
+)
+
+
+def semantic_viewer_style(obj):
+    text = " ".join([
+        safe_text(getattr(obj, "Name", "")),
+        safe_text(getattr(obj, "Label", "")),
+        safe_text(getattr(obj, "TypeId", "")),
+    ]).lower()
+    for role, patterns, color, edge_color, point_color, opacity in SEMANTIC_VIEWER_STYLES:
+        if any(re.search(pattern, text) for pattern in patterns):
+            return style_from_hex(
+                color,
+                edge_color=edge_color,
+                point_color=point_color,
+                opacity=opacity,
+                role=role,
+                source="semantic_default",
+            )
+    return style_from_hex("#8f9aa6", edge_color="#334155", point_color="#475569", opacity=0.84)
+
+
+def view_object_style(obj):
+    try:
+        view = getattr(obj, "ViewObject")
+    except Exception:
+        view = None
+    if view is None:
+        return None
+
+    def view_property(name):
+        try:
+            return getattr(view, name)
+        except Exception:
+            return None
+
+    style = {
+        "schema": "freecad.viewer_object_style.v1",
+        "source": "view_object",
+        "semantic_role": "generic",
+    }
+    color = viewer_color_triplet(view_property("ShapeColor"))
+    if color:
+        style["color_rgb"] = color
+        style["color"] = viewer_hex_color(color)
+    line_color = viewer_color_triplet(view_property("LineColor"))
+    if line_color:
+        style["edge_color_rgb"] = line_color
+        style["edge_color"] = viewer_hex_color(line_color)
+    point_color = viewer_color_triplet(view_property("PointColor"))
+    if point_color:
+        style["point_color_rgb"] = point_color
+        style["point_color"] = viewer_hex_color(point_color)
+    try:
+        transparency = int(float(view_property("Transparency")))
+        transparency = max(0, min(100, transparency))
+        style["transparency"] = transparency
+        style["opacity"] = max(0.05, min(1.0, 1.0 - transparency / 100.0))
+    except Exception:
+        pass
+    display_mode = safe_text(view_property("DisplayMode") or "")
+    if display_mode:
+        style["display_mode"] = display_mode
+    return style if len(style) > 3 else None
+
+
+def viewer_style_color_is_default(rgb):
+    if not rgb or len(rgb) < 3:
+        return True
+    grey_targets = ([0.8, 0.8, 0.8], [0.56, 0.60, 0.65])
+    return any(all(abs(float(rgb[index]) - target[index]) < 0.04 for index in range(3)) for target in grey_targets)
+
+
+def view_object_style_is_custom(style):
+    if not style:
+        return False
+    if style.get("transparency") not in (None, 0):
+        return True
+    for key in ("color_rgb", "edge_color_rgb", "point_color_rgb"):
+        if key in style and not viewer_style_color_is_default(style.get(key)):
+            return True
+    return False
+
+
+def viewer_object_style(obj):
+    semantic = semantic_viewer_style(obj)
+    view = view_object_style(obj)
+    if view and view_object_style_is_custom(view):
+        merged = dict(semantic)
+        merged.update({key: value for key, value in view.items() if value is not None})
+        merged["semantic_role"] = semantic.get("semantic_role", "generic")
+        merged["source"] = "view_object"
+        return merged
+    if view and view.get("display_mode"):
+        semantic["display_mode"] = view["display_mode"]
+    return semantic
+
+
 def viewer_face_mesh(face, index, placement=None, tolerance=0.8, triangle_limit=800):
     try:
         vertices, facets = face.tessellate(float(tolerance))
@@ -656,6 +822,7 @@ def viewer_object_scene(obj, face_limit=96, total_triangle_limit=12000):
     }
     ref.update({
         "bbox": merged_bbox or bbox_summary(shape),
+        "style": viewer_object_style(obj),
         "faces": faces,
         "edges": edges,
         "vertices": vertices,

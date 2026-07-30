@@ -89,6 +89,12 @@ Hard rules:
 - For FreeCAD: import `FreeCAD` and `Part`; create/recompute a document and assign
   the final document object, shape, document, or list of exportable objects to
   `result`. Give major objects useful names and labels.
+- For FreeCAD multi-object scenes, set `obj.ViewObject.ShapeColor`,
+  `obj.ViewObject.LineColor`, `obj.ViewObject.Transparency`, and useful display
+  modes for major objects when available. Use a restrained semantic CAD palette:
+  plot/green muted green, roads dark slate, water translucent blue, buildings
+  light stone/steel, amenities warm amber. Do not add dense decorative geometry
+  just to make the model prettier.
 - `result` must contain valid solid geometry with positive volume (not an empty
   sketch). A multi-object layout is valid when it exports as STEP/STL and preserves
   recognizable objects.

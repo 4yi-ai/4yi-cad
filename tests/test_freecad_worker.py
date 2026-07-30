@@ -134,6 +134,26 @@ def test_worker_defines_stable_subelement_ref_v2_semantics():
         assert marker in source
 
 
+def test_worker_exports_viewer_scene_style_metadata():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        "freecad.viewer_object_style.v1",
+        "viewer_object_style",
+        "view_object_style",
+        "semantic_viewer_style",
+        "ViewObject",
+        "ShapeColor",
+        "LineColor",
+        "Transparency",
+        "semantic_role",
+        "water",
+        "building",
+        '"style": viewer_object_style(obj)',
+    ):
+        assert marker in source
+
+
 def test_worker_defines_assembly_lcs_and_runtime_capability_diagnostics():
     source = WORKER_SOURCE.read_text(encoding="utf-8")
 
@@ -984,6 +1004,15 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     }
     for marker in ("plot", "building", "water", "playground"):
         assert any(marker in text for text in object_text)
+
+    styles = {item["name"]: item.get("style", {}) for item in scene["objects"]}
+    assert styles["Plot"]["semantic_role"] == "plot"
+    assert styles["BuildingA"]["semantic_role"] == "building"
+    assert styles["WaterGarden"]["semantic_role"] == "water"
+    assert styles["Playground"]["semantic_role"] == "play"
+    assert styles["GreenPark"]["semantic_role"] == "green"
+    assert len({styles[name]["color"] for name in ("Plot", "BuildingA", "WaterGarden", "Playground", "GreenPark")}) >= 4
+    assert 0 < styles["WaterGarden"]["opacity"] < styles["BuildingA"]["opacity"] <= 1
 
 
 @pytest.mark.skipif(

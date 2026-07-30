@@ -2467,6 +2467,59 @@ function freeCadSelectionColor(kind) {
   }[kind] || 0x64748b;
 }
 
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0.05, Math.min(1, number)) : fallback;
+}
+
+function colorNumberFromHex(value, fallback) {
+  const match = String(value || "").trim().match(/^#?([0-9a-fA-F]{6})$/);
+  return match ? parseInt(match[1], 16) : fallback;
+}
+
+function colorNumberFromRgb(value, fallback) {
+  if (!Array.isArray(value) || value.length < 3) return fallback;
+  const channels = value.slice(0, 3).map(Number);
+  if (!channels.every(Number.isFinite)) return fallback;
+  return channels.reduce((acc, raw) => {
+    const channel = raw > 1 ? raw / 255 : raw;
+    return (acc << 8) + Math.max(0, Math.min(255, Math.round(channel * 255)));
+  }, 0);
+}
+
+function freeCadStyleColorValue(style, hexKey, rgbKey, fallback) {
+  const fromHex = colorNumberFromHex(style?.[hexKey], null);
+  if (fromHex !== null) return fromHex;
+  return colorNumberFromRgb(style?.[rgbKey], fallback);
+}
+
+function freeCadViewerObjectStyle(obj) {
+  const rawStyle = obj?.style && typeof obj.style === "object" ? obj.style : {};
+  const role = String(rawStyle.semantic_role || rawStyle.semanticRole || "generic").toLowerCase();
+  const defaults = {
+    water: [0x38bdf8, 0x0369a1, 0x0ea5e9, 0.54, 0.52],
+    green: [0x86c47a, 0x3f7f4f, 0x16a34a, 0.70, 0.40],
+    play: [0xf4b860, 0xb45309, 0xf59e0b, 0.76, 0.46],
+    road: [0x56616f, 0x263241, 0x475569, 0.82, 0.44],
+    amenity: [0xd8a35d, 0x9a5d1f, 0xc97a24, 0.84, 0.46],
+    building: [0xb9c2cc, 0x334155, 0x475569, 0.90, 0.34],
+    plot: [0xd7e5cf, 0x75856f, 0x6b7c62, 0.66, 0.42],
+    generic: [0x8f9aa6, 0x334155, 0x475569, 0.84, 0.30],
+  }[role] || [0x8f9aa6, 0x334155, 0x475569, 0.84, 0.30];
+  const color = freeCadStyleColorValue(rawStyle, "color", "color_rgb", defaults[0]);
+  const edgeColor = freeCadStyleColorValue(rawStyle, "edge_color", "edge_color_rgb", defaults[1]);
+  const pointColor = freeCadStyleColorValue(rawStyle, "point_color", "point_color_rgb", defaults[2]);
+  const opacity = clampUnit(rawStyle.opacity, defaults[3]);
+  return {
+    role,
+    color,
+    edgeColor,
+    pointColor,
+    opacity,
+    edgeOpacity: defaults[4],
+  };
+}
+
 function freeCadSubelementMatchesSelection(objectName, reference, kind, stableId = "") {
   const selected = state.selectedFreeCadSubelement;
   return Boolean(selected)
@@ -2539,6 +2592,7 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
     const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectStyle = freeCadViewerObjectStyle(obj);
     for (const face of obj.faces || []) {
       const reference = face.reference || face.name || "";
       const vertices = Array.isArray(face.vertices) ? face.vertices : [];
@@ -2560,13 +2614,14 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.computeVertexNormals();
+      const faceOpacity = selected ? 0.97 : objectSelected ? Math.max(objectStyle.opacity, 0.88) : objectStyle.opacity;
       const material = new THREE.MeshStandardMaterial({
-        color: selected ? 0x2f80ed : objectSelected ? 0x9bb6d4 : 0x8f9aa6,
+        color: selected ? 0x2f80ed : objectStyle.color,
         roughness: 0.58,
         metalness: 0.04,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: selected ? 0.96 : 0.84,
+        opacity: faceOpacity,
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.userData.freeCadSelection = {
@@ -2590,9 +2645,9 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(geometry, 28),
           new THREE.LineBasicMaterial({
-            color: selected ? 0x0b6fe8 : 0x334155,
+            color: selected ? 0x0b6fe8 : objectStyle.edgeColor,
             transparent: true,
-            opacity: selected ? 0.85 : 0.34,
+            opacity: selected ? 0.85 : 0.56,
           })
         );
         edges.renderOrder = selected ? 9 : 3;
@@ -2611,6 +2666,7 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
     const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectStyle = freeCadViewerObjectStyle(obj);
     for (const edge of obj.edges || []) {
       const reference = edge.reference || edge.name || "";
       const points = Array.isArray(edge.points) ? edge.points : [];
@@ -2626,9 +2682,9 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       const material = new THREE.LineBasicMaterial({
-        color: selected ? 0xf59e0b : objectSelected || mode === "edge" ? 0xd97706 : 0x475569,
+        color: selected ? 0xf59e0b : objectStyle.edgeColor,
         transparent: true,
-        opacity: selected ? 0.98 : mode === "edge" || objectSelected ? 0.62 : 0.22,
+        opacity: selected ? 0.98 : mode === "edge" || objectSelected ? Math.max(0.66, objectStyle.edgeOpacity) : objectStyle.edgeOpacity,
       });
       const line = new THREE.Line(geometry, material);
       line.userData.freeCadSelection = {
@@ -2661,6 +2717,7 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
     const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectStyle = freeCadViewerObjectStyle(obj);
     for (const vertex of obj.vertices || []) {
       const reference = vertex.reference || vertex.name || "";
       const point = freeCadTriplet(vertex.point || vertex.center);
@@ -2669,7 +2726,7 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
       const selected = freeCadSubelementMatchesSelection(objectName, reference, "Vertex", stableId);
       const geometry = new THREE.SphereGeometry(selected ? radius * 1.35 : radius, 10, 6);
       const material = new THREE.MeshBasicMaterial({
-        color: selected ? 0x22c55e : objectSelected || mode === "vertex" ? 0x16a34a : 0x64748b,
+        color: selected ? 0x22c55e : objectStyle.pointColor,
         transparent: true,
         opacity: selected ? 0.96 : mode === "vertex" || objectSelected ? 0.72 : 0.28,
         depthWrite: false,
