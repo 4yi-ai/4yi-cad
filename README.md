@@ -4,17 +4,17 @@ AI CAD app: **prompt → parametric 3D model → preview → STEP/STL export →
 Packaged as a **4yi dedicated app** — a standalone repo the 4yi platform builds
 (CodeBuild → ECR) and installs per-consumer-org into EKS, injecting the LLM gateway.
 
-## Product target
+## Our target
 
-4yi-cad targets FreeCAD users who want an AI companion for early model generation
-and bidirectional FreeCAD handoff. Generated models can be exported back to
-FreeCAD-compatible artifacts such as FCStd/STEP/STL, and existing FreeCAD outputs
-can be imported into 4yi-cad for preview, parameter edits, diagnostics, and
-inspectable iteration. It is not intended to replace FreeCAD's GUI or mature
-workbenches. Private/Public Beta should be positioned around reliable
-Sketcher/PartDesign-style generation, upload, preview, diagnostics, import from
-FreeCAD, and export back to FreeCAD; GA requires a stronger closed loop for
-topology references, Assembly, TechDraw, and external geometry repair.
+Our target is to serve FreeCAD users with an AI companion for early model
+generation and bidirectional FreeCAD handoff. Generated models can be exported
+back to FreeCAD-compatible artifacts such as FCStd/STEP/STL, and existing
+FreeCAD outputs can be imported into 4yi-cad for preview, parameter edits,
+diagnostics, and inspectable iteration. It is not intended to replace FreeCAD's
+GUI or mature workbenches. Private/Public Beta should be positioned around
+reliable Sketcher/PartDesign-style generation, upload, preview, diagnostics,
+import from FreeCAD, and export back to FreeCAD; GA requires a stronger closed
+loop for topology references, Assembly, TechDraw, and external geometry repair.
 
 ## Architecture (MVP)
 
