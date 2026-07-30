@@ -241,6 +241,15 @@ def test_chat_history_is_sanitized_before_restore_and_generate():
     assert "history: mode === \"rewrite\" ? [] : sanitizeChatHistory(state.chatHistory)" in html
 
 
+def test_generate_errors_include_response_detail_in_logs():
+    html = _html()
+
+    assert "async function responseErrorMessage(resp)" in html
+    assert "const text = await resp.text();" in html
+    assert "json.detail || json.error || text" in html
+    assert "throw new Error(await responseErrorMessage(resp));" in html
+
+
 def test_generated_hole_edit_prefers_local_parameter_patch():
     html = _html()
 

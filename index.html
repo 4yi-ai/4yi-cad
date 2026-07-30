@@ -4042,6 +4042,29 @@ async function fetchJson(url, body) {
   return json;
 }
 
+async function responseErrorMessage(resp) {
+  let detail = "";
+  try {
+    const text = await resp.text();
+    if (text) {
+      try {
+        const json = JSON.parse(text);
+        detail = json.detail || json.error || text;
+      } catch {
+        detail = text;
+      }
+    }
+  } catch {
+    detail = "";
+  }
+  if (Array.isArray(detail)) {
+    detail = detail.map((item) => item?.msg || item?.type || String(item)).join("; ");
+  } else if (detail && typeof detail === "object") {
+    detail = detail.message || JSON.stringify(detail);
+  }
+  return detail ? `HTTP ${resp.status}: ${detail}` : `HTTP ${resp.status}`;
+}
+
 function detectFreeCadImportFormat(filename) {
   const match = String(filename || "").toLowerCase().match(/\.([a-z0-9]+)$/);
   const ext = match ? match[1] : "";
@@ -9657,7 +9680,7 @@ async function generateFromPrompt(prompt, options = {}) {
       setStatus("waking", { attempt: attempt + 1 });
       await new Promise((r) => setTimeout(r, 3000));
     }
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) throw new Error(await responseErrorMessage(resp));
     const sawDone = await readSse(resp, prompt, { mode });
     if (!sawDone) {
       setStatus("failed");
