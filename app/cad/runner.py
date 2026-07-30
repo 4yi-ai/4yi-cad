@@ -88,6 +88,11 @@ def _returncode_error(returncode: int) -> str:
         signal_name = f"signal {signum}"
     if signal_name == "SIGXCPU":
         return f"worker terminated by signal {signum} ({signal_name}); CPU time limit exceeded"
+    if signal_name == "SIGKILL":
+        return (
+            f"worker terminated by signal {signum} ({signal_name}); possible memory/container "
+            "limit exceeded, simplify the geometry or use fewer high-resolution operations"
+        )
     return f"worker terminated by signal {signum} ({signal_name})"
 
 

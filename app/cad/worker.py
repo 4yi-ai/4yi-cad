@@ -62,12 +62,41 @@ def render_preview_isolated(
     return out or None
 
 
+def install_cadquery_compat(cq) -> None:
+    """Patch common LLM CadQuery API confusions inside this worker process only."""
+
+    original_shell = getattr(cq.Workplane, "shell", None)
+    if not callable(original_shell) or getattr(original_shell, "_fouryi_compat", False):
+        return
+
+    def shell_compat(self, thickness=None, *args, **kwargs):
+        face_selector = kwargs.pop("faces", None)
+        if face_selector is None:
+            face_selector = kwargs.pop("face_selector", None)
+        if thickness is None:
+            raise TypeError("Workplane.shell() missing required argument: 'thickness'")
+        target = self
+        if face_selector is not None:
+            if not isinstance(face_selector, str):
+                raise TypeError(
+                    "Workplane.shell(faces=...) compatibility only accepts a CadQuery selector string"
+                )
+            target = self.faces(face_selector)
+        return original_shell(target, thickness, *args, **kwargs)
+
+    shell_compat._fouryi_compat = True
+    shell_compat._fouryi_original = original_shell
+    cq.Workplane.shell = shell_compat
+
+
 def run(script: str) -> dict:
     try:
         import cadquery as cq
         from cadquery import exporters
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"cadquery unavailable: {exc}"}
+
+    install_cadquery_compat(cq)
 
     namespace: dict = {"cq": cq, "cadquery": cq}
     try:

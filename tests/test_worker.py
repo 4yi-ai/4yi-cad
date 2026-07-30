@@ -10,7 +10,7 @@ survive. Tested with injected commands — no cadquery/VTK needed.
 import sys
 from types import SimpleNamespace
 
-from app.cad.worker import render_preview_isolated
+from app.cad.worker import install_cadquery_compat, render_preview_isolated
 
 PY = sys.executable
 
@@ -47,3 +47,29 @@ def test_default_preview_runs_directly_when_xvfb_is_missing(monkeypatch):
 
     assert render_preview_isolated("/mesh.stl") == "QUJD"
     assert seen["argv"] == [PY, "-m", "app.cad.preview", "/mesh.stl"]
+
+
+def test_cadquery_shell_compat_accepts_faces_selector():
+    class FakeWorkplane:
+        def __init__(self, selector=None):
+            self.selector = selector
+
+        def faces(self, selector):
+            return FakeWorkplane(selector)
+
+        def shell(self, thickness, kind="arc"):
+            return {
+                "selector": self.selector,
+                "thickness": thickness,
+                "kind": kind,
+            }
+
+    fake_cq = SimpleNamespace(Workplane=FakeWorkplane)
+
+    install_cadquery_compat(fake_cq)
+
+    assert fake_cq.Workplane().shell(thickness=1.5, faces=">Z", kind="intersection") == {
+        "selector": ">Z",
+        "thickness": 1.5,
+        "kind": "intersection",
+    }

@@ -131,6 +131,19 @@ def test_worker_signal_exit_reports_signal_name(monkeypatch):
     assert "CPU time limit exceeded" in res.error
 
 
+def test_sigkill_exit_reports_possible_memory_limit(monkeypatch):
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=-int(signal.SIGKILL), stdout="", stderr="")
+
+    monkeypatch.setattr("app.cad.runner.subprocess.run", fake_run)
+
+    res = run_sandboxed({}, timeout_s=5, worker_argv=[PY, "-c", "print('{}')"])
+
+    assert res.success is False
+    assert "SIGKILL" in res.error
+    assert "memory/container limit" in res.error
+
+
 def test_subprocess_setup_error_is_failure_not_exception(monkeypatch):
     def raise_setup_error(*args, **kwargs):
         raise subprocess.SubprocessError("preexec failed")

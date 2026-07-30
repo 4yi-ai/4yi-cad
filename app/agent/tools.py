@@ -14,8 +14,9 @@ RUN_CADQUERY_TOOL = {
             "Generate a parametric 3D model by writing a CadQuery Python script. "
             "The script must build a CadQuery model and assign the final solid to a "
             "variable named `result`. It runs headless in a sandbox with no network "
-            "access. If a previous attempt failed, read the error and return a corrected "
-            "complete script."
+            "access. Target CadQuery 2.7 APIs; do not pass unsupported keyword "
+            "arguments such as `faces=` to `Workplane.shell()`. If a previous "
+            "attempt failed, read the error and return a corrected complete script."
         ),
         "parameters": {
             "type": "object",
@@ -74,6 +75,8 @@ Hard rules:
 - All dimensions are in millimetres.
 - For CadQuery: `import cadquery as cq` at the top; assign the FINAL solid to a
   variable named `result`.
+- Target CadQuery 2.7 APIs. Do not call `Workplane.shell(faces=...)`; if you need
+  an open-face shell, write `.faces(">Z").shell(thickness)` instead.
 - For FreeCAD: import `FreeCAD` and `Part`; create/recompute a document and assign
   the final document object or shape to `result`.
 - `result` must be a single, valid solid with positive volume (not an empty sketch).
