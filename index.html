@@ -2138,8 +2138,9 @@ function clearGenerationActivity() {
 }
 
 function renderGenerationActivityEvents(activity = state.generationActivity, limit = 4) {
-  if (!activity?.events?.length) return "";
-  return `<div class="activity-events">${activity.events.slice(0, limit).map((item) => `
+  const events = activity?.events?.slice(1, limit + 1) || [];
+  if (!events.length) return "";
+  return `<div class="activity-events">${events.map((item) => `
     <div class="activity-event"><span class="activity-dot"></span><span>${escapeHtml(generationActivityEventText(item))}</span></div>
   `).join("")}</div>`;
 }
