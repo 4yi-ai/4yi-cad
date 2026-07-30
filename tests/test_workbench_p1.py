@@ -29,6 +29,7 @@ def test_p1_workbench_exposes_core_surfaces():
         "restoreWorkbenchSession",
         "sanitizeChatHistory",
         "recordServerVersion",
+        "clearServerSessionReference",
         "restoreServerSession",
         "artifactRefs",
         "hydrateArtifactRefs",
@@ -239,6 +240,17 @@ def test_chat_history_is_sanitized_before_restore_and_generate():
     assert 'item.role === "user" || item.role === "assistant"' in html
     assert "state.chatHistory = sanitizeChatHistory(saved.chatHistory);" in html
     assert "history: mode === \"rewrite\" ? [] : sanitizeChatHistory(state.chatHistory)" in html
+
+
+def test_missing_server_session_is_cleared_and_retried():
+    html = _html()
+
+    assert "function clearServerSessionReference()" in html
+    assert "function isMissingServerSessionError(error)" in html
+    assert "for (let attempt = 0; attempt < 2; attempt += 1)" in html
+    assert "if (attempt === 0 && isMissingServerSessionError(saveError))" in html
+    assert "clearServerSessionReference();" in html
+    assert "if (isMissingServerSessionError(error)) clearServerSessionReference();" in html
 
 
 def test_generate_errors_include_response_detail_in_logs():

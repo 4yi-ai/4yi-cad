@@ -3917,6 +3917,17 @@ function syncSavedServerVersion(version, fallbackLabel, fallbackDetail) {
   persistWorkbenchSession();
 }
 
+function clearServerSessionReference() {
+  state.serverSessionId = "";
+  state.activeServerVersionId = "";
+  localStorage.removeItem(SERVER_SESSION_ID_STORAGE_KEY);
+  persistWorkbenchSession();
+}
+
+function isMissingServerSessionError(error) {
+  return /session not found|HTTP\s*404|404 Not Found/i.test(String(error?.message || error || ""));
+}
+
 async function ensureServerSession() {
   if (state.serverSessionId) return state.serverSessionId;
   const res = await fetchJson("/api/sessions", { title: state.generatedPrompt || "4yi-cad session" });
@@ -3932,14 +3943,21 @@ async function recordServerVersion(intent, userInstruction = "", status = "ok", 
   const signature = versionSignature(payload);
   if (signature === state.lastServerVersionSignature) return;
   state.lastServerVersionSignature = signature;
-  try {
-    const sessionId = await ensureServerSession();
-    const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/versions`, payload);
-    syncSavedServerVersion(saved.version, intent, userInstruction);
-    await refreshFreeCadDocumentSummary(sessionId, saved.version?.id);
-    return saved.version;
-  } catch (saveError) {
-    console.warn("Unable to persist 4yi-cad server session", saveError);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const sessionId = await ensureServerSession();
+      const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/versions`, payload);
+      syncSavedServerVersion(saved.version, intent, userInstruction);
+      await refreshFreeCadDocumentSummary(sessionId, saved.version?.id);
+      return saved.version;
+    } catch (saveError) {
+      if (attempt === 0 && isMissingServerSessionError(saveError)) {
+        clearServerSessionReference();
+        continue;
+      }
+      console.warn("Unable to persist 4yi-cad server session", saveError);
+      break;
+    }
   }
   return null;
 }
@@ -4026,6 +4044,7 @@ async function restoreServerSession() {
     localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, sessionId);
     return await applyStoredServerVersion(active, saved.versions || []);
   } catch (error) {
+    if (isMissingServerSessionError(error)) clearServerSessionReference();
     console.warn("Unable to restore 4yi-cad server session", error);
     return false;
   }
