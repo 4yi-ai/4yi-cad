@@ -240,6 +240,15 @@ def test_generated_hole_edit_prefers_local_parameter_patch():
     assert "if (useAgent) {" in html
 
 
+def test_generated_parameter_patch_requires_explicit_edit_intent():
+    html = _html()
+
+    assert "shouldParseGeneratedParameterPatch" in html
+    assert "generatedParameterNameMentioned" in html
+    assert "if (!shouldParseGeneratedParameterPatch(text, params)) return null;" in html
+    assert "层数|楼层|层|数量" in html
+
+
 def test_generated_unmapped_command_falls_back_to_agent():
     html = _html()
 

@@ -9161,6 +9161,27 @@ function shouldUseAgentForUnmappedCommand(text, rewriteScript) {
   return state.previewMode === "generated";
 }
 
+function generatedParameterNameMentioned(text, params) {
+  const normalized = text.toLowerCase();
+  const tokens = new Set(normalized.match(/[a-z_]\w*/g) || []);
+  const compactText = normalized.replace(/[\s_-]+/g, "");
+  return params.some((param) => {
+    const name = String(param.name || "").toLowerCase();
+    if (!name) return false;
+    if (tokens.has(name)) return true;
+    return name.length > 2 && compactText.includes(name.replace(/[\s_-]+/g, ""));
+  });
+}
+
+function shouldParseGeneratedParameterPatch(text, params) {
+  const normalized = text.toLowerCase();
+  if (generatedParameterNameMentioned(text, params)) return true;
+  if (/改成|改为|设为|设置为|变成|调整|修改|更新|增大|减小|加大|缩小|change|set|adjust|update|resize|increase|decrease|make/.test(normalized)) {
+    return true;
+  }
+  return /(?:mm|毫米)/i.test(normalized) && Boolean(requestedDimension(normalized));
+}
+
 function parseGeneratedParameterPatch(text) {
   const params = state.generatedParameters || [];
   if (!params.length) return null;
@@ -9170,6 +9191,7 @@ function parseGeneratedParameterPatch(text) {
     if (target) return { name: target.name, value: Number(exact[2]) };
   }
 
+  if (!shouldParseGeneratedParameterPatch(text, params)) return null;
   const value = extractCommandValue(text);
   if (value === null) return null;
   const target = bestGeneratedParameterMatch(text, params);
@@ -9426,10 +9448,10 @@ function requestedDimension(normalized) {
     ["diameter", /直径|孔径|孔|diam|diameter|holes?/],
     ["radius", /半径|圆角|radius|rad/],
     ["thickness", /厚度|厚|thick|thickness/],
+    ["count", /层数|楼层|层|数量|个数|几个|count|number|qty|num|floors?/],
     ["height", /高度|高|height/],
     ["depth", /深度|进深|depth|deep/],
     ["gap", /间隙|间距|缝|gap|spacing|space/],
-    ["count", /数量|个数|几个|count|number|qty|num/],
     ["length", /长度|长|length|long/],
     ["width", /宽度|宽|width|wide/],
   ];

@@ -9,6 +9,7 @@ terminal error. Dependency-injected fakes: no cadquery/network.
 
 import json
 
+from app.agent.tools import RUN_FREECAD_TOOL, SYSTEM_PROMPT
 from app.agent.loop import ExecResult, run_generation
 from app.gateway import ChatCompletion
 
@@ -55,6 +56,16 @@ def _no_tool(content: str) -> ChatCompletion:
 
 async def _collect(agen):
     return [ev async for ev in agen]
+
+
+def test_system_prompt_supports_freecad_site_layouts():
+    freecad_description = RUN_FREECAD_TOOL["function"]["description"]
+
+    assert "FreeCAD users" in SYSTEM_PROMPT
+    assert "multi-object site/community/building layouts" in SYSTEM_PROMPT
+    assert "convert to\n  millimetres" in SYSTEM_PROMPT
+    assert "rather than collapsing everything into one block" in SYSTEM_PROMPT
+    assert "multi-object site/building layouts" in freecad_description
 
 
 async def test_happy_path_first_attempt_succeeds():

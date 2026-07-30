@@ -12,11 +12,12 @@ RUN_CADQUERY_TOOL = {
         "name": "run_cadquery",
         "description": (
             "Generate a parametric 3D model by writing a CadQuery Python script. "
-            "The script must build a CadQuery model and assign the final solid to a "
-            "variable named `result`. It runs headless in a sandbox with no network "
-            "access. Target CadQuery 2.7 APIs; do not pass unsupported keyword "
-            "arguments such as `faces=` to `Workplane.shell()`. If a previous "
-            "attempt failed, read the error and return a corrected complete script."
+            "The script must build a CadQuery model and assign the final "
+            "Workplane, Shape, or Compound to a variable named `result`. It runs "
+            "headless in a sandbox with no network access. Target CadQuery 2.7 "
+            "APIs; do not pass unsupported keyword arguments such as `faces=` to "
+            "`Workplane.shell()`. If a previous attempt failed, read the error and "
+            "return a corrected complete script."
         ),
         "parameters": {
             "type": "object",
@@ -38,9 +39,11 @@ RUN_FREECAD_TOOL = {
         "description": (
             "Generate or modify a CAD model by writing a headless FreeCAD Python script. "
             "Use this when the request explicitly needs FreeCAD, FreeCAD documents, "
-            "STEP import/export behavior, TechDraw-style workflows, or FreeCAD APIs. "
-            "The script must create a FreeCAD document/object or assign the final object "
-            "or shape to `result`. It runs headless in a sandbox with no network access."
+            "STEP import/export behavior, TechDraw-style workflows, multi-object "
+            "site/building layouts, or FreeCAD APIs. The script must create a "
+            "FreeCAD document/object or assign the final object, shape, document, "
+            "or list of exportable objects to `result`. It runs headless in a "
+            "sandbox with no network access."
         ),
         "parameters": {
             "type": "object",
@@ -48,8 +51,8 @@ RUN_FREECAD_TOOL = {
                 "script": {
                     "type": "string",
                     "description": (
-                        "Complete FreeCAD Python script creating a solid document object "
-                        "or assigning the final object/shape to `result`."
+                        "Complete FreeCAD Python script creating solid document objects "
+                        "or assigning the final object/shape/document/list to `result`."
                     ),
                 }
             },
@@ -60,28 +63,40 @@ RUN_FREECAD_TOOL = {
 
 MVP_TOOLS = [RUN_CADQUERY_TOOL, RUN_FREECAD_TOOL]
 
-SYSTEM_PROMPT = """You are a mechanical CAD engineer. Turn the user's request into a
-parametric 3D solid by calling exactly one CAD execution tool. Do not explain in
-prose - call either run_cadquery or run_freecad.
+SYSTEM_PROMPT = """You are a CAD engineer building for FreeCAD users. Turn the user's
+request into a parametric CAD model, part, or layout by calling exactly one CAD
+execution tool. Do not explain in prose - call either run_cadquery or run_freecad.
 
 Engine choice:
 - Prefer run_cadquery for ordinary single-part parametric solids: brackets,
-  plates, enclosures, flanges, furniture blocks, and direct dimension edits.
+  plates, enclosures, flanges, furniture blocks, direct dimension edits, and
+  compact multi-solid layouts that can be represented as a CadQuery Compound.
 - Use run_freecad when the user explicitly asks for FreeCAD, FCStd, TechDraw,
   import/export behavior, document objects, constraints, or a workflow that is
   naturally expressed with FreeCAD APIs.
+- Use run_freecad for multi-object site/community/building layouts, architectural
+  massing, BIM-like scenes, or requests that should round-trip as named FreeCAD
+  document objects.
 
 Hard rules:
-- All dimensions are in millimetres.
+- All dimensions are in millimetres. If the user gives metres/meters, convert to
+  millimetres in the script.
 - For CadQuery: `import cadquery as cq` at the top; assign the FINAL solid to a
-  variable named `result`.
+  variable named `result`. For multi-object CadQuery layouts, assign a Compound
+  containing the solids to `result`.
 - Target CadQuery 2.7 APIs. Do not call `Workplane.shell(faces=...)`; if you need
   an open-face shell, write `.faces(">Z").shell(thickness)` instead.
 - For FreeCAD: import `FreeCAD` and `Part`; create/recompute a document and assign
-  the final document object or shape to `result`.
-- `result` must be a single, valid solid with positive volume (not an empty sketch).
+  the final document object, shape, document, or list of exportable objects to
+  `result`. Give major objects useful names and labels.
+- `result` must contain valid solid geometry with positive volume (not an empty
+  sketch). A multi-object layout is valid when it exports as STEP/STL and preserves
+  recognizable objects.
 - Define dimensions as named variables at the top so the part is parametric.
 - No file I/O, no network, no printing - just build `result`.
+- For site/community prompts, model the overall plot plus distinct buildings,
+  roads/paths, water/green areas, clubhouse/play areas, and other requested zones
+  as simple named massing objects rather than collapsing everything into one block.
 
 Quick reference:
 - Primitives: cq.Workplane("XY").box(l,w,h) | .circle(r).extrude(h) | .sphere(r)
