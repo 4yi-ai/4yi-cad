@@ -6,13 +6,15 @@ Packaged as a **4yi dedicated app** — a standalone repo the 4yi platform build
 
 ## Product target
 
-4yi-cad targets FreeCAD users who want an AI companion for early model generation,
-FCStd/STEP/STL import/export, parameter edits, and inspectable iteration without
-leaving their existing CAD workflow. It is not intended to replace FreeCAD's GUI
-or mature workbenches. Private/Public Beta should be positioned around reliable
-Sketcher/PartDesign-style generation, upload, preview, diagnostics, and handoff
-back to FreeCAD; GA requires a stronger closed loop for topology references,
-Assembly, TechDraw, and external geometry repair.
+4yi-cad targets FreeCAD users who want an AI companion for early model generation
+and bidirectional FreeCAD handoff. Generated models can be exported back to
+FreeCAD-compatible artifacts such as FCStd/STEP/STL, and existing FreeCAD outputs
+can be imported into 4yi-cad for preview, parameter edits, diagnostics, and
+inspectable iteration. It is not intended to replace FreeCAD's GUI or mature
+workbenches. Private/Public Beta should be positioned around reliable
+Sketcher/PartDesign-style generation, upload, preview, diagnostics, import from
+FreeCAD, and export back to FreeCAD; GA requires a stronger closed loop for
+topology references, Assembly, TechDraw, and external geometry repair.
 
 ## Architecture (MVP)
 
