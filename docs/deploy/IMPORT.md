@@ -12,7 +12,7 @@ the edited wizard proposal should match.
 2. **Edit the proposal** to match `import-proposal.reference.json`:
    - one **public** service, `runtime_port` **8080**, `health_path` **`/healthz`**
    - `auth_policy` **`platform_sso`**
-   - `platform_runtime.gateway`: `apiBaseEnv:[OPENAI_BASE_URL]`, `apiKeyEnv:[OPENAI_API_KEY]`
+   - `platform_runtime.gateway`: `apiBaseEnv:[OPENAI_BASE_URL, OPENAI_API_BASE]`, `apiKeyEnv:[OPENAI_API_KEY]`
    - `TEXT_MODEL` slot: real tool-calling model id as `defaultModel` + `allowedModels`
      (no vision requirement)
    - `CAD_FREECAD_UPLOAD_MAX_BYTES=104857600` for the Private Beta default
@@ -20,8 +20,9 @@ the edited wizard proposal should match.
    - **no** native LLM key env proposed as a required secret
    - `memory_request_mb` = measured worst-case peak RSS, schedulable on one node
    - stateful behavior is explicit: SQLite session metadata and filesystem CAD
-     artifacts default to pod-local `/tmp`; configure durable storage before
-     making Public Beta/GA durability claims.
+     artifacts use `${CAD_DATA_DIR}` when the platform injects it; otherwise they
+     fall back to pod-local `/tmp`. Confirm the live install is PVC/object-storage
+     backed before making Public Beta/GA durability claims.
 3. **Release** — CodeBuild → ECR (sets `last_image_uri`). Confirm the image builds
    from the root `Dockerfile`.
 4. **Publish** — needs a smoke pass + **tenant-isolation certification**. The
@@ -38,7 +39,10 @@ the edited wizard proposal should match.
 - [ ] `/api/freecad/upload_policy` reports the intended upload cap and formats
 - [ ] `/api/freecad/smoke` returns `ok:true` in the built container (single-container
       FreeCADCmd path is installed and can export STEP/STL)
-- [ ] gateway calls hit `${OPENAI_BASE_URL}/chat/completions` (not `/responses`, not `api.openai.com`)
+- [ ] `/api/production/smoke` reports `durable_storage_configured:true` for installs
+      that have a PVC/object-storage backed `CAD_DATA_DIR`
+- [ ] gateway calls hit the injected `${OPENAI_BASE_URL}` or `${OPENAI_API_BASE}`
+      `/chat/completions` endpoint (not `/responses`, not `api.openai.com`)
 - [ ] self-correction (V1) uses multiple <290s calls, never one long call
 - [ ] `/tmp` is a writable tmpfs; rootfs read-only; runs as non-root
 - [ ] sandbox proof: generated code cannot read `OPENAI_API_KEY` or reach the network/IMDS

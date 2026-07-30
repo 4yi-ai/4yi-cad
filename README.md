@@ -44,11 +44,11 @@ The platform injects no DB/object-storage and idle auto-pause scales the pod to
 zero, wiping pod-local state unless a persistent volume is attached. The browser
 therefore still keeps a local session cache, and the server mirrors lightweight
 session/version facts into SQLite for reload/recovery. `CAD_SESSION_DB_PATH`
-controls the SQLite file location; without a persistent volume, the default
-`/tmp/4yi-cad/sessions.sqlite3` is a convenience cache, not durable production
-storage. `CAD_ARTIFACT_ROOT` controls server-side artifact storage; the default
-`/tmp/4yi-cad/artifacts` also needs a persistent volume or object-storage backend
-before production use.
+controls the SQLite file location and `CAD_ARTIFACT_ROOT` controls server-side
+artifact storage. When the platform injects `CAD_DATA_DIR`, the app defaults to
+`${CAD_DATA_DIR}/sessions.sqlite3` and `${CAD_DATA_DIR}/artifacts`; otherwise it
+falls back to `/tmp/4yi-cad/...`, which is a convenience cache, not durable
+production storage.
 
 Do not store secrets or cross-session artifacts in SQLite until the CAD worker is
 isolated from the web process; model-generated Python currently runs in the same
@@ -104,11 +104,12 @@ curl -s localhost:8080/api/freecad/smoke
 Import via `/admin/marketplace/ai-import` as a **Dedicated app** (`public_git`,
 this repo URL + branch). Proposal must have: one public service, `runtime_port`
 = `$PORT`, `health_path` = `/healthz`, `auth_policy: platform_sso`, and a
-`platform_runtime.gateway` block (`apiBaseEnv: [OPENAI_BASE_URL]`,
+`platform_runtime.gateway` block (`apiBaseEnv: [OPENAI_BASE_URL, OPENAI_API_BASE]`,
 `apiKeyEnv: [OPENAI_API_KEY]`, `TEXT_MODEL` slot with `defaultModel` +
 `allowedModels`). Set `CAD_FREECAD_UPLOAD_MAX_BYTES=104857600` for the Private
 Beta 100 MB upload cap. Size memory to measured peak RSS, schedulable on one
-node, and configure durable storage before claiming Public Beta/GA persistence.
+node, and confirm the platform injects `CAD_DATA_DIR` backed by durable storage
+before claiming Public Beta/GA persistence.
 
 > **Pre-public-release license gate:** FreeCAD ships GPL components and any ported
 > Text23D code must be license-compatible — resolve before making the repo public.

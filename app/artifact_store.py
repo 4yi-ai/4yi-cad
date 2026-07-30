@@ -30,7 +30,13 @@ ARTIFACTS = {
 
 
 def default_artifact_root() -> str:
-    return os.environ.get("CAD_ARTIFACT_ROOT", DEFAULT_ARTIFACT_ROOT)
+    explicit = os.environ.get("CAD_ARTIFACT_ROOT", "").strip()
+    if explicit:
+        return explicit
+    data_dir = os.environ.get("CAD_DATA_DIR", "").strip()
+    if data_dir:
+        return str(Path(data_dir) / "artifacts")
+    return DEFAULT_ARTIFACT_ROOT
 
 
 @dataclass(frozen=True)

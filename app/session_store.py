@@ -19,7 +19,13 @@ def utc_now() -> str:
 
 
 def default_db_path() -> str:
-    return os.environ.get("CAD_SESSION_DB_PATH", DEFAULT_DB_PATH)
+    explicit = os.environ.get("CAD_SESSION_DB_PATH", "").strip()
+    if explicit:
+        return explicit
+    data_dir = os.environ.get("CAD_DATA_DIR", "").strip()
+    if data_dir:
+        return str(Path(data_dir) / "sessions.sqlite3")
+    return DEFAULT_DB_PATH
 
 
 @dataclass(frozen=True)

@@ -66,17 +66,17 @@
     ],
     "_manifest_note": [
       "Single public service (single-container MVP: FastAPI serves the SPA + /api + the sandboxed CadQuery worker in one image).",
-      "The app stores session metadata in SQLite and CAD artifacts on the filesystem. Defaults are pod-local /tmp paths for Private Beta; configure PVC/object storage before Public Beta/GA durability claims.",
+      "The app stores session metadata in SQLite and CAD artifacts on the filesystem. If the platform injects CAD_DATA_DIR, storage defaults to that directory; otherwise it falls back to pod-local /tmp. Confirm PVC/object storage before Public Beta/GA durability claims.",
       "CONFIRM at deploy: /tmp must be a WRITABLE tmpfs/emptyDir mount because the sandbox worker writes there and the pod should run read-only rootfs + non-root (tenant-isolation)."
     ]
   },
 
   "platformRuntime": {
-    "gateway": {
-      "kind": "openai_compatible",
-      "apiBaseEnv": ["OPENAI_BASE_URL"],
-      "apiKeyEnv": ["OPENAI_API_KEY"]
-    },
+      "gateway": {
+        "kind": "openai_compatible",
+        "apiBaseEnv": ["OPENAI_BASE_URL", "OPENAI_API_BASE"],
+        "apiKeyEnv": ["OPENAI_API_KEY"]
+      },
     "models": [
       {
         "env": "TEXT_MODEL",
@@ -92,6 +92,6 @@
   "deploymentFit": {
     "single_public_service": true,
     "stateful": true,
-    "notes": "Stateful-lite Private Beta: server stores SQLite session/version metadata and filesystem artifacts under CAD_SESSION_DB_PATH/CAD_ARTIFACT_ROOT, defaulting to pod-local /tmp. Durable PVC/object storage is required before Public Beta or GA."
+    "notes": "Stateful-lite Private Beta: server stores SQLite session/version metadata and filesystem artifacts under CAD_SESSION_DB_PATH/CAD_ARTIFACT_ROOT, or under CAD_DATA_DIR when the platform injects it. Durable PVC/object storage is required before Public Beta or GA."
   }
 }

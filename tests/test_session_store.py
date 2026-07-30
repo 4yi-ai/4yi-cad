@@ -1,5 +1,24 @@
 from app.cad.design_state import default_design_state, geometry_summary, render_cadquery_script
-from app.session_store import SqliteSessionStore
+from app.artifact_store import default_artifact_root
+from app.session_store import SqliteSessionStore, default_db_path
+
+
+def test_default_storage_paths_use_platform_data_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAD_SESSION_DB_PATH", raising=False)
+    monkeypatch.delenv("CAD_ARTIFACT_ROOT", raising=False)
+    monkeypatch.setenv("CAD_DATA_DIR", str(tmp_path / "data"))
+
+    assert default_db_path() == str(tmp_path / "data" / "sessions.sqlite3")
+    assert default_artifact_root() == str(tmp_path / "data" / "artifacts")
+
+
+def test_explicit_storage_paths_override_platform_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAD_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CAD_SESSION_DB_PATH", str(tmp_path / "custom" / "sessions.sqlite3"))
+    monkeypatch.setenv("CAD_ARTIFACT_ROOT", str(tmp_path / "custom" / "artifacts"))
+
+    assert default_db_path() == str(tmp_path / "custom" / "sessions.sqlite3")
+    assert default_artifact_root() == str(tmp_path / "custom" / "artifacts")
 
 
 def test_sqlite_session_store_persists_versions(tmp_path):
