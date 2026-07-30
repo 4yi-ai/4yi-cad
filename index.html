@@ -95,6 +95,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .status-chip.working {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-color: #b8d6ff;
+    background: #eef6ff;
+    color: var(--primary);
+  }
+  .status-chip.working::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid rgba(11,111,232,.22);
+    border-top-color: var(--primary);
+    animation: activitySpin .8s linear infinite;
+    flex: 0 0 auto;
+  }
   .top-actions {
     min-width: 0;
     display: flex;
@@ -295,6 +313,89 @@
     font-size: 12px;
     pointer-events: none;
   }
+  .generation-activity {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    z-index: 7;
+    width: min(340px, calc(100% - 24px));
+    border: 1px solid #b8d6ff;
+    border-radius: var(--radius);
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .12);
+    padding: 11px 12px;
+    color: var(--text);
+    pointer-events: none;
+  }
+  .generation-activity header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .generation-activity strong {
+    display: block;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .generation-activity p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .activity-spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(11,111,232,.18);
+    border-top-color: var(--primary);
+    animation: activitySpin .8s linear infinite;
+    flex: 0 0 auto;
+  }
+  .activity-bar {
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #dbeafe;
+  }
+  .activity-bar span {
+    display: block;
+    width: 44%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary);
+    animation: activitySweep 1.2s ease-in-out infinite;
+  }
+  .activity-events {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .activity-event {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .activity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 3px rgba(11,111,232,.1);
+    flex: 0 0 auto;
+  }
+  .activity-event span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .generated-preview img {
     display: block;
     max-width: 100%;
@@ -457,6 +558,13 @@
   @keyframes markerPulse {
     0%, 100% { opacity: .25; transform: scale(.96); }
     50% { opacity: .9; transform: scale(1.04); }
+  }
+  @keyframes activitySpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes activitySweep {
+    0% { transform: translateX(-110%); }
+    55%, 100% { transform: translateX(230%); }
   }
   .generated-placeholder {
     border: 1px dashed var(--line);
@@ -837,6 +945,19 @@
     font-size: 13px;
   }
   .chat-message.user { background: var(--primary-soft); border-color: #cfe4ff; }
+  .chat-message.activity {
+    border-color: #b8d6ff;
+    background: #eef6ff;
+  }
+  .chat-message.activity strong {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--primary);
+  }
+  .chat-message.activity .activity-events {
+    margin-top: 7px;
+  }
   .chat-message strong { display: block; margin-bottom: 3px; font-size: 12px; }
   .chat-message span { color: var(--muted); }
   .history-item, .log-item, .artifact-card {
@@ -1027,6 +1148,19 @@ const I18N = {
     waitingGeneratedPreview: "Waiting for generated preview",
     generatedPreviewTitle: "Generated model preview",
     generatedPreviewHint: "The CAD agent will replace the default DesignState viewport with its rendered PNG when generation succeeds.",
+    activityTitle: "Generating CAD model",
+    activityRewriteTitle: "Updating current CAD model",
+    activitySubtitle: "The agent is working on the model.",
+    activitySubmitting: "Submitting request",
+    activityWaking: "Waking CAD runtime ({attempt})",
+    activityThinking: "Planning CAD script",
+    activityScript: "{engine} script ready, attempt {attempt}",
+    activityRendering: "Running CAD and rendering preview",
+    activityRetry: "Repairing script after attempt {attempt}",
+    activityPreview: "Preview image ready",
+    activityArtifact: "File ready: {format}",
+    activityDone: "Model ready",
+    activityFailed: "Generation failed",
     featureBadge: "Feature: {name}",
     axisReadout: "X {x} / Y {y} / Z {z} mm",
     stepStlStatus: "STEP/STL {status}",
@@ -1443,6 +1577,19 @@ const I18N = {
     waitingGeneratedPreview: "等待生成模型预览",
     generatedPreviewTitle: "生成模型预览",
     generatedPreviewHint: "生成成功后，CAD agent 会用渲染 PNG 替换默认 DesignState 视图。",
+    activityTitle: "正在生成 CAD 模型",
+    activityRewriteTitle: "正在更新当前 CAD 模型",
+    activitySubtitle: "Agent 正在处理模型。",
+    activitySubmitting: "正在提交请求",
+    activityWaking: "正在唤醒 CAD 运行环境（{attempt}）",
+    activityThinking: "正在规划 CAD 脚本",
+    activityScript: "{engine} 脚本已生成，第 {attempt} 次尝试",
+    activityRendering: "正在运行 CAD 并渲染预览",
+    activityRetry: "第 {attempt} 次失败后正在修复脚本",
+    activityPreview: "预览图已就绪",
+    activityArtifact: "文件已就绪：{format}",
+    activityDone: "模型已就绪",
+    activityFailed: "生成失败",
     featureBadge: "特征：{name}",
     axisReadout: "X {x} / Y {y} / Z {z} mm",
     stepStlStatus: "STEP/STL {status}",
@@ -1837,6 +1984,17 @@ const SERVER_SESSION_ID_STORAGE_KEY = "4yi-cad.server-session-id.v1";
 const FALLBACK_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 const CHAT_HISTORY_MAX_MESSAGES = 12;
 const CHAT_HISTORY_MAX_CHARS = 2000;
+const GENERATION_ACTIVITY_MAX_EVENTS = 6;
+const WORKING_STATUS_KEYS = new Set([
+  "submitting",
+  "waking",
+  "thinking",
+  "rendering",
+  "updatingPreview",
+  "applyingPatch",
+  "importingModel",
+  "checkingSketchSolver",
+]);
 let freeCadUploadPolicyPromise = null;
 
 function sanitizeChatHistory(history) {
@@ -1878,6 +2036,8 @@ const state = {
   freecadVersion: "",
   exportStatus: "notReady",
   statusKey: "loading",
+  statusVars: {},
+  generationActivity: null,
   previewMode: "design_state",
   generatedPrompt: "",
   generatedParameters: [],
@@ -1913,6 +2073,102 @@ const state = {
     { role: "assistant", key: "chat.initial" },
   ],
 };
+
+function generationActivityEventText(item) {
+  if (!item) return "";
+  if (item.key) return t(item.key, item.vars || {});
+  return item.text || "";
+}
+
+function generationActivityTitle(activity = state.generationActivity) {
+  return activity?.mode === "rewrite" ? t("activityRewriteTitle") : t("activityTitle");
+}
+
+function generationActivityCurrentText(activity = state.generationActivity) {
+  return generationActivityEventText(activity?.events?.[0]) || t("activitySubtitle");
+}
+
+function startGenerationActivity(prompt, mode = "create") {
+  state.generationActivity = {
+    active: true,
+    mode,
+    prompt,
+    phase: "submitting",
+    events: [],
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  pushGenerationActivity("activitySubmitting", {}, "submitting");
+}
+
+function pushGenerationActivity(key, vars = {}, phase = "working") {
+  const activity = state.generationActivity;
+  if (!activity) return;
+  const normalizedVars = vars || {};
+  const last = activity.events[0];
+  const sameLast = last && last.key === key && JSON.stringify(last.vars || {}) === JSON.stringify(normalizedVars);
+  activity.active = true;
+  activity.phase = phase;
+  activity.updatedAt = Date.now();
+  if (sameLast) {
+    last.at = activity.updatedAt;
+    return;
+  }
+  activity.events.unshift({ key, vars: normalizedVars, phase, at: activity.updatedAt });
+  activity.events = activity.events.slice(0, GENERATION_ACTIVITY_MAX_EVENTS);
+}
+
+function finishGenerationActivity(ok) {
+  const activity = state.generationActivity;
+  if (!activity) return;
+  activity.active = false;
+  activity.phase = ok ? "done" : "failed";
+  activity.updatedAt = Date.now();
+  activity.events.unshift({
+    key: ok ? "activityDone" : "activityFailed",
+    vars: {},
+    phase: activity.phase,
+    at: activity.updatedAt,
+  });
+  activity.events = activity.events.slice(0, GENERATION_ACTIVITY_MAX_EVENTS);
+}
+
+function clearGenerationActivity() {
+  state.generationActivity = null;
+}
+
+function renderGenerationActivityEvents(activity = state.generationActivity, limit = 4) {
+  if (!activity?.events?.length) return "";
+  return `<div class="activity-events">${activity.events.slice(0, limit).map((item) => `
+    <div class="activity-event"><span class="activity-dot"></span><span>${escapeHtml(generationActivityEventText(item))}</span></div>
+  `).join("")}</div>`;
+}
+
+function renderGenerationActivityOverlay() {
+  const activity = state.generationActivity;
+  if (!activity?.active) return "";
+  return `<div class="generation-activity" aria-live="polite">
+    <header>
+      <span class="activity-spinner"></span>
+      <div>
+        <strong>${escapeHtml(generationActivityTitle(activity))}</strong>
+        <p>${escapeHtml(generationActivityCurrentText(activity))}</p>
+      </div>
+    </header>
+    <div class="activity-bar"><span></span></div>
+    ${renderGenerationActivityEvents(activity)}
+  </div>`;
+}
+
+function renderGenerationActivityChatMessage() {
+  const activity = state.generationActivity;
+  if (!activity?.active) return "";
+  return `<article class="chat-message activity" aria-live="polite">
+    <strong><span class="activity-spinner"></span>${escapeHtml(generationActivityTitle(activity))}</strong>
+    <span>${escapeHtml(generationActivityCurrentText(activity))}</span>
+    ${renderGenerationActivityEvents(activity, 3)}
+  </article>`;
+}
 
 let generatedViewerToken = 0;
 let generatedViewerRuntime = null;
@@ -4006,6 +4262,7 @@ function resetClientWorkbenchSession() {
   state.exportStatus = "notReady";
   state.statusKey = "loading";
   state.statusVars = {};
+  state.generationActivity = null;
   state.previewMode = "design_state";
   state.generatedPrompt = "";
   state.generatedParameters = [];
@@ -5204,7 +5461,9 @@ function setStatus(key, vars = {}) {
   state.statusKey = key;
   state.statusVars = vars;
   const hasTranslation = i18nPath(currentLocale, `status.${key}`) || i18nPath("en", `status.${key}`);
-  $("status").textContent = hasTranslation ? t(`status.${key}`, vars) : key;
+  const node = $("status");
+  node.textContent = hasTranslation ? t(`status.${key}`, vars) : key;
+  node.classList.toggle("working", Boolean(state.generationActivity?.active) || WORKING_STATUS_KEYS.has(key));
 }
 
 function renderStaticText() {
@@ -5414,6 +5673,7 @@ function renderGeneratedPreview() {
       : `<div class="generated-placeholder"><strong>${escapeHtml(t("generatedPreviewTitle"))}</strong></div>`;
     return `<div class="${classes}">
       ${callout}
+      ${renderGenerationActivityOverlay()}
       <div class="generated-image-frame generated-scene-frame" data-view-mode="${escapeHtml(state.viewMode)}">
         ${hasMesh ? `<div class="cad-viewer" id="generatedCadViewer" data-viewer-key="${escapeHtml(generatedCadViewerKey())}">
           <div class="cad-viewer-status">${escapeHtml(t("interactiveMesh"))}</div>
@@ -5428,7 +5688,7 @@ function renderGeneratedPreview() {
   return `<div class="generated-preview"><div class="generated-placeholder">
     <strong>${escapeHtml(t("generatedPreviewTitle"))}</strong>
     <span>${escapeHtml(t("generatedPreviewHint"))}</span>
-  </div></div>`;
+  </div>${renderGenerationActivityOverlay()}</div>`;
 }
 
 function renderModelSvg() {
@@ -7509,7 +7769,7 @@ function renderBottomTabs() {
 function renderBottom() {
   renderBottomTabs();
   if (state.bottomTab === "chat") {
-    $("bottomContent").innerHTML = `<div class="chat-panel"><div class="chat-list">${state.chatMessages.map((item) => `
+    $("bottomContent").innerHTML = `<div class="chat-panel"><div class="chat-list">${renderGenerationActivityChatMessage()}${state.chatMessages.map((item) => `
       <article class="chat-message ${item.role === "user" ? "user" : ""}">
         <strong>${item.role === "user" ? escapeHtml(t("chat.you")) : escapeHtml(t("chat.agent"))}</strong>
         <span>${escapeHtml(chatText(item))}</span>
@@ -9801,6 +10061,7 @@ async function generateFromPrompt(prompt, options = {}) {
   const previousGeneratedPrompt = state.generatedPrompt;
   const displayPrompt = mode === "rewrite" && previousGeneratedPrompt ? previousGeneratedPrompt : prompt;
   $("applyButton").disabled = true;
+  startGenerationActivity(displayPrompt, mode);
   state.previewMode = "generated";
   state.generatedPrompt = displayPrompt;
   state.generatedParameters = [];
@@ -9817,8 +10078,9 @@ async function generateFromPrompt(prompt, options = {}) {
   state.freecadVersion = "";
   state.exportStatus = "notReady";
   state.patch = mode === "rewrite" ? { op: "request_script_rewrite", instruction: prompt } : null;
-  setBottomTab("logs");
+  setBottomTab("chat");
   setStatus("submitting");
+  renderAll();
   let resp;
   try {
     for (let attempt = 0; attempt < 20; attempt++) {
@@ -9831,18 +10093,23 @@ async function generateFromPrompt(prompt, options = {}) {
         }),
       });
       if (resp.status !== 503) break;
+      pushGenerationActivity("activityWaking", { attempt: attempt + 1 }, "waking");
       setStatus("waking", { attempt: attempt + 1 });
+      renderViewport();
+      renderBottom();
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!resp.ok) throw new Error(await responseErrorMessage(resp));
     const sawDone = await readSse(resp, prompt, { mode, instruction: prompt });
     if (!sawDone) {
+      finishGenerationActivity(false);
       setStatus("failed");
       log(t("log.streamEndedWithoutDone"));
       state.chatMessages.unshift({ role: "assistant", key: "chat.generationBad" });
       if (!state.previewPng) state.previewMode = "design_state";
     }
   } catch (error) {
+    finishGenerationActivity(false);
     setStatus("generationFailed");
     log(t("chat.generationFailed", { message: error.message }));
     state.chatMessages.unshift({ role: "assistant", key: "chat.generationFailed", vars: { message: error.message } });
@@ -9887,7 +10154,13 @@ async function readSse(resp, prompt, context = {}) {
 }
 
 function handleAgentEvent(ev, context = {}) {
-  if (ev.type === "status") setStatus(ev.message);
+  let shouldRenderViewport = false;
+  if (ev.type === "status") {
+    if (ev.message === "thinking") pushGenerationActivity("activityThinking", {}, "thinking");
+    if (ev.message === "rendering") pushGenerationActivity("activityRendering", {}, "rendering");
+    setStatus(ev.message);
+    shouldRenderViewport = true;
+  }
   if (ev.type === "script") {
     state.script = ev.script;
     state.engine = normalizeEngine(ev.engine);
@@ -9901,14 +10174,24 @@ function handleAgentEvent(ev, context = {}) {
     if (!state.generatedParameters.some((param) => param.name === state.selectedGeneratedParameterName)) {
       state.selectedGeneratedParameterName = "";
     }
+    pushGenerationActivity("activityScript", { attempt: ev.attempt || 1, engine: engineLabel() }, "script");
+    pushGenerationActivity("activityRendering", {}, "rendering");
+    setStatus("rendering");
     log(t("log.producedScript", { attempt: ev.attempt || 1, engine: engineLabel() }));
+    shouldRenderViewport = true;
   }
-  if (ev.type === "retry") log(t("log.retry", { attempt: ev.attempt, message: ev.message }));
+  if (ev.type === "retry") {
+    pushGenerationActivity("activityRetry", { attempt: ev.attempt || 1 }, "retry");
+    setStatus("thinking");
+    log(t("log.retry", { attempt: ev.attempt, message: ev.message }));
+    shouldRenderViewport = true;
+  }
   if (ev.type === "preview" && ev.png_b64) {
     state.previewMode = "generated";
     state.engine = normalizeEngine(ev.engine || state.engine);
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     state.previewPng = ev.png_b64;
+    pushGenerationActivity("activityPreview", {}, "preview");
     log(t("log.renderedPreview"));
     renderViewport();
   }
@@ -9918,15 +10201,20 @@ function handleAgentEvent(ev, context = {}) {
     state.artifacts[ev.format] = ev.data_b64;
     delete state.artifactRefs[ev.format];
     if (hasStepStlArtifacts()) state.exportStatus = "ready";
+    pushGenerationActivity("activityArtifact", { format: ev.format }, "artifact");
     log(t("log.artifactReady", { format: ev.format }));
+    shouldRenderViewport = true;
   }
   if (ev.type === "error") {
+    finishGenerationActivity(false);
     log(ev.message);
+    shouldRenderViewport = true;
   }
   if (ev.type === "done") {
     state.engine = normalizeEngine(ev.engine || state.engine);
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
+    finishGenerationActivity(Boolean(ev.ok));
     setStatus(ev.ok ? "done" : "failed");
     const rewrite = context.mode === "rewrite";
     const userInstruction = context.instruction || state.generatedPrompt;
@@ -9940,7 +10228,9 @@ function handleAgentEvent(ev, context = {}) {
     });
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
     void recordServerVersion(ev.ok ? (rewrite ? "modify" : "create") : "repair", userInstruction, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
+    shouldRenderViewport = true;
   }
+  if (shouldRenderViewport) renderViewport();
   renderBottom();
   persistWorkbenchSession();
 }

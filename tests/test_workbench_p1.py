@@ -28,6 +28,12 @@ def test_p1_workbench_exposes_core_surfaces():
         "persistWorkbenchSession",
         "restoreWorkbenchSession",
         "sanitizeChatHistory",
+        "generationActivity",
+        "startGenerationActivity",
+        "pushGenerationActivity",
+        "finishGenerationActivity",
+        "renderGenerationActivityOverlay",
+        "renderGenerationActivityChatMessage",
         "recordServerVersion",
         "clearServerSessionReference",
         "restoreServerSession",
@@ -335,6 +341,28 @@ def test_viewer_scene_styles_drive_frontend_materials():
     assert "color: selected ? 0xf59e0b : objectStyle.edgeColor" in html
     assert "color: selected ? 0x22c55e : objectStyle.pointColor" in html
     assert "Math.max(objectStyle.opacity, 0.88)" in html
+
+
+def test_agent_generation_exposes_working_activity_feedback():
+    html = _html()
+
+    assert ".status-chip.working" in html
+    assert ".generation-activity" in html
+    assert "aria-live=\"polite\"" in html
+    assert "activity-spinner" in html
+    assert "activity-bar" in html
+    assert "activitySubmitting" in html
+    assert "activityThinking" in html
+    assert "activityScript" in html
+    assert "activityRendering" in html
+    assert "activityRetry" in html
+    assert "activityPreview" in html
+    assert "activityArtifact" in html
+    assert "startGenerationActivity(displayPrompt, mode);" in html
+    assert 'setBottomTab("chat");' in html
+    assert "renderGenerationActivityChatMessage()" in html
+    assert "pushGenerationActivity(\"activityRendering\"" in html
+    assert "node.classList.toggle(\"working\"" in html
 
 
 def test_new_session_button_resets_current_workbench_session():

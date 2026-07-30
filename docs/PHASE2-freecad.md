@@ -361,8 +361,11 @@ cad-worker/freecad-worker        ── big CPU/mem + EBS
     exports style metadata in `viewer_scene`; frontend renders those styles with
     CAD-readable object outlines and selection highlighting. Follow-up work:
     user-editable style controls and richer saved style presets.
-25. Parametric panel polish **or** interactive WS viewport.
-26. Optional: multimodal image input; template library.
+25. Agent/render activity feedback baseline: frontend shows live status chip,
+    viewport activity overlay, and chat activity card while SSE generation is
+    submitting, thinking, rendering, retrying, and receiving artifacts.
+26. Parametric panel polish **or** interactive WS viewport.
+27. Optional: multimodal image input; template library.
 
 Each task: red→green TDD (unit tests with fakes; heavy FreeCAD/preview via container
 smoke). Adversarial review + verification-before-completion per task.
