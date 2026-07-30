@@ -16,6 +16,7 @@ Events: status | script | retry | preview | artifact | error | done.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Awaitable, Callable
 
@@ -23,6 +24,9 @@ from app.agent.tools import MVP_TOOLS, SYSTEM_PROMPT
 from app.cad.script_params import extract_script_parameters
 
 DEFAULT_MAX_ATTEMPTS = 3
+MAX_CHAT_HISTORY_MESSAGES = 12
+MAX_CHAT_HISTORY_CHARS = 12_000
+MAX_CHAT_HISTORY_MESSAGE_CHARS = 2_000
 
 
 @dataclass
@@ -40,6 +44,11 @@ Executor = Callable[[str], Awaitable[ExecResult]]
 
 _CAD_TOOL_NAMES = {"run_cadquery": "cadquery", "run_freecad": "freecad"}
 _REQUIRE_CAD_TOOL = "required"
+_FREECAD_HINT_RE = re.compile(
+    r"\b(freecad|fcstd|techdraw|bim|site|community|campus|neighbou?rhood|"
+    r"master\s+plan|building\s+layout|architectural\s+massing|massing)\b|"
+    r"小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|道路|景观"
+)
 
 
 def _first_run_call(completion):
@@ -58,6 +67,10 @@ def _tool_name_for(engine: str) -> str:
     return "run_freecad" if engine == "freecad" else "run_cadquery"
 
 
+def _tool_choice_for_engine(engine: str) -> dict:
+    return {"type": "function", "function": {"name": _tool_name_for(engine)}}
+
+
 def _script_of(call) -> str | None:
     try:
         args = json.loads(call.get("function", {}).get("arguments") or "{}")
@@ -65,6 +78,32 @@ def _script_of(call) -> str | None:
         return None
     script = args.get("script")
     return script if isinstance(script, str) and script.strip() else None
+
+
+def sanitize_chat_history(history: list[dict] | None) -> list[dict[str, str]]:
+    """Return only recent user/assistant text messages under the context budget."""
+    messages: list[dict[str, str]] = []
+    total_chars = 0
+    for item in reversed((history or [])[-MAX_CHAT_HISTORY_MESSAGES:]):
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role not in {"user", "assistant"} or not isinstance(content, str):
+            continue
+        content = content.strip()[:MAX_CHAT_HISTORY_MESSAGE_CHARS]
+        if not content:
+            continue
+        if total_chars + len(content) > MAX_CHAT_HISTORY_CHARS:
+            break
+        messages.append({"role": role, "content": content})
+        total_chars += len(content)
+    return list(reversed(messages))
+
+
+def infer_engine_hint(prompt: str) -> str | None:
+    normalized = (prompt or "").lower()
+    return "freecad" if _FREECAD_HINT_RE.search(normalized) else None
 
 
 async def run_generation(
@@ -76,13 +115,19 @@ async def run_generation(
     history: list[dict] | None = None,
     system_prompt: str = SYSTEM_PROMPT,
     tools: list[dict] | None = None,
+    engine_hint: str | None = None,
     tool_choice=None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> AsyncIterator[dict]:
     tools = tools if tools is not None else MVP_TOOLS
-    tool_choice = _REQUIRE_CAD_TOOL if tool_choice is None else tool_choice
+    forced_engine = engine_hint if engine_hint in {"cadquery", "freecad"} else infer_engine_hint(prompt)
+    tool_choice = (
+        _tool_choice_for_engine(forced_engine)
+        if forced_engine
+        else (_REQUIRE_CAD_TOOL if tool_choice is None else tool_choice)
+    )
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    messages.extend(history or [])
+    messages.extend(sanitize_chat_history(history))
     messages.append({"role": "user", "content": prompt})
 
     yield {"type": "status", "message": "thinking"}
@@ -99,7 +144,8 @@ async def run_generation(
 
         if script is None:
             # Model replied without a usable tool call; nudge and retry.
-            last_error = "you must call run_cadquery or run_freecad with a complete script"
+            required = _tool_name_for(forced_engine) if forced_engine else "run_cadquery or run_freecad"
+            last_error = f"you must call {required} with a complete script"
             if attempt < max_attempts:
                 yield {"type": "retry", "attempt": attempt, "message": last_error}
                 messages.append({"role": "assistant", "content": completion.content or ""})
@@ -108,6 +154,16 @@ async def run_generation(
             break
 
         engine = _engine_of(call)
+        if forced_engine and engine != forced_engine:
+            required = _tool_name_for(forced_engine)
+            last_error = f"this request must use {required}; call {required} with a complete script"
+            if attempt < max_attempts:
+                yield {"type": "retry", "attempt": attempt, "message": last_error}
+                messages.append({"role": "assistant", "content": completion.content or ""})
+                messages.append({"role": "user", "content": last_error})
+                continue
+            break
+
         tool_name = _tool_name_for(engine)
         yield {
             "type": "script",

@@ -18,6 +18,33 @@ from app.cad.freecad_worker import (
 
 PY = sys.executable
 WORKER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "cad" / "freecad_worker.py"
+SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = """
+import FreeCAD
+import Part
+
+doc = FreeCAD.newDocument("SiteCommunitySmoke")
+
+def add_box(name, label, x, y, z, length, width, height):
+    obj = doc.addObject("Part::Box", name)
+    obj.Label = label
+    obj.Length = length
+    obj.Width = width
+    obj.Height = height
+    obj.Placement.Base = FreeCAD.Vector(x, y, z)
+    return obj
+
+plot = add_box("Plot", "Plot", 0, 0, -80, 100000, 100000, 80)
+road = add_box("RoadLoop", "Road loop", 8000, 8000, 0, 84000, 6000, 120)
+building_a = add_box("BuildingA", "Building A", 18000, 18000, 0, 14000, 18000, 18000)
+building_b = add_box("BuildingB", "Building B", 44000, 18000, 0, 14000, 18000, 15000)
+building_c = add_box("BuildingC", "Building C", 70000, 18000, 0, 14000, 18000, 12000)
+water = add_box("WaterGarden", "Water garden", 18000, 65000, 0, 24000, 15000, 120)
+playground = add_box("Playground", "Playground", 62000, 62000, 0, 18000, 16000, 120)
+green = add_box("GreenPark", "Green park", 47000, 61000, 0, 9000, 25000, 100)
+
+doc.recompute()
+result = [plot, road, building_a, building_b, building_c, water, playground, green]
+"""
 
 
 def test_run_freecad_script_reports_missing_binary(monkeypatch):
@@ -936,6 +963,27 @@ def test_local_freecadcmd_smoke_exports_step_stl_and_fcstd():
         assert scene["objects"][0]["edges"][0]["points"]
         assert scene["objects"][0]["vertices"][0]["point"]
     assert result["freecad_version"]
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
+    result = run_freecad_script(SITE_LAYOUT_FREECAD_SMOKE_SCRIPT, timeout=90)
+
+    assert result["ok"] is True
+    assert {"step", "stl", "fcstd", "viewer_scene"}.issubset(result["exports"])
+    scene = json.loads(base64.b64decode(result["exports"]["viewer_scene"]))
+    assert scene["schema"] == "freecad.viewer_scene.v1"
+    assert scene["object_count"] >= 8
+
+    object_text = {
+        f"{item.get('name', '')} {item.get('label', '')}".lower()
+        for item in scene["objects"]
+    }
+    for marker in ("plot", "building", "water", "playground"):
+        assert any(marker in text for text in object_text)
 
 
 @pytest.mark.skipif(

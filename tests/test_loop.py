@@ -10,7 +10,7 @@ terminal error. Dependency-injected fakes: no cadquery/network.
 import json
 
 from app.agent.tools import RUN_FREECAD_TOOL, SYSTEM_PROMPT
-from app.agent.loop import ExecResult, run_generation
+from app.agent.loop import ExecResult, infer_engine_hint, run_generation
 from app.gateway import ChatCompletion
 
 
@@ -65,7 +65,16 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "multi-object site/community/building layouts" in SYSTEM_PROMPT
     assert "convert to\n  millimetres" in SYSTEM_PROMPT
     assert "rather than collapsing everything into one block" in SYSTEM_PROMPT
+    assert "Private beta complexity budget" in SYSTEM_PROMPT
+    assert "20-40 major exportable objects" in SYSTEM_PROMPT
+    assert "Avoid per-window or per-floor geometry arrays" in SYSTEM_PROMPT
     assert "multi-object site/building layouts" in freecad_description
+
+
+def test_site_community_prompts_infer_freecad_engine_hint():
+    assert infer_engine_hint("make a 3-floor villa on a 100x100m site") == "freecad"
+    assert infer_engine_hint("设计一个带水景和楼栋的小区总图") == "freecad"
+    assert infer_engine_hint("make a cube") is None
 
 
 async def test_happy_path_first_attempt_succeeds():
@@ -127,6 +136,74 @@ async def test_freecad_tool_uses_freecad_executor_and_emits_engine_metadata():
     assert events[-1]["engine"] == "freecad"
     assert events[-1]["freecad_version"] == "1.1.3"
     assert any(e["type"] == "preview" and e["engine"] == "freecad" for e in events)
+
+
+async def test_site_prompt_forces_freecad_tool_choice():
+    script = "import FreeCAD\nresult = object()\n"
+    gw = FakeGateway(_tool_call(script, name="run_freecad"))
+    cadquery_calls = []
+    freecad_calls = []
+
+    async def execute(script):
+        cadquery_calls.append(script)
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+
+    events = await _collect(
+        run_generation(
+            "make a 3-floor villa on a 100x100m site",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+        )
+    )
+
+    assert gw.calls[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "run_freecad"},
+    }
+    assert cadquery_calls == []
+    assert freecad_calls == [script]
+    assert events[1]["engine"] == "freecad"
+    assert events[-1]["ok"] is True
+
+
+async def test_site_prompt_retries_if_model_uses_wrong_engine():
+    gw = FakeGateway(
+        [
+            _tool_call("wrong", "c1", name="run_cadquery"),
+            _tool_call("right", "c2", name="run_freecad"),
+        ]
+    )
+    cadquery_calls = []
+    freecad_calls = []
+
+    async def execute(script):
+        cadquery_calls.append(script)
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+
+    events = await _collect(
+        run_generation(
+            "community building layout with water and playground",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+            max_attempts=2,
+        )
+    )
+
+    assert cadquery_calls == []
+    assert freecad_calls == ["right"]
+    assert len(gw.calls) == 2
+    assert any(e["type"] == "retry" and "run_freecad" in e["message"] for e in events)
+    assert events[-1]["ok"] is True
 
 
 async def test_self_corrects_after_a_failed_attempt():

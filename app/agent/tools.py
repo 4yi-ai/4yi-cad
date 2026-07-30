@@ -97,6 +97,14 @@ Hard rules:
 - For site/community prompts, model the overall plot plus distinct buildings,
   roads/paths, water/green areas, clubhouse/play areas, and other requested zones
   as simple named massing objects rather than collapsing everything into one block.
+- Private beta complexity budget: site/community/building-layout outputs are
+  massing-level scenes with no more than 20-40 major exportable objects. Aggregate
+  repeated towers, floors, windows, facade panels, trees, cars, and furniture into
+  simple named masses or zones.
+- Avoid per-window or per-floor geometry arrays, dense meshes, heavy booleans,
+  global fillets/chamfers, and ornamental detail unless the user asks for one
+  specific small part. Prioritize valid export, named editable objects, and a
+  responsive viewer over visual detail.
 
 Quick reference:
 - Primitives: cq.Workplane("XY").box(l,w,h) | .circle(r).extrude(h) | .sphere(r)

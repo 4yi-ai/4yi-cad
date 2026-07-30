@@ -242,23 +242,29 @@ def test_generated_hole_edit_prefers_local_parameter_patch():
 
 def test_generated_parameter_patch_requires_explicit_edit_intent():
     html = _html()
+    parser_body = html[
+        html.index("function shouldParseGeneratedParameterPatch"):
+        html.index("function parseGeneratedParameterPatch")
+    ]
 
     assert "shouldParseGeneratedParameterPatch" in html
     assert "generatedParameterNameMentioned" in html
     assert "if (!shouldParseGeneratedParameterPatch(text, params)) return null;" in html
     assert "层数|楼层|层|数量" in html
+    assert "isCreateOrScenePrompt" in html
+    assert "create|generate|model" not in parser_body
+    assert "decrease|make" not in parser_body
 
 
 def test_generated_unmapped_command_falls_back_to_agent():
     html = _html()
 
     assert "shouldUseAgentForUnmappedCommand" in html
+    assert "const createOrScenePrompt = isCreateOrScenePrompt(text);" in html
+    assert "const generatedPatch = !createOrScenePrompt && !freeCadPatch" in html
+    assert "const patch = !createOrScenePrompt && !freeCadPatch" in html
+    assert "const useAgent = createOrScenePrompt ||" in html
     assert 'state.previewMode === "generated"' in html
-    assert (
-        "const useAgent = !freeCadPatch && !generatedPatch && !patch && "
-        "shouldUseAgentForUnmappedCommand(text, rewriteScript);"
-    ) in html
-    assert "hasSceneGenerationIntent" not in html
 
 
 def test_p1_workbench_does_not_expose_topology_or_arbitrary_feature_history_controls():

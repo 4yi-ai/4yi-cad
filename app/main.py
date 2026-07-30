@@ -20,9 +20,9 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.agent.loop import ExecResult, run_generation
+from app.agent.loop import ExecResult, MAX_CHAT_HISTORY_MESSAGE_CHARS, run_generation
 from app.artifact_store import ArtifactStore, FileArtifactStore
 from app.cad.design_state import (
     CadPatch,
@@ -57,6 +57,7 @@ from app.session_store import SessionStore, SqliteSessionStore
 _INDEX_HTML = Path(__file__).resolve().parents[1] / "index.html"
 DEFAULT_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 FREECAD_IMPORT_FORMATS = ("fcstd", "step", "stp", "iges", "igs", "brep")
+MAX_CHAT_HISTORY_PAYLOAD_MESSAGES = 40
 
 
 def _freecad_upload_max_bytes() -> int:
@@ -95,10 +96,20 @@ def _enforce_freecad_upload_size(data_b64: str, *, label: str) -> None:
         )
 
 
+class ChatHistoryMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=MAX_CHAT_HISTORY_MESSAGE_CHARS)
+
+
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     # Client is the source of truth: it replays prior turns as chat messages.
-    history: list[dict] = Field(default_factory=list)
+    history: list[ChatHistoryMessage] = Field(
+        default_factory=list,
+        max_length=MAX_CHAT_HISTORY_PAYLOAD_MESSAGES,
+    )
 
 
 class DesignPatchRequest(BaseModel):
@@ -1285,7 +1296,7 @@ def create_app(
             gateway=gw,
             execute=execute,
             execute_freecad=freecad_execute,
-            history=req.history,
+            history=[item.model_dump() for item in req.history],
         )
         return StreamingResponse(
             _sse_with_heartbeat(agen),

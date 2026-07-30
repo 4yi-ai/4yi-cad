@@ -9143,12 +9143,23 @@ function buildScriptRewritePrompt(instruction) {
   ].join("\n");
 }
 
+function isCreateOrScenePrompt(text) {
+  const normalized = text.toLowerCase();
+  const editVerb = /改成|改为|设为|设置为|变成|调整|修改|更新|增大|减小|加大|缩小|change|set|adjust|update|resize|increase|decrease/;
+  const sceneNoun = /小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|景观|\b(site|community|campus|neighbou?rhood|master\s+plan|building\s+layout|massing|bim|villa|residential)\b/;
+  if (/生成|创建|新建|建模|制作|做一个|画一个/.test(normalized)) return true;
+  if (/\b(create|generate|model)\b/.test(normalized)) return true;
+  if (/\bmake\s+(?:me\s+)?(?:a|an|new)\b/.test(normalized)) return true;
+  if (/\bdesign\s+(?:a|an|new)\b/.test(normalized)) return true;
+  return sceneNoun.test(normalized) && !editVerb.test(normalized);
+}
+
 function shouldRouteToAgent(text) {
   const normalized = text.toLowerCase();
   if (shouldRequestScriptRewrite(text)) return true;
+  if (isCreateOrScenePrompt(text)) return true;
   if (/\b(freecad|fcstd|techdraw)\b/.test(normalized)) return true;
   if (/\b(step|stl|iges|brep|obj|gltf)\b|导出|输出|导入/.test(normalized)) return true;
-  if (/生成|创建|新建|建模|制作|做一个|画一个|\b(create|generate|make|model|export|import)\b/.test(normalized)) return true;
   if (/\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?/.test(normalized)) return true;
   return false;
 }
@@ -9176,7 +9187,7 @@ function generatedParameterNameMentioned(text, params) {
 function shouldParseGeneratedParameterPatch(text, params) {
   const normalized = text.toLowerCase();
   if (generatedParameterNameMentioned(text, params)) return true;
-  if (/改成|改为|设为|设置为|变成|调整|修改|更新|增大|减小|加大|缩小|change|set|adjust|update|resize|increase|decrease|make/.test(normalized)) {
+  if (/改成|改为|设为|设置为|变成|调整|修改|更新|增大|减小|加大|缩小|change|set|adjust|update|resize|increase|decrease/.test(normalized)) {
     return true;
   }
   return /(?:mm|毫米)/i.test(normalized) && Boolean(requestedDimension(normalized));
@@ -9526,15 +9537,16 @@ async function submitCommand(event) {
   const text = input.value.trim();
   if (!text) return;
   const rewriteScript = shouldRequestScriptRewrite(text);
+  const createOrScenePrompt = isCreateOrScenePrompt(text);
   const serverFreeCadPatch = !rewriteScript ? await parseServerFreeCadDocumentPatch(text) : null;
   const freeCadPatch = serverFreeCadPatch || (!rewriteScript ? parseFreeCadDocumentPatch(text) : null);
-  const generatedPatch = !freeCadPatch && !rewriteScript && state.previewMode === "generated"
+  const generatedPatch = !createOrScenePrompt && !freeCadPatch && !rewriteScript && state.previewMode === "generated"
     ? parseGeneratedParameterPatch(text)
     : null;
-  const patch = !freeCadPatch && !generatedPatch && !rewriteScript && state.previewMode !== "generated"
+  const patch = !createOrScenePrompt && !freeCadPatch && !generatedPatch && !rewriteScript && state.previewMode !== "generated"
     ? parseConversationalPatch(text)
     : null;
-  const useAgent = !freeCadPatch && !generatedPatch && !patch && shouldUseAgentForUnmappedCommand(text, rewriteScript);
+  const useAgent = createOrScenePrompt || (!freeCadPatch && !generatedPatch && !patch && shouldUseAgentForUnmappedCommand(text, rewriteScript));
   input.value = "";
   state.chatMessages.unshift({ role: "user", text });
   setBottomTab("chat");
