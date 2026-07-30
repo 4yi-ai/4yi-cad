@@ -934,6 +934,7 @@
     <div class="top-actions">
       <div class="status-chip" id="status">loading design state</div>
       <input class="hidden-file-input" id="freeCadImportInput" type="file" accept=".FCStd,.fcstd,.step,.stp,.iges,.igs,.brep" onchange="importFreeCadModelFile(this.files && this.files[0]); this.value = '';" />
+      <button class="top-action-button" id="newSessionButton" type="button" onclick="startNewWorkbenchSession()" title="Start a new workbench session"><span data-icon="redo"></span><span id="newSessionButtonText">New Session</span></button>
       <button class="top-action-button" id="importButton" type="button" onclick="openFreeCadImportPicker()" title="Import FCStd, STEP, IGES, or BREP"><span data-icon="download"></span><span id="importButtonText">Import</span></button>
       <button class="lang-button" id="localeToggle" type="button" onclick="toggleLocale()">中文</button>
     </div>
@@ -997,6 +998,8 @@ const I18N = {
     properties: "Properties / Parameters",
     commandPlaceholder: "Chat / modify: change four holes to 6mm",
     apply: "Apply",
+    newSession: "New Session",
+    newSessionTitle: "Start a new workbench session",
     importModel: "Import",
     importModelTitle: "Import FCStd, STEP, IGES, or BREP",
     langToggle: "中文",
@@ -1287,13 +1290,14 @@ const I18N = {
       appliedFreeCadTypedPatch: "Applied FreeCAD typed edit: {name}.",
       importOk: "Imported {name} as mutable FreeCAD document state.",
       importFailed: "Import failed: {message}",
-      scriptRewriteOk: "Rewrote the CAD script for the topology change.",
+      scriptRewriteOk: "Updated the current CAD script.",
       rollbackOk: "Restored server version v{version}.",
       rollbackFailed: "Rollback failed: {message}",
       commandNotUnderstood: "I could not map that to an existing CAD parameter or typed edit.",
       generationFailed: "Generation failed: {message}",
       generationOk: "Generated a CAD script and available preview/artifacts.",
       generationBad: "Generation failed. See Logs for details.",
+      newSessionStarted: "Started a new workbench session.",
     },
     artifact: {
       stepTitle: "STEP solid",
@@ -1330,7 +1334,7 @@ const I18N = {
       agentDetail: "Generated preview and artifacts",
       agentFailedDetail: "See logs for failure",
       scriptRewrite: "Script rewrite",
-      scriptRewriteDetail: "Topology edit: {instruction}",
+      scriptRewriteDetail: "Current model edit: {instruction}",
       rollback: "Rollback",
       rollbackDetail: "Restored v{version}",
       freecadImport: "FreeCAD import: {name}",
@@ -1370,6 +1374,7 @@ const I18N = {
       sketchDryRunFailed: "Sketch solver preview failed: {message}",
       commandNotUnderstood: "Command was not routed because it did not match an existing parameter or typed edit.",
       streamEndedWithoutDone: "Generation stream ended before a final done event",
+      newSessionStarted: "Started new workbench session",
       unknownError: "unknown error",
     },
     status: {
@@ -1409,6 +1414,8 @@ const I18N = {
     properties: "属性 / 参数",
     commandPlaceholder: "聊天 / 修改：把四个孔改成 6mm",
     apply: "应用",
+    newSession: "新建会话",
+    newSessionTitle: "新建工作台会话",
     importModel: "导入",
     importModelTitle: "导入 FCStd、STEP、IGES 或 BREP",
     langToggle: "EN",
@@ -1699,13 +1706,14 @@ const I18N = {
       appliedFreeCadTypedPatch: "已应用 FreeCAD 类型化编辑：{name}。",
       importOk: "已导入 {name}，并作为可变 FreeCAD 文档状态。",
       importFailed: "导入失败：{message}",
-      scriptRewriteOk: "已为拓扑修改重写 CAD 脚本。",
+      scriptRewriteOk: "已更新当前 CAD 脚本。",
       rollbackOk: "已恢复服务器版本 v{version}。",
       rollbackFailed: "回滚失败：{message}",
       commandNotUnderstood: "还不能把这句话映射到现有 CAD 参数或类型化编辑。",
       generationFailed: "生成失败：{message}",
       generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
       generationBad: "生成失败。请查看日志。",
+      newSessionStarted: "已新建工作台会话。",
     },
     artifact: {
       stepTitle: "STEP 实体",
@@ -1742,7 +1750,7 @@ const I18N = {
       agentDetail: "已生成预览和产物",
       agentFailedDetail: "查看日志获取失败原因",
       scriptRewrite: "脚本重写",
-      scriptRewriteDetail: "拓扑修改：{instruction}",
+      scriptRewriteDetail: "当前模型修改：{instruction}",
       rollback: "回滚",
       rollbackDetail: "已恢复 v{version}",
       freecadImport: "FreeCAD 导入：{name}",
@@ -1782,6 +1790,7 @@ const I18N = {
       sketchDryRunFailed: "草图求解预检失败：{message}",
       commandNotUnderstood: "命令未路由：没有匹配到现有参数或类型化编辑。",
       streamEndedWithoutDone: "生成流结束但没有收到最终 done 事件",
+      newSessionStarted: "已新建工作台会话",
       unknownError: "未知错误",
     },
     status: {
@@ -3917,11 +3926,59 @@ function syncSavedServerVersion(version, fallbackLabel, fallbackDetail) {
   persistWorkbenchSession();
 }
 
-function clearServerSessionReference() {
+function clearServerSessionReference(options = {}) {
   state.serverSessionId = "";
   state.activeServerVersionId = "";
   localStorage.removeItem(SERVER_SESSION_ID_STORAGE_KEY);
-  persistWorkbenchSession();
+  if (options.persist !== false) persistWorkbenchSession();
+}
+
+function resetClientWorkbenchSession() {
+  localStorage.removeItem(WORKBENCH_SESSION_STORAGE_KEY);
+  clearServerSessionReference({ persist: false });
+  state.designState = null;
+  state.script = "";
+  state.patch = null;
+  state.logs = [t("log.workbenchStarting")];
+  state.history = [];
+  state.artifacts = {};
+  state.artifactRefs = {};
+  state.previewPng = null;
+  state.engine = "cadquery";
+  state.freecadVersion = "";
+  state.exportStatus = "notReady";
+  state.statusKey = "loading";
+  state.statusVars = {};
+  state.previewMode = "design_state";
+  state.generatedPrompt = "";
+  state.generatedParameters = [];
+  state.documentSummary = null;
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = "";
+  state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
+  state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
+  state.sketchEditTool = "select";
+  state.sketchSnapEnabled = true;
+  state.sketchSnapSize = 1;
+  state.assemblyConnectorAnchor = null;
+  state.viewMode = "iso";
+  state.selectionMode = "feature";
+  state.measureMode = "distance";
+  state.showBBox = true;
+  state.showDims = true;
+  state.exploded = false;
+  state.selectedFeatureId = "base_plate";
+  state.bottomTab = "chat";
+  state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
+  state.lastServerVersionSignature = "";
+  state.chatHistory = [];
+  state.chatMessages = [{ role: "assistant", key: "chat.newSessionStarted" }];
 }
 
 function isMissingServerSessionError(error) {
@@ -5103,6 +5160,8 @@ function renderStaticText() {
   $("propertiesTitle").textContent = t("properties");
   $("commandInput").placeholder = t("commandPlaceholder");
   $("applyButton").textContent = t("apply");
+  $("newSessionButtonText").textContent = t("newSession");
+  $("newSessionButton").title = t("newSessionTitle");
   $("importButtonText").textContent = t("importModel");
   $("importButton").title = t("importModelTitle");
   $("localeToggle").textContent = t("langToggle");
@@ -9183,12 +9242,28 @@ function shouldRequestScriptRewrite(text) {
   return false;
 }
 
+function hasActiveGeneratedModel() {
+  return state.previewMode === "generated" && Boolean(state.script || state.previewPng || hasInteractiveViewerArtifact());
+}
+
+function isExplicitNewModelPrompt(text) {
+  const normalized = text.toLowerCase();
+  return /新(建|的)?\s*(会话|模型|设计|项目|方案)|重新(设计|生成|开始)|从头(开始|来|做)|重置(当前)?(会话|模型|设计)?|清空(当前)?(会话|模型|设计)?|换(一个|个)(新)?(模型|设计|方案)|\b(start\s+over|from\s+scratch)\b|\breset\s+(?:the\s+)?(?:session|model|design)\b|\bnew\s+(?:session|model|design)\b|\b(?:create|generate|make)\s+(?:me\s+)?a\s+new\b/.test(normalized);
+}
+
+function commandModeForAgent(text, rewriteScript) {
+  if (rewriteScript) return "rewrite";
+  if (hasActiveGeneratedModel() && !isExplicitNewModelPrompt(text)) return "rewrite";
+  return "create";
+}
+
 function buildScriptRewritePrompt(instruction) {
   return [
-    "Rewrite the current CAD script for this topology-level edit.",
+    "Continue editing the current CAD model. Rewrite the current CAD script for the user request; do not start a new unrelated design.",
     `User edit: ${instruction}`,
+    `Current model brief: ${state.generatedPrompt || "existing generated CAD model"}`,
     `Current engine: ${state.engine}. Use the same engine unless the edit explicitly requires another engine.`,
-    "Return one complete script by calling the appropriate CAD tool. Preserve named parameters and existing dimensions where practical.",
+    "Return one complete script by calling the appropriate CAD tool. Preserve the current model, named parameters, dimensions, and existing objects where practical; change only what the user requested.",
     "Current script:",
     "```python",
     state.script,
@@ -9222,7 +9297,7 @@ function shouldUseAgentForUnmappedCommand(text, rewriteScript) {
   if (shouldRouteToAgent(text)) return true;
   // In generated mode, local parsers above handle deterministic parameter edits.
   // Anything left is natural-language CAD intent and should be resolved by the agent.
-  return state.previewMode === "generated";
+  return hasActiveGeneratedModel();
 }
 
 function generatedParameterNameMentioned(text, params) {
@@ -9599,6 +9674,7 @@ async function submitCommand(event) {
   const patch = !createOrScenePrompt && !freeCadPatch && !generatedPatch && !rewriteScript && state.previewMode !== "generated"
     ? parseConversationalPatch(text)
     : null;
+  const agentMode = commandModeForAgent(text, rewriteScript);
   const useAgent = createOrScenePrompt || (!freeCadPatch && !generatedPatch && !patch && shouldUseAgentForUnmappedCommand(text, rewriteScript));
   input.value = "";
   state.chatMessages.unshift({ role: "user", text });
@@ -9653,7 +9729,7 @@ async function submitCommand(event) {
     return;
   }
   if (useAgent) {
-    await generateFromPrompt(text, { mode: rewriteScript ? "rewrite" : "create" });
+    await generateFromPrompt(text, { mode: agentMode });
     return;
   }
   state.chatMessages.unshift({ role: "assistant", key: "chat.commandNotUnderstood" });
@@ -9665,9 +9741,11 @@ async function submitCommand(event) {
 async function generateFromPrompt(prompt, options = {}) {
   const mode = options.mode === "rewrite" ? "rewrite" : "create";
   const requestPrompt = mode === "rewrite" ? buildScriptRewritePrompt(prompt) : prompt;
+  const previousGeneratedPrompt = state.generatedPrompt;
+  const displayPrompt = mode === "rewrite" && previousGeneratedPrompt ? previousGeneratedPrompt : prompt;
   $("applyButton").disabled = true;
   state.previewMode = "generated";
-  state.generatedPrompt = prompt;
+  state.generatedPrompt = displayPrompt;
   state.generatedParameters = [];
   state.documentSummary = null;
   state.selectedGeneratedParameterName = "";
@@ -9700,7 +9778,7 @@ async function generateFromPrompt(prompt, options = {}) {
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!resp.ok) throw new Error(await responseErrorMessage(resp));
-    const sawDone = await readSse(resp, prompt, { mode });
+    const sawDone = await readSse(resp, prompt, { mode, instruction: prompt });
     if (!sawDone) {
       setStatus("failed");
       log(t("log.streamEndedWithoutDone"));
@@ -9794,16 +9872,17 @@ function handleAgentEvent(ev, context = {}) {
     if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
     setStatus(ev.ok ? "done" : "failed");
     const rewrite = context.mode === "rewrite";
+    const userInstruction = context.instruction || state.generatedPrompt;
     addHistory(
       ev.ok ? (rewrite ? t("history.scriptRewrite") : t("history.agentGeneration")) : t("history.agentGenerationFailed"),
-      ev.ok ? (rewrite ? t("history.scriptRewriteDetail", { instruction: state.generatedPrompt }) : t("history.agentDetail")) : t("history.agentFailedDetail")
+      ev.ok ? (rewrite ? t("history.scriptRewriteDetail", { instruction: userInstruction }) : t("history.agentDetail")) : t("history.agentFailedDetail")
     );
     state.chatMessages.unshift({
       role: "assistant",
       key: ev.ok ? (rewrite ? "chat.scriptRewriteOk" : "chat.generationOk") : "chat.generationBad",
     });
     if (!ev.ok && !state.previewPng) state.previewMode = "design_state";
-    void recordServerVersion(ev.ok ? (rewrite ? "modify" : "create") : "repair", state.generatedPrompt, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
+    void recordServerVersion(ev.ok ? (rewrite ? "modify" : "create") : "repair", userInstruction, ev.ok ? "ok" : "failed", ev.ok ? "" : t("chat.generationBad"));
   }
   renderBottom();
   persistWorkbenchSession();
@@ -9883,6 +9962,35 @@ async function init() {
   renderAll();
 }
 
+async function startNewWorkbenchSession() {
+  $("applyButton").disabled = true;
+  resetClientWorkbenchSession();
+  setStatus("loading");
+  try {
+    const initial = await fetchJson("/api/design/initial");
+    state.designState = initial.design_state;
+    state.script = initial.script;
+    state.engine = normalizeEngine(initial.engine);
+    state.freecadVersion = "";
+    state.selectedFeatureId = state.designState.selected_feature_id;
+    addHistory(t("history.initialTitle"), t("history.initialDetail"));
+    log(t("log.newSessionStarted"));
+    setStatus("ready");
+    void recordServerVersion("create", t("history.initialDetail"));
+  } catch (error) {
+    setStatus("initialUnavailable");
+    log(t("log.initialFailed", { message: error.message }));
+    state.designState = fallbackDesignState();
+    state.script = "";
+    state.engine = "cadquery";
+    state.freecadVersion = "";
+    state.selectedFeatureId = state.designState.selected_feature_id;
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
+}
+
 function fallbackDesignState() {
   return {
     schema_version: "4yi-cad.design/v1",
@@ -9917,6 +10025,7 @@ window.setMeasureMode = setMeasureMode;
 window.setBottomTab = setBottomTab;
 window.commitParameter = commitParameter;
 window.commitGeneratedParameter = commitGeneratedParameter;
+window.startNewWorkbenchSession = startNewWorkbenchSession;
 window.openFreeCadImportPicker = openFreeCadImportPicker;
 window.importFreeCadModelFile = importFreeCadModelFile;
 window.renameFeature = renameFeature;
