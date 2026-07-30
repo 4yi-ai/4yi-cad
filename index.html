@@ -9150,7 +9150,19 @@ function shouldRouteToAgent(text) {
   if (/\b(step|stl|iges|brep|obj|gltf)\b|导出|输出|导入/.test(normalized)) return true;
   if (/生成|创建|新建|建模|制作|做一个|画一个|\b(create|generate|make|model|export|import)\b/.test(normalized)) return true;
   if (/\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?/.test(normalized)) return true;
+  if (hasSceneGenerationIntent(normalized)) return true;
   return false;
+}
+
+function hasSceneGenerationIntent(normalized) {
+  const footprint = /\d+(?:\.\d+)?\s*(?:x|×|\*)\s*\d+(?:\.\d+)?\s*(?:m|米|meter|meters|mm|毫米)?/;
+  const sceneNoun = /花园|园区|场地|地块|小区|建筑|房子|楼房|楼层|楼|别墅|泳池|游泳池|庭院|景观|布局|\b(?:garden|site|campus|building|house|villa|pool|layout|floor|tower)\b/;
+  const spatialCue = /在|里|内|有|包含|放置|布置|布局|with|inside|within|contains?|include|place|layout/;
+  const quantityCue = /\d+|一|二|两|三|四|五|六|七|八|九|十|栋|层|个|座|处/;
+  return sceneNoun.test(normalized) && (
+    footprint.test(normalized)
+    || (spatialCue.test(normalized) && quantityCue.test(normalized))
+  );
 }
 
 function parseGeneratedParameterPatch(text) {
