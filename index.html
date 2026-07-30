@@ -572,8 +572,25 @@
     font-weight: 700;
   }
   .typed-action-button:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); border-color: #bdd8ff; }
+  .typed-action-button.active { background: var(--primary-soft); color: var(--primary); border-color: #bdd8ff; }
   .typed-action-button:disabled { opacity: .48; cursor: not-allowed; }
   .typed-action-button svg { width: 14px; height: 14px; stroke-width: 2; }
+  .typed-action-toggle {
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .typed-action-toggle input { margin: 0; }
+  .sketch-tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+  .sketch-tool-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 650; }
 
   .section { padding: 14px; border-bottom: 1px solid var(--line); }
   .section h3 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
@@ -667,6 +684,87 @@
   .diagnostic-row.warning { border-color: #ffe1a6; background: #fff8e8; color: var(--warning); }
   .diagnostic-row.error { border-color: #f4b8b8; background: #fff0f0; color: var(--danger); }
   .diagnostic-row.info { border-color: #cfe4ff; background: #f5f9ff; color: var(--primary); }
+  .sketch-preview-review {
+    border: 1px solid #f4b8b8;
+    border-radius: var(--radius);
+    background: #fff7f7;
+    padding: 9px 10px;
+    margin: 10px 0;
+  }
+  .sketch-preview-review strong { display: block; font-size: 13px; color: var(--danger); }
+  .sketch-preview-review span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+  .sketch-solver-strip {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    margin: 10px 0;
+    font-size: 12px;
+  }
+  .sketch-solver-strip.error { border-color: #f4b8b8; background: #fff0f0; }
+  .sketch-solver-strip.warning { border-color: #ffe1a6; background: #fff8e8; }
+  .sketch-solver-strip.info { border-color: #cfe4ff; background: #f5f9ff; }
+  .sketch-solver-strip strong,
+  .sketch-solver-strip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .constraint-glyph-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 9px 10px;
+    margin: 10px 0;
+    display: grid;
+    gap: 8px;
+  }
+  .constraint-glyph-card.error { border-color: #f4b8b8; background: #fff7f7; }
+  .constraint-glyph-card.warning { border-color: #ffe1a6; background: #fffaf0; }
+  .constraint-glyph-header {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 9px;
+    align-items: center;
+  }
+  .constraint-glyph-mark {
+    width: 46px;
+    height: 38px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--primary-soft);
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+    font: 750 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .constraint-glyph-card.error .constraint-glyph-mark { background: #fff0f0; color: var(--danger); border-color: #f4b8b8; }
+  .constraint-glyph-card.warning .constraint-glyph-mark { background: #fff8e8; color: var(--warning); border-color: #ffe1a6; }
+  .constraint-glyph-copy { min-width: 0; display: grid; gap: 3px; font-size: 12px; }
+  .constraint-glyph-copy strong,
+  .constraint-glyph-copy span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .constraint-glyph-copy span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .constraint-ref-grid { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .constraint-ref-chip {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    min-height: 28px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: nowrap;
+  }
+  .constraint-ref-chip:hover,
+  .constraint-ref-chip.active { background: var(--primary-soft); border-color: #9fc8ff; color: var(--primary); }
+  .constraint-ref-chip:disabled { cursor: default; opacity: 0.58; }
+  .constraint-ref-chip.error { background: #fff0f0; border-color: #f4b8b8; color: var(--danger); }
+  .constraint-ref-chip.warning { background: #fff8e8; border-color: #ffe1a6; color: var(--warning); }
   .param-row {
     min-height: 42px;
     display: grid;
@@ -988,6 +1086,66 @@ const I18N = {
     sketchGeometryList: "Geometry list",
     sketchConstraintList: "Constraint list",
     sketchDiagnostics: "Sketch diagnostics",
+    addSketchLine: "Line",
+    addSketchCircle: "Circle",
+    addSketchArc: "Arc",
+    sketchPointEditor: "Point editor",
+    sketchToolSelect: "Select",
+    sketchSnap: "Snap",
+    sketchConstraintPalette: "Constraint palette",
+    sketchSolverMap: "Solver map",
+    sketchConstraintGlyph: "Constraint glyph",
+    constraintReferences: "References",
+    relatedConstraints: "Related constraints",
+    focusGeometry: "Focus geometry",
+    sketchDragPreview: "Sketch drag",
+    sketchDragCommit: "Sketch commit",
+    sketchLiveSolve: "Live solve",
+    sketchLiveSolveChecking: "Live solve checking",
+    sketchLiveSolveOk: "Live solve ok",
+    sketchLiveSolveBlocked: "Live solve issue",
+    sketchLiveSolveFailed: "Live solve failed",
+    sketchDryRunReview: "Solver preview",
+    validateSketch: "Validate sketch",
+    focusAllReferences: "Focus refs",
+    sketchSolverIssues: "Solver issues",
+    focusConstraint: "Focus #{index}",
+    focusGeometryIndex: "Focus geometry #{index}",
+    underConstrained: "Under-constrained",
+    conflictingConstraints: "Conflicts",
+    redundantConstraints: "Redundant",
+    malformedConstraints: "Malformed",
+    enableConstraint: "Enable #{index}",
+    makeDriving: "Make #{index} driving",
+    commitAnyway: "Commit anyway",
+    revertDrag: "Revert drag",
+    disableConstraint: "Disable #{index}",
+    makeReference: "Make #{index} reference",
+    addHorizontalConstraint: "Horizontal",
+    addVerticalConstraint: "Vertical",
+    addBlockConstraint: "Block",
+    addCoincidentConstraint: "Coincident",
+    addDistanceConstraint: "Distance",
+    addDistanceXConstraint: "Distance X",
+    addDistanceYConstraint: "Distance Y",
+    addRadiusConstraint: "Radius",
+    addDiameterConstraint: "Diameter",
+    addEqualConstraint: "Equal",
+    addParallelConstraint: "Parallel",
+    addPerpendicularConstraint: "Perpendicular",
+    addTangentConstraint: "Tangent",
+    addPointOnObjectConstraint: "Point on object",
+    setCoincidenceAnchor: "Set A",
+    clearCoincidenceAnchor: "Clear A",
+    setGeometryAnchor: "Set geometry A",
+    clearGeometryAnchor: "Clear geometry A",
+    constraintValuePrompt: "{type} value",
+    toggleConstruction: "Construction",
+    sketchConstraintEditor: "Constraint editor",
+    constraintName: "Name",
+    constraintActive: "Active",
+    constraintReference: "Reference",
+    removeConstraint: "Remove",
     techDrawPanel: "TechDraw",
     layoutDiagnostics: "Layout diagnostics",
     exportQuality: "Export quality",
@@ -1191,6 +1349,7 @@ const I18N = {
       importDone: "Imported FreeCAD model: {name}",
       importFailed: "FreeCAD import failed: {message}",
       importUnsupported: "Unsupported import format: {name}",
+      importTooLarge: "{name} is {size}; upload limit is {max}.",
       patchFailed: "Patch failed: {message}",
       exportUnavailable: "Export unavailable: {message}",
       initialFailed: "Initial state failed: {message}",
@@ -1206,6 +1365,9 @@ const I18N = {
       freecadDocumentPatchUpdated: "Updated FreeCAD document: {name} = {value} {unit}",
       freecadTypedPatchUpdated: "Updated FreeCAD document: {name}",
       freecadDocumentPatchFailed: "FreeCAD document patch failed: {message}",
+      sketchDryRunOk: "Sketch solver preview passed: {name}",
+      sketchDryRunBlocked: "Sketch solver preview blocked commit: {message}",
+      sketchDryRunFailed: "Sketch solver preview failed: {message}",
       commandNotUnderstood: "Command was not routed because it did not match an existing parameter or typed edit.",
       streamEndedWithoutDone: "Generation stream ended before a final done event",
       unknownError: "unknown error",
@@ -1220,6 +1382,8 @@ const I18N = {
       applyingPatch: "applying CADPatch",
       patchFailed: "patch failed",
       updatingPreview: "updating preview/export",
+      checkingSketchSolver: "checking sketch solver",
+      sketchDryRunBlocked: "sketch solver review needed",
       previewExportReady: "preview/export ready",
       previewUpdated: "preview updated",
       submitting: "submitting to CAD agent",
@@ -1334,6 +1498,66 @@ const I18N = {
     sketchGeometryList: "几何列表",
     sketchConstraintList: "约束列表",
     sketchDiagnostics: "草图诊断",
+    addSketchLine: "直线",
+    addSketchCircle: "圆",
+    addSketchArc: "圆弧",
+    sketchPointEditor: "点编辑",
+    sketchToolSelect: "选择",
+    sketchSnap: "捕捉",
+    sketchConstraintPalette: "约束面板",
+    sketchSolverMap: "求解映射",
+    sketchConstraintGlyph: "约束符号",
+    constraintReferences: "引用",
+    relatedConstraints: "相关约束",
+    focusGeometry: "定位几何",
+    sketchDragPreview: "草图拖动",
+    sketchDragCommit: "草图提交",
+    sketchLiveSolve: "实时求解",
+    sketchLiveSolveChecking: "实时求解检查中",
+    sketchLiveSolveOk: "实时求解通过",
+    sketchLiveSolveBlocked: "实时求解问题",
+    sketchLiveSolveFailed: "实时求解失败",
+    sketchDryRunReview: "求解预检",
+    validateSketch: "校验草图",
+    focusAllReferences: "定位引用",
+    sketchSolverIssues: "求解问题",
+    focusConstraint: "定位 #{index}",
+    focusGeometryIndex: "定位几何 #{index}",
+    underConstrained: "欠约束",
+    conflictingConstraints: "冲突",
+    redundantConstraints: "冗余",
+    malformedConstraints: "异常",
+    enableConstraint: "启用 #{index}",
+    makeDriving: "设 #{index} 为驱动",
+    commitAnyway: "仍然提交",
+    revertDrag: "回退拖动",
+    disableConstraint: "禁用 #{index}",
+    makeReference: "设 #{index} 为参考",
+    addHorizontalConstraint: "水平",
+    addVerticalConstraint: "垂直",
+    addBlockConstraint: "锁定",
+    addCoincidentConstraint: "重合",
+    addDistanceConstraint: "距离",
+    addDistanceXConstraint: "X 距离",
+    addDistanceYConstraint: "Y 距离",
+    addRadiusConstraint: "半径",
+    addDiameterConstraint: "直径",
+    addEqualConstraint: "相等",
+    addParallelConstraint: "平行",
+    addPerpendicularConstraint: "垂直",
+    addTangentConstraint: "相切",
+    addPointOnObjectConstraint: "点在对象上",
+    setCoincidenceAnchor: "设为 A",
+    clearCoincidenceAnchor: "清除 A",
+    setGeometryAnchor: "设为几何 A",
+    clearGeometryAnchor: "清除几何 A",
+    constraintValuePrompt: "{type} 数值",
+    toggleConstruction: "辅助线",
+    sketchConstraintEditor: "约束编辑",
+    constraintName: "名称",
+    constraintActive: "启用",
+    constraintReference: "参考",
+    removeConstraint: "移除",
     techDrawPanel: "工程图",
     layoutDiagnostics: "布局诊断",
     exportQuality: "导出质量",
@@ -1537,6 +1761,7 @@ const I18N = {
       importDone: "已导入 FreeCAD 模型：{name}",
       importFailed: "FreeCAD 导入失败：{message}",
       importUnsupported: "不支持的导入格式：{name}",
+      importTooLarge: "{name} 大小为 {size}，上传上限是 {max}。",
       patchFailed: "补丁失败：{message}",
       exportUnavailable: "导出不可用：{message}",
       initialFailed: "初始状态失败：{message}",
@@ -1552,6 +1777,9 @@ const I18N = {
       freecadDocumentPatchUpdated: "已更新 FreeCAD 文档：{name} = {value} {unit}",
       freecadTypedPatchUpdated: "已更新 FreeCAD 文档：{name}",
       freecadDocumentPatchFailed: "FreeCAD 文档补丁失败：{message}",
+      sketchDryRunOk: "草图求解预检通过：{name}",
+      sketchDryRunBlocked: "草图求解预检阻止提交：{message}",
+      sketchDryRunFailed: "草图求解预检失败：{message}",
       commandNotUnderstood: "命令未路由：没有匹配到现有参数或类型化编辑。",
       streamEndedWithoutDone: "生成流结束但没有收到最终 done 事件",
       unknownError: "未知错误",
@@ -1566,6 +1794,8 @@ const I18N = {
       applyingPatch: "正在应用 CADPatch",
       patchFailed: "补丁失败",
       updatingPreview: "正在更新预览 / 导出",
+      checkingSketchSolver: "正在检查草图求解",
+      sketchDryRunBlocked: "草图求解需要确认",
       previewExportReady: "预览 / 导出就绪",
       previewUpdated: "预览已更新",
       submitting: "正在提交给 CAD agent",
@@ -1595,6 +1825,8 @@ const DEFAULT_FEATURE_NAMES = {
 
 const WORKBENCH_SESSION_STORAGE_KEY = "4yi-cad.workbench.session.v1";
 const SERVER_SESSION_ID_STORAGE_KEY = "4yi-cad.server-session-id.v1";
+const FALLBACK_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+let freeCadUploadPolicyPromise = null;
 
 function initialLocale() {
   const stored = localStorage.getItem("4yi-cad.locale");
@@ -1635,6 +1867,14 @@ const state = {
   selectedFreeCadSubelement: null,
   selectedFreeCadAssemblyJoint: null,
   selectedFreeCadSketchElement: null,
+  sketchCoincidenceAnchor: null,
+  sketchGeometryConstraintAnchor: null,
+  sketchDragPreview: null,
+  sketchLiveSolve: null,
+  sketchDryRunReview: null,
+  sketchEditTool: "select",
+  sketchSnapEnabled: true,
+  sketchSnapSize: 1,
   assemblyConnectorAnchor: null,
   viewMode: "iso",
   selectionMode: "feature",
@@ -1656,6 +1896,8 @@ const state = {
 
 let generatedViewerToken = 0;
 let generatedViewerRuntime = null;
+let sketchLiveSolveTimer = null;
+let sketchLiveSolveToken = 0;
 let threeModulePromise = null;
 
 const parameterOrder = [
@@ -1759,6 +2001,11 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
     selectedFreeCadAssemblyJoint: state.selectedFreeCadAssemblyJoint,
     selectedFreeCadSketchElement: state.selectedFreeCadSketchElement,
+    sketchCoincidenceAnchor: state.sketchCoincidenceAnchor,
+    sketchGeometryConstraintAnchor: state.sketchGeometryConstraintAnchor,
+    sketchEditTool: state.sketchEditTool,
+    sketchSnapEnabled: state.sketchSnapEnabled,
+    sketchSnapSize: state.sketchSnapSize,
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
     viewMode: state.viewMode,
     selectionMode: state.selectionMode,
@@ -1826,6 +2073,11 @@ function restoreWorkbenchSession() {
     state.selectedFreeCadSubelement = saved.selectedFreeCadSubelement && typeof saved.selectedFreeCadSubelement === "object" ? saved.selectedFreeCadSubelement : null;
     state.selectedFreeCadAssemblyJoint = saved.selectedFreeCadAssemblyJoint && typeof saved.selectedFreeCadAssemblyJoint === "object" ? saved.selectedFreeCadAssemblyJoint : null;
     state.selectedFreeCadSketchElement = saved.selectedFreeCadSketchElement && typeof saved.selectedFreeCadSketchElement === "object" ? saved.selectedFreeCadSketchElement : null;
+    state.sketchCoincidenceAnchor = saved.sketchCoincidenceAnchor && typeof saved.sketchCoincidenceAnchor === "object" ? saved.sketchCoincidenceAnchor : null;
+    state.sketchGeometryConstraintAnchor = saved.sketchGeometryConstraintAnchor && typeof saved.sketchGeometryConstraintAnchor === "object" ? saved.sketchGeometryConstraintAnchor : null;
+    state.sketchEditTool = ["select", "line", "circle", "arc"].includes(saved.sketchEditTool) ? saved.sketchEditTool : "select";
+    state.sketchSnapEnabled = saved.sketchSnapEnabled !== false;
+    state.sketchSnapSize = Number.isFinite(Number(saved.sketchSnapSize)) && Number(saved.sketchSnapSize) > 0 ? Number(saved.sketchSnapSize) : 1;
     state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
@@ -2014,6 +2266,26 @@ function selectedFreeCadSketchElementKey() {
     normalizeFreeCadToken(selected.sketchName),
     normalizeFreeCadToken(selected.kind),
     Number(selected.index),
+    normalizeFreeCadToken(selected.pointRole),
+  ].join(":");
+}
+
+function selectedFreeCadSketchCoincidenceAnchorKey() {
+  const anchor = state.sketchCoincidenceAnchor;
+  if (!anchor) return "";
+  return [
+    normalizeFreeCadToken(anchor.sketchName),
+    Number(anchor.geometryIndex),
+    normalizeFreeCadToken(anchor.pointRole),
+  ].join(":");
+}
+
+function selectedFreeCadSketchGeometryAnchorKey() {
+  const anchor = state.sketchGeometryConstraintAnchor;
+  if (!anchor) return "";
+  return [
+    normalizeFreeCadToken(anchor.sketchName),
+    Number(anchor.geometryIndex),
   ].join(":");
 }
 
@@ -2031,6 +2303,8 @@ function generatedCadViewerKey() {
     selectedFreeCadSubelementKey(),
     selectedFreeCadAssemblyJointKey(),
     selectedFreeCadSketchElementKey(),
+    selectedFreeCadSketchCoincidenceAnchorKey(),
+    selectedFreeCadSketchGeometryAnchorKey(),
     freeCadSelectableShapeObjects().length,
     freeCadDocumentGeometryText(),
     freeCadAssemblyText(),
@@ -2526,11 +2800,36 @@ function freeCadSketchObjects() {
   return freeCadDocumentObjects().filter((obj) => freeCadObjectIsSketch(obj) && obj.sketch);
 }
 
+function activeFreeCadSketchObject() {
+  const selected = freeCadObjectByName(state.selectedFreeCadObjectName);
+  if (selected && freeCadObjectIsSketch(selected)) return selected;
+  const sketchElement = state.selectedFreeCadSketchElement;
+  if (sketchElement?.sketchName) {
+    const obj = freeCadObjectByName(sketchElement.sketchName);
+    if (obj && freeCadObjectIsSketch(obj)) return obj;
+  }
+  return firstFreeCadSketchObject();
+}
+
 function freeCadSketchPoint(sketch, point) {
   const local = freeCadTriplet(point);
   if (!local) return null;
   const base = freeCadTriplet(sketch?.placement?.base) || [0, 0, 0];
   return [base[0] + local[0], base[1] + local[1], base[2] + local[2]];
+}
+
+function freeCadSketchLocalPoint(sketch, modelPoint) {
+  const model = freeCadTriplet(modelPoint);
+  if (!model) return null;
+  const base = freeCadTriplet(sketch?.placement?.base) || [0, 0, 0];
+  return [model[0] - base[0], model[1] - base[1], model[2] - base[2]];
+}
+
+function freeCadSnapSketchPoint(point) {
+  const values = freeCadTriplet(point);
+  if (!values || !state.sketchSnapEnabled) return values;
+  const grid = Number(state.sketchSnapSize) > 0 ? Number(state.sketchSnapSize) : 1;
+  return values.map((value) => Math.round(value / grid) * grid);
 }
 
 function freeCadSketchElementSelected(sketchName, kind, index) {
@@ -2539,6 +2838,12 @@ function freeCadSketchElementSelected(sketchName, kind, index) {
     && normalizeFreeCadToken(selected.sketchName) === normalizeFreeCadToken(sketchName)
     && normalizeFreeCadToken(selected.kind) === normalizeFreeCadToken(kind)
     && Number(selected.index) === Number(index);
+}
+
+function freeCadSketchPointEntries(geometry) {
+  return ["start", "end", "center", "location", "point"]
+    .map((role) => ({ role, point: freeCadTriplet(geometry?.[role]) }))
+    .filter((item) => item.point);
 }
 
 function freeCadSketchGeometryAnchor(sketch, geometry) {
@@ -2570,6 +2875,18 @@ function freeCadSketchCirclePoints(sketch, geometry, segments = 56) {
   return points;
 }
 
+function setFreeCadSketchTool(tool) {
+  state.sketchEditTool = ["select", "line", "circle", "arc"].includes(tool) ? tool : "select";
+  persistWorkbenchSession();
+  renderAll();
+}
+
+function setFreeCadSketchSnap(enabled) {
+  state.sketchSnapEnabled = Boolean(enabled);
+  persistWorkbenchSession();
+  renderAll();
+}
+
 function addViewerSceneSketchEditOverlay(THREE, group) {
   const targets = [];
   const radius = Math.max(0.28, freeCadPickPadding() * 0.42);
@@ -2579,15 +2896,41 @@ function addViewerSceneSketchEditOverlay(THREE, group) {
     const geometry = Array.isArray(sketch.geometry) ? sketch.geometry : [];
     const constraints = Array.isArray(sketch.constraints) ? sketch.constraints : [];
     const editMode = sketch.edit_mode || {};
+    const issueGeometry = freeCadSketchIssueGeometryIndexes(sketchName);
+    const issueConstraints = freeCadSketchIssueConstraintIndexes(sketchName);
     const selectedSketch = normalizeFreeCadToken(sketchName) === normalizeFreeCadToken(state.selectedFreeCadObjectName);
-    if (!selectedSketch && !freeCadSketchElementSelected(sketchName, "constraint", state.selectedFreeCadSketchElement?.index)) continue;
+    const selectedConstraint = state.selectedFreeCadSketchElement?.kind === "constraint"
+      && normalizeFreeCadToken(state.selectedFreeCadSketchElement?.sketchName) === normalizeFreeCadToken(sketchName)
+      ? constraints.find((constraint) => Number(constraint.index) === Number(state.selectedFreeCadSketchElement.index))
+      : null;
+    const selectedConstraintGeometry = freeCadConstraintGeometryIndexSet(selectedConstraint);
+    const hasSketchIssue = issueGeometry.size > 0 || issueConstraints.size > 0;
+    if (!selectedSketch && !selectedConstraint && !hasSketchIssue) continue;
     for (const item of geometry.slice(0, 160)) {
       const selected = freeCadSketchElementSelected(sketchName, "geometry", item.index);
-      const color = selected ? 0x0b6fe8 : item.construction ? 0x64748b : 0xef4444;
+      const relatedToSelectedConstraint = selectedConstraintGeometry.has(Number(item.index));
+      const severity = issueGeometry.has(Number(item.index)) ? "error" : item.diagnostic_severity || "";
+      const geometryAnchorSelected = freeCadSketchGeometryRefsEqual(state.sketchGeometryConstraintAnchor, {
+        sketchName,
+        geometryIndex: Number(item.index) || 0,
+      });
+      const color = selected
+        ? 0x0b6fe8
+        : relatedToSelectedConstraint
+        ? 0x2563eb
+        : geometryAnchorSelected
+        ? 0xf59e0b
+        : severity === "error"
+        ? 0xdc2626
+        : severity === "warning"
+        ? 0xb45309
+        : item.construction
+        ? 0x64748b
+        : 0xef4444;
       const material = new THREE.LineBasicMaterial({
         color,
         transparent: true,
-        opacity: selected ? 0.98 : item.construction ? 0.38 : 0.76,
+        opacity: selected || relatedToSelectedConstraint || geometryAnchorSelected ? 0.98 : item.construction ? 0.38 : severity ? 0.9 : 0.76,
       });
       const linePoints = [];
       const start = freeCadSketchPoint(sketch, item.start);
@@ -2612,8 +2955,8 @@ function addViewerSceneSketchEditOverlay(THREE, group) {
       const anchor = freeCadSketchGeometryAnchor(sketch, item);
       if (anchor) {
         const point = new THREE.Mesh(
-          new THREE.SphereGeometry(selected ? radius * 1.25 : radius, 10, 6),
-          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: selected ? 0.94 : 0.58, depthWrite: false })
+          new THREE.SphereGeometry(selected || relatedToSelectedConstraint ? radius * 1.25 : radius, 10, 6),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: selected || relatedToSelectedConstraint ? 0.94 : 0.58, depthWrite: false })
         );
         point.position.set(anchor[0], anchor[1], anchor[2]);
         point.userData.freeCadSelection = {
@@ -2627,17 +2970,73 @@ function addViewerSceneSketchEditOverlay(THREE, group) {
         group.add(point);
         targets.push(point);
       }
+      for (const entry of freeCadSketchPointEntries(item)) {
+        const modelPoint = freeCadSketchPoint(sketch, entry.point);
+        if (!modelPoint) continue;
+        const roleSelected = selected && normalizeFreeCadToken(state.selectedFreeCadSketchElement?.pointRole) === normalizeFreeCadToken(entry.role);
+        const pointAnchorSelected = freeCadSketchPointRefsEqual(state.sketchCoincidenceAnchor, {
+          sketchName,
+          geometryIndex: Number(item.index) || 0,
+          pointRole: entry.role,
+        });
+        const handle = new THREE.Mesh(
+          new THREE.SphereGeometry(roleSelected || relatedToSelectedConstraint || pointAnchorSelected || geometryAnchorSelected ? radius * 1.55 : radius * 1.18, 14, 8),
+          new THREE.MeshBasicMaterial({
+            color: roleSelected ? 0x16a34a : relatedToSelectedConstraint ? 0xbfdbfe : pointAnchorSelected || geometryAnchorSelected ? 0xf59e0b : severity === "error" ? 0xfecaca : 0xffffff,
+            transparent: true,
+            opacity: roleSelected || relatedToSelectedConstraint || pointAnchorSelected || geometryAnchorSelected ? 0.98 : 0.88,
+            depthWrite: false,
+          })
+        );
+        handle.position.set(modelPoint[0], modelPoint[1], modelPoint[2]);
+        handle.userData.freeCadSelection = {
+          type: "sketch_point",
+          sketchName,
+          kind: "geometry",
+          index: Number(item.index) || 0,
+          pointRole: entry.role,
+          priority: roleSelected ? -8 : relatedToSelectedConstraint || pointAnchorSelected || geometryAnchorSelected ? -7 : -6,
+        };
+        handle.renderOrder = roleSelected ? 40 : relatedToSelectedConstraint || pointAnchorSelected || geometryAnchorSelected ? 38 : 34;
+        group.add(handle);
+        targets.push(handle);
+      }
     }
     for (const constraint of constraints.slice(0, 120)) {
       const selected = freeCadSketchElementSelected(sketchName, "constraint", constraint.index);
-      const severity = freeCadConstraintSeverity(constraint, editMode);
-      const related = [constraint.first, constraint.second, constraint.third]
-        .map((value) => geometry.find((item) => Number(item.index) === Number(value)))
-        .filter(Boolean);
+      const issue = issueConstraints.has(Number(constraint.index));
+      const severity = issue ? "error" : freeCadConstraintSeverity(constraint, editMode);
+      const related = freeCadSketchConstraintGeometryItems(obj, constraint);
       const anchors = related.map((item) => freeCadSketchGeometryAnchor(sketch, item)).filter(Boolean);
       const anchor = anchors.length ? viewerSceneAveragePoint(anchors) : freeCadSketchPoint(sketch, [0, 0, 0]);
       if (!anchor) continue;
-      const label = `#${constraint.index} ${constraint.type || "Constraint"}`;
+      if ((selected || issue || severity === "error" || severity === "warning") && anchors.length > 1) {
+        const connectorPoints = [];
+        for (const refAnchor of anchors) connectorPoints.push(...anchor, ...refAnchor);
+        const connectorGeometry = new THREE.BufferGeometry();
+        connectorGeometry.setAttribute("position", new THREE.Float32BufferAttribute(connectorPoints, 3));
+        const connector = new THREE.LineSegments(
+          connectorGeometry,
+          new THREE.LineBasicMaterial({
+            color: severity === "error" ? 0xdc2626 : severity === "warning" ? 0xb45309 : 0x2563eb,
+            transparent: true,
+            opacity: selected || issue ? 0.82 : 0.46,
+            depthWrite: false,
+          })
+        );
+        connector.userData.freeCadSelection = {
+          type: "sketch_element",
+          sketchName,
+          kind: "constraint",
+          index: Number(constraint.index) || 0,
+          severity,
+          priority: selected ? -5 : -4,
+        };
+        connector.renderOrder = selected || issue ? 35 : 29;
+        group.add(connector);
+        targets.push(connector);
+      }
+      const label = `${freeCadConstraintGlyphText(constraint)} #${constraint.index}`;
       const sprite = addFreeCadViewerLabelSprite(THREE, group, label, anchor, {
         color: severity === "error" ? "#dc2626" : severity === "warning" ? "#b45309" : "#0b6fe8",
         stroke: selected ? "#0b6fe8" : severity === "error" ? "#fecaca" : severity === "warning" ? "#fde68a" : "#bfdbfe",
@@ -2805,7 +3204,8 @@ function chooseFreeCadViewerHit(hits) {
     .map((hit, index) => {
       const selection = hit.object?.userData?.freeCadSelection || {};
       let rank = 100;
-      if (selection.type === "assembly_joint") rank = targetKind ? 24 : (selection.priority ?? -1);
+      if (selection.type === "sketch_point") rank = targetKind ? 25 : (selection.priority ?? -6);
+      else if (selection.type === "assembly_joint") rank = targetKind ? 24 : (selection.priority ?? -1);
       else if (selection.type === "sketch_element") rank = targetKind ? 26 : (selection.priority ?? -2);
       else if (targetKind && selection.kind === targetKind) rank = selection.priority ?? 0;
       else if (!targetKind && selection.type === "object") rank = 0;
@@ -2817,8 +3217,7 @@ function chooseFreeCadViewerHit(hits) {
   return ranked[0]?.hit || null;
 }
 
-function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
-  if (!targets.length) return;
+function freeCadViewerRaycaster(event, renderer, camera, THREE) {
   const rect = renderer.domElement.getBoundingClientRect();
   const pointer = new THREE.Vector2(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -2827,10 +3226,360 @@ function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
   const raycaster = new THREE.Raycaster();
   raycaster.params.Line = { threshold: 0.08 };
   raycaster.setFromCamera(pointer, camera);
+  return raycaster;
+}
+
+function freeCadModelPointOnCameraPlane(event, renderer, camera, group, THREE, originModelPoint) {
+  const origin = freeCadTriplet(originModelPoint);
+  if (!origin) return null;
+  const worldOrigin = new THREE.Vector3(origin[0], origin[1], origin[2]);
+  group.localToWorld(worldOrigin);
+  const normal = new THREE.Vector3();
+  camera.getWorldDirection(normal);
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, worldOrigin);
+  const worldPoint = new THREE.Vector3();
+  const raycaster = freeCadViewerRaycaster(event, renderer, camera, THREE);
+  if (!raycaster.ray.intersectPlane(plane, worldPoint)) return null;
+  const modelPoint = group.worldToLocal(worldPoint.clone());
+  return [modelPoint.x, modelPoint.y, modelPoint.z];
+}
+
+function freeCadSketchPointDragTarget(selection) {
+  if (!selection?.sketchName || !selection.pointRole) return null;
+  const obj = freeCadObjectByName(selection.sketchName);
+  if (!obj || !freeCadObjectIsSketch(obj)) return null;
+  const geometry = (Array.isArray(obj.sketch?.geometry) ? obj.sketch.geometry : [])
+    .find((item) => Number(item.index) === Number(selection.index));
+  const localPoint = freeCadTriplet(geometry?.[selection.pointRole]);
+  const modelPoint = freeCadSketchPoint(obj.sketch, localPoint);
+  if (!geometry || !localPoint || !modelPoint) return null;
+  return { obj, geometry, localPoint, modelPoint };
+}
+
+function freeCadSketchDragDelta(start, current) {
+  const a = freeCadTriplet(start);
+  const b = freeCadTriplet(current);
+  if (!a || !b) return null;
+  return [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+}
+
+function freeCadSketchDragStats(sketch, geometry) {
+  const editMode = sketch?.edit_mode || {};
+  const constraintIndexes = Array.isArray(geometry?.constraint_indexes)
+    ? geometry.constraint_indexes.map(Number).filter(Number.isFinite)
+    : [];
+  const diagnostics = Array.isArray(geometry?.constraint_diagnostics) ? geometry.constraint_diagnostics : [];
+  const severity = freeCadSketchGeometrySeverity(geometry);
+  const dof = editMode.degrees_of_freedom ?? sketch?.degrees_of_freedom ?? null;
+  const diagnosticLabels = diagnostics
+    .filter((item) => item?.severity || item?.status || item?.solver_status)
+    .map((item) => {
+      const index = Number.isFinite(Number(item.index)) ? `#${Number(item.index)}` : "";
+      const label = item.severity || item.status || item.solver_status || "";
+      return [label, index].filter(Boolean).join(" ");
+    });
+  return {
+    severity,
+    degreesOfFreedom: dof,
+    constraintCount: constraintIndexes.length || diagnostics.length || 0,
+    diagnostics: diagnosticLabels.slice(0, 3),
+    solverStatus: geometry?.solver_status || freeCadSketchSolverText(sketch),
+  };
+}
+
+function cancelFreeCadSketchLiveSolve(options = {}) {
+  sketchLiveSolveToken += 1;
+  if (sketchLiveSolveTimer) {
+    clearTimeout(sketchLiveSolveTimer);
+    sketchLiveSolveTimer = null;
+  }
+  if (options.clearState !== false) {
+    state.sketchLiveSolve = null;
+    if (state.sketchDragPreview?.liveSolve) state.sketchDragPreview = { ...state.sketchDragPreview, liveSolve: null };
+  }
+}
+
+function freeCadSketchLiveSolveSeverity(live) {
+  const status = String(live?.status || "").toLowerCase();
+  if (status === "blocked" || status === "failed") return "error";
+  if (status === "checking") return "warning";
+  return "info";
+}
+
+function freeCadSketchLiveSolveStatusText(live) {
+  if (!live) return "";
+  const labels = {
+    checking: t("sketchLiveSolveChecking"),
+    ok: t("sketchLiveSolveOk"),
+    blocked: t("sketchLiveSolveBlocked"),
+    failed: t("sketchLiveSolveFailed"),
+  };
+  const status = labels[live.status] || live.status || t("sketchLiveSolve");
+  const pieces = [status];
+  if (Number.isFinite(Number(live.degreesOfFreedom))) {
+    pieces.push(`${t("degreesOfFreedom")} ${formatNumber(live.degreesOfFreedom)}`);
+  }
+  if (live.solverState) pieces.push(live.solverState);
+  if (live.message) pieces.push(live.message);
+  return pieces.filter(Boolean).join(" | ");
+}
+
+function freeCadSketchLiveSolveMatchesPreview(live, preview) {
+  if (!live || !preview) return false;
+  return normalizeFreeCadToken(live.sketchName) === normalizeFreeCadToken(preview.sketchName)
+    && Number(live.geometryIndex) === Number(preview.geometryIndex)
+    && String(live.pointRole || "") === String(preview.pointRole || "");
+}
+
+function freeCadSketchLiveSolveForSketch(sketchName) {
+  const live = state.sketchLiveSolve;
+  if (!live || !sketchName) return null;
+  return normalizeFreeCadToken(live.sketchName) === normalizeFreeCadToken(sketchName) ? live : null;
+}
+
+function freeCadSketchLiveSolveConstraintIndexes(sketchName = "") {
+  const live = freeCadSketchLiveSolveForSketch(sketchName || state.selectedFreeCadObjectName);
+  const indexes = new Set();
+  for (const issue of live?.issues || []) {
+    for (const value of issue.constraintIndexes || []) {
+      const index = Number(value);
+      if (Number.isFinite(index)) indexes.add(index);
+    }
+  }
+  return indexes;
+}
+
+function freeCadSketchLiveSolveGeometryIndexes(sketchName = "") {
+  const live = freeCadSketchLiveSolveForSketch(sketchName || state.selectedFreeCadObjectName);
+  const indexes = new Set();
+  for (const issue of live?.issues || []) {
+    for (const value of issue.geometryIndexes || []) {
+      const index = Number(value);
+      if (Number.isFinite(index)) indexes.add(index);
+    }
+  }
+  return indexes;
+}
+
+function freeCadSketchSummaryFromPreview(preview, sketchName = "") {
+  const target = normalizeFreeCadToken(sketchName);
+  const matches = (name) => !target || normalizeFreeCadToken(name) === target;
+  for (const obj of Array.isArray(preview?.document_summary?.objects) ? preview.document_summary.objects : []) {
+    if (obj?.sketch && matches(obj.name || obj.label || obj.sketch.name || obj.sketch.label || "")) return obj.sketch;
+  }
+  for (const result of Array.isArray(preview?.patch_results) ? preview.patch_results : []) {
+    const name = result.sketch?.name || result.object?.name || result.object?.label || result.sketch_summary?.name || result.sketch_summary?.label || "";
+    if (result.sketch_summary && matches(name)) return result.sketch_summary;
+  }
+  return null;
+}
+
+function freeCadSketchLiveSolveIssueBlocks(issue) {
+  const severity = String(issue?.severity || "").toLowerCase();
+  const code = String(issue?.code || "").toLowerCase();
+  return severity === "error"
+    || code.includes("conflict")
+    || code.includes("malformed")
+    || code.includes("redundant")
+    || code.includes("dry_run_failed");
+}
+
+function freeCadSketchLiveSolveSummary(preview, sketchName = "") {
+  const issues = freeCadSketchPreviewIssues(preview);
+  const blocking = preview?.ok === false || issues.some(freeCadSketchLiveSolveIssueBlocks);
+  const sketch = freeCadSketchSummaryFromPreview(preview, sketchName);
+  const editMode = sketch?.edit_mode || {};
+  const firstIssue = issues.find(freeCadSketchLiveSolveIssueBlocks) || issues[0] || null;
+  return {
+    status: preview?.ok === false ? "failed" : blocking ? "blocked" : "ok",
+    blocking,
+    issues,
+    degreesOfFreedom: editMode.degrees_of_freedom ?? sketch?.degrees_of_freedom ?? null,
+    solverState: editMode.state || freeCadSketchSolverText(sketch) || "",
+    message: firstIssue ? [firstIssue.code, firstIssue.message].filter(Boolean).join(": ") : "",
+  };
+}
+
+function scheduleFreeCadSketchLiveSolve(drag, localPoint) {
+  const point = freeCadTriplet(localPoint);
+  const obj = freeCadObjectByName(drag?.objectName || drag?.selection?.sketchName);
+  const pointRole = drag?.selection?.pointRole || "";
+  if (!drag || !point || !pointRole || !obj || !freeCadObjectIsSketch(obj) || !Number.isFinite(Number(drag.selection?.index))) return;
+  if (sketchLiveSolveTimer) clearTimeout(sketchLiveSolveTimer);
+  const token = ++sketchLiveSolveToken;
+  const liveBase = {
+    status: "checking",
+    sketchName: freeCadObjectKey(obj),
+    geometryIndex: Number(drag.selection.index),
+    pointRole,
+    point,
+    issues: [],
+    blocking: false,
+    degreesOfFreedom: null,
+    solverState: "",
+    message: "",
+  };
+  state.sketchLiveSolve = liveBase;
+  setFreeCadSketchDragPreview(drag, point, { liveSolve: liveBase });
+  sketchLiveSolveTimer = setTimeout(async () => {
+    sketchLiveSolveTimer = null;
+    const patch = freeCadSketchGeometryPointPatch(
+      liveBase.sketchName,
+      liveBase.geometryIndex,
+      liveBase.pointRole,
+      liveBase.point
+    );
+    if (!patch) return;
+    try {
+      const preview = await previewFreeCadDocumentPatch(patch, freeCadPatchDetail(patch), { quiet: true });
+      if (token !== sketchLiveSolveToken) return;
+      state.sketchLiveSolve = {
+        ...liveBase,
+        ...freeCadSketchLiveSolveSummary(preview, liveBase.sketchName),
+        preview,
+      };
+    } catch (error) {
+      if (token !== sketchLiveSolveToken) return;
+      state.sketchLiveSolve = {
+        ...liveBase,
+        status: "failed",
+        blocking: true,
+        message: error.message || t("log.unknownError"),
+        issues: [{
+          severity: "error",
+          code: "dry_run_failed",
+          message: error.message || t("log.unknownError"),
+          sketchName: liveBase.sketchName,
+          geometryIndexes: [liveBase.geometryIndex],
+          constraintIndexes: [],
+        }],
+      };
+    }
+    if (freeCadSketchLiveSolveMatchesPreview(state.sketchLiveSolve, state.sketchDragPreview)) {
+      state.sketchDragPreview = { ...state.sketchDragPreview, liveSolve: state.sketchLiveSolve };
+      updateFreeCadSketchDragReadout();
+      renderProperties();
+    }
+  }, 450);
+}
+
+function freeCadSketchDragPreviewText(preview) {
+  if (!preview) return "";
+  const live = preview.liveSolve || (freeCadSketchLiveSolveMatchesPreview(state.sketchLiveSolve, preview) ? state.sketchLiveSolve : null);
+  const point = freeCadTriplet(preview.currentPoint);
+  const pieces = [
+    `${preview.geometryLabel || preview.sketchName || "Sketch"}${preview.pointRole ? `.${preview.pointRole}` : ""}`,
+  ];
+  if (point) {
+    pieces.push(`X ${formatNumber(point[0])}`);
+    pieces.push(`Y ${formatNumber(point[1])}`);
+    pieces.push(`Z ${formatNumber(point[2])} ${t("unitMm")}`);
+  }
+  if (Number.isFinite(Number(preview.degreesOfFreedom))) pieces.push(`${preview.degreesOfFreedom} DOF`);
+  if (Number(preview.constraintCount) > 0) pieces.push(`${Number(preview.constraintCount)} constraints`);
+  if (preview.severity) pieces.push(preview.severity);
+  if (Array.isArray(preview.diagnostics) && preview.diagnostics.length) {
+    pieces.push(preview.diagnostics.join(", "));
+  }
+  if (live) pieces.push(`${t("sketchLiveSolve")}: ${freeCadSketchLiveSolveStatusText(live)}`);
+  return pieces.filter(Boolean).join(" | ");
+}
+
+function freeCadSketchDragPreviewAxisText(preview) {
+  const delta = freeCadTriplet(preview?.delta);
+  if (!delta) return "";
+  return `dX ${formatNumber(delta[0])} / dY ${formatNumber(delta[1])} / dZ ${formatNumber(delta[2])} ${t("unitMm")} / d ${formatNumber(preview.distance || 0)} ${t("unitMm")}`;
+}
+
+function updateFreeCadSketchDragReadout() {
+  const preview = state.sketchDragPreview;
+  if (!preview) return;
+  const title = $("measureTitle");
+  const text = $("measureText");
+  const axis = $("axisReadout");
+  if (title) title.textContent = preview.committing ? t("sketchDragCommit") : t("sketchDragPreview");
+  if (text) text.textContent = freeCadSketchDragPreviewText(preview);
+  if (axis) axis.textContent = freeCadSketchDragPreviewAxisText(preview);
+}
+
+function setFreeCadSketchDragPreview(drag, localPoint, options = {}) {
+  const obj = freeCadObjectByName(drag?.objectName || drag?.selection?.sketchName);
+  const geometry = obj ? freeCadSketchGeometryByIndex(obj, drag?.selection?.index) : drag?.geometry;
+  const point = freeCadTriplet(localPoint);
+  const start = freeCadTriplet(drag?.startLocalPoint || drag?.localPoint || geometry?.[drag?.selection?.pointRole]);
+  if (!obj || !freeCadObjectIsSketch(obj) || !geometry || !point || !start) return null;
+  const delta = freeCadSketchDragDelta(start, point) || [0, 0, 0];
+  const stats = freeCadSketchDragStats(obj.sketch, geometry);
+  const preview = {
+    sketchName: freeCadObjectKey(obj),
+    geometryIndex: Number(geometry.index) || 0,
+    pointRole: drag?.selection?.pointRole || "",
+    geometryLabel: freeCadSketchGeometryLabel(freeCadSketchGeometryRef(freeCadObjectKey(obj), geometry.index)),
+    startPoint: start,
+    currentPoint: point,
+    delta,
+    distance: Math.hypot(delta[0], delta[1], delta[2]),
+    committing: options.committing === true,
+    ...stats,
+  };
+  const liveSolve = options.liveSolve || (freeCadSketchLiveSolveMatchesPreview(state.sketchLiveSolve, preview) ? state.sketchLiveSolve : null);
+  if (liveSolve) preview.liveSolve = liveSolve;
+  state.sketchDragPreview = preview;
+  updateFreeCadSketchDragReadout();
+  return preview;
+}
+
+function clearFreeCadSketchDragPreview() {
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDragPreview = null;
+  state.sketchDryRunReview = null;
+}
+
+function clearFreeCadSketchDryRunReview(options = {}) {
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDryRunReview = null;
+  if (options.clearDragPreview !== false) state.sketchDragPreview = null;
+  if (options.persist !== false) persistWorkbenchSession();
+  if (options.render !== false) renderAll();
+  return true;
+}
+
+function updateFreeCadSketchDragPreviewGeometry(drag, displayPoint) {
+  const point = freeCadTriplet(displayPoint);
+  if (!drag || !point || !Array.isArray(drag.previewObjects)) return;
+  const displayDelta = freeCadSketchDragDelta(drag.startDisplayPoint, point) || [0, 0, 0];
+  for (const preview of drag.previewObjects) {
+    const attr = preview.line?.geometry?.getAttribute?.("position");
+    if (!attr || !preview.positions?.length) continue;
+    const next = preview.positions.slice();
+    if (freeCadSketchGeometryIsLine(drag.geometry) && drag.selection?.pointRole === "start") {
+      next.splice(0, 3, point[0], point[1], point[2]);
+    } else if (freeCadSketchGeometryIsLine(drag.geometry) && drag.selection?.pointRole === "end") {
+      next.splice(3, 3, point[0], point[1], point[2]);
+    } else {
+      for (let index = 0; index < next.length; index += 3) {
+        next[index] = preview.positions[index] + displayDelta[0];
+        next[index + 1] = preview.positions[index + 1] + displayDelta[1];
+        next[index + 2] = preview.positions[index + 2] + displayDelta[2];
+      }
+    }
+    attr.array.set(next);
+    attr.needsUpdate = true;
+    preview.line.geometry.computeBoundingSphere?.();
+  }
+}
+
+function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
+  if (!targets.length) return;
+  const raycaster = freeCadViewerRaycaster(event, renderer, camera, THREE);
   const hit = chooseFreeCadViewerHit(raycaster.intersectObjects(targets, false));
   const selection = hit?.object?.userData?.freeCadSelection;
   if (selection?.type === "assembly_joint") {
     selectFreeCadAssemblyJoint(selection.assemblyName, selection.jointName);
+    return;
+  }
+  if (selection?.type === "sketch_point") {
+    selectFreeCadSketchElement(selection.sketchName, selection.kind, selection.index, selection.pointRole);
     return;
   }
   if (selection?.type === "sketch_element") {
@@ -2843,6 +3592,17 @@ function pickFreeCadViewerSelection(event, renderer, camera, targets, THREE) {
     return;
   }
   selectFreeCadObject(selection.objectName);
+}
+
+async function drawFreeCadSketchPrimitiveFromViewerClick(event, renderer, camera, group, THREE) {
+  if (!["line", "circle", "arc"].includes(state.sketchEditTool)) return false;
+  const obj = activeFreeCadSketchObject();
+  if (!obj || !freeCadObjectIsSketch(obj)) return false;
+  const base = freeCadTriplet(obj.sketch?.placement?.base) || [0, 0, 0];
+  const modelPoint = freeCadModelPointOnCameraPlane(event, renderer, camera, group, THREE, base);
+  const localPoint = freeCadSnapSketchPoint(freeCadSketchLocalPoint(obj.sketch, modelPoint));
+  if (!localPoint) return false;
+  return addFreeCadSketchPrimitive(freeCadObjectKey(obj), state.sketchEditTool, localPoint);
 }
 
 async function mountGeneratedCadViewer() {
@@ -2962,15 +3722,123 @@ async function mountGeneratedCadViewer() {
       targets = [...addViewerSceneSketchEditOverlay(THREE, group), ...addFreeCadSelectionBoxes(THREE, group)];
     }
     let pointerDown = null;
+    let sketchDrag = null;
     renderer.domElement.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
       pointerDown = { x: event.clientX, y: event.clientY };
+      const hit = chooseFreeCadViewerHit(
+        freeCadViewerRaycaster(event, renderer, camera, THREE).intersectObjects(targets, false)
+      );
+      const selection = hit?.object?.userData?.freeCadSelection;
+      if (selection?.type === "sketch_point" && state.sketchEditTool === "select") {
+        const target = freeCadSketchPointDragTarget(selection);
+        if (target) {
+          selectFreeCadSketchElement(selection.sketchName, "geometry", selection.index, selection.pointRole, { render: false });
+          const previewObjects = targets
+            .filter((candidate) => {
+              const candidateSelection = candidate.userData?.freeCadSelection || {};
+              return candidate.isLine
+                && candidate.geometry?.getAttribute?.("position")
+                && candidateSelection.type === "sketch_element"
+                && candidateSelection.kind === "geometry"
+                && normalizeFreeCadToken(candidateSelection.sketchName) === normalizeFreeCadToken(selection.sketchName)
+                && Number(candidateSelection.index) === Number(selection.index);
+            })
+            .map((line) => {
+              const attr = line.geometry?.getAttribute?.("position");
+              return attr ? { line, positions: Array.from(attr.array) } : null;
+            })
+            .filter(Boolean);
+          sketchDrag = {
+            selection,
+            objectName: freeCadObjectKey(target.obj),
+            sketch: target.obj.sketch,
+            geometry: target.geometry,
+            startLocalPoint: target.localPoint,
+            startDisplayPoint: target.modelPoint,
+            startModelPoint: target.modelPoint,
+            currentLocalPoint: target.localPoint,
+            handle: hit.object,
+            previewObjects,
+            moved: false,
+            pointerId: event.pointerId,
+          };
+          setFreeCadSketchDragPreview(sketchDrag, target.localPoint);
+          controls.enabled = false;
+          try {
+            renderer.domElement.setPointerCapture(event.pointerId);
+          } catch (_error) {
+            // Pointer capture is best-effort across browsers.
+          }
+        }
+      }
+    });
+    renderer.domElement.addEventListener("pointermove", (event) => {
+      if (!sketchDrag) return;
+      event.stopPropagation();
+      const modelPoint = freeCadModelPointOnCameraPlane(
+        event,
+        renderer,
+        camera,
+        group,
+        THREE,
+        sketchDrag.startModelPoint
+      );
+      const localPoint = freeCadSnapSketchPoint(freeCadSketchLocalPoint(sketchDrag.sketch, modelPoint));
+      const displayPoint = freeCadSketchPoint(sketchDrag.sketch, localPoint);
+      if (!localPoint || !displayPoint) return;
+      sketchDrag.currentLocalPoint = localPoint;
+      sketchDrag.moved = true;
+      updateFreeCadSketchDragPreviewGeometry(sketchDrag, displayPoint);
+      sketchDrag.handle.position.set(displayPoint[0], displayPoint[1], displayPoint[2]);
+      setFreeCadSketchDragPreview(sketchDrag, localPoint);
+      scheduleFreeCadSketchLiveSolve(sketchDrag, localPoint);
     });
     renderer.domElement.addEventListener("pointerup", (event) => {
       event.stopPropagation();
       const moved = pointerDown ? Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) : 0;
       pointerDown = null;
-      if (moved <= 5) pickFreeCadViewerSelection(event, renderer, camera, targets, THREE);
+      if (sketchDrag) {
+        const drag = sketchDrag;
+        sketchDrag = null;
+        controls.enabled = true;
+        try {
+          renderer.domElement.releasePointerCapture(drag.pointerId);
+        } catch (_error) {
+          // Pointer capture is best-effort across browsers.
+        }
+        if (drag.moved && drag.currentLocalPoint) {
+          cancelFreeCadSketchLiveSolve({ clearState: false });
+          setFreeCadSketchDragPreview(drag, drag.currentLocalPoint, { committing: true, liveSolve: state.sketchLiveSolve });
+          void previewAndCommitFreeCadSketchGeometryPointValue(
+            drag.objectName,
+            drag.selection.index,
+            drag.selection.pointRole,
+            drag.currentLocalPoint
+          ).then((ok) => {
+            if (!ok && !state.sketchDryRunReview) {
+              clearFreeCadSketchDragPreview();
+              renderAll();
+            }
+          });
+        } else {
+          clearFreeCadSketchDragPreview();
+          renderAll();
+        }
+        return;
+      }
+      if (moved <= 5) {
+        void drawFreeCadSketchPrimitiveFromViewerClick(event, renderer, camera, group, THREE).then((handled) => {
+          if (!handled) pickFreeCadViewerSelection(event, renderer, camera, targets, THREE);
+        });
+      }
+    });
+    renderer.domElement.addEventListener("pointercancel", () => {
+      if (!sketchDrag) return;
+      sketchDrag = null;
+      controls.enabled = true;
+      clearFreeCadSketchDragPreview();
+      renderAll();
     });
     renderer.domElement.addEventListener("click", (event) => event.stopPropagation());
     renderer.domElement.addEventListener("wheel", (event) => event.stopPropagation(), { passive: false });
@@ -3111,6 +3979,14 @@ async function applyStoredServerVersion(version, versions = null) {
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
   state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
+  state.sketchEditTool = "select";
+  state.sketchSnapEnabled = true;
+  state.sketchSnapSize = 1;
   state.assemblyConnectorAnchor = null;
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   state.bottomTab = "history";
@@ -3165,6 +4041,30 @@ function openFreeCadImportPicker() {
   $("freeCadImportInput").click();
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(value >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(value >= 10 * 1024 ? 0 : 1)} KB`;
+  return `${Math.round(value)} B`;
+}
+
+async function freeCadUploadPolicy() {
+  if (!freeCadUploadPolicyPromise) {
+    freeCadUploadPolicyPromise = fetchJson("/api/freecad/upload_policy")
+      .catch(() => ({
+        max_bytes: FALLBACK_FREECAD_UPLOAD_MAX_BYTES,
+        formats: ["fcstd", "step", "stp", "iges", "igs", "brep"],
+      }));
+  }
+  const policy = await freeCadUploadPolicyPromise;
+  const maxBytes = Number(policy?.max_bytes || FALLBACK_FREECAD_UPLOAD_MAX_BYTES);
+  return {
+    ...policy,
+    max_bytes: Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : FALLBACK_FREECAD_UPLOAD_MAX_BYTES,
+  };
+}
+
 async function fileToBase64(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   return bytesToBase64(bytes);
@@ -3191,6 +4091,25 @@ async function importFreeCadModelFile(file) {
     return false;
   }
 
+  const policy = await freeCadUploadPolicy();
+  if (file.size > policy.max_bytes) {
+    const message = t("log.importTooLarge", {
+      name: file.name || t("notAvailable"),
+      size: formatBytes(file.size),
+      max: formatBytes(policy.max_bytes),
+    });
+    setStatus("patchFailed");
+    log(message);
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.importFailed",
+      vars: { message },
+    });
+    setBottomTab("chat");
+    renderAll();
+    return false;
+  }
+
   $("applyButton").disabled = true;
   $("importButton").disabled = true;
   state.previewMode = "generated";
@@ -3203,6 +4122,12 @@ async function importFreeCadModelFile(file) {
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
+  state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   state.assemblyConnectorAnchor = null;
   state.previewPng = null;
   state.artifacts = {};
@@ -3641,9 +4566,22 @@ function freeCadPatchDisplayName(patch) {
     const geometry = patch.geometry || patch.geometries?.[0] || {};
     return `${objectName}.addGeometry:${geometry.type || geometry.kind || ""}`;
   }
+  if (patch.op === "set_geometry_point" || patch.op === "move_geometry" || patch.op === "move_sketch_geometry") {
+    return `${objectName}.geometry#${patch.geometry_index ?? patch.index ?? ""}.${patch.point_role || patch.point || "point"}`;
+  }
+  if (patch.op === "set_geometry_construction" || patch.op === "toggle_geometry_construction") {
+    return `${objectName}.construction:#${patch.geometry_index ?? patch.index ?? ""}`;
+  }
   if (patch.op === "add_constraint") {
     const constraint = patch.constraint || patch.constraints?.[0] || {};
     return `${objectName}.addConstraint:${constraint.type || constraint.constraint_type || ""}`;
+  }
+  if (patch.op === "add_endpoint_coincidence") {
+    return `${objectName}.addConstraint:Coincident`;
+  }
+  if (patch.op === "set_constraint_state") {
+    const constraint = patch.constraint_name || `#${patch.constraint_index ?? ""}`;
+    return `${objectName}.constraintState:${constraint}`;
   }
   if (patch.op === "remove_constraint") {
     const constraint = patch.constraint_name || `#${patch.constraint_index ?? ""}`;
@@ -3916,6 +4854,16 @@ function freeCadTechDrawText() {
       return `${name}: ${page.view_count || 0} views, ${page.dimension_count || 0} dims${quality ? `, ${quality}` : ""}`;
     })
     .join(" · ");
+}
+
+function freeCadTechDrawValidationText() {
+  const validation = state.documentSummary?.techdraw_export_status?.validation;
+  const formats = validation?.formats || {};
+  const parts = ["svg", "dxf", "pdf"].map((key) => {
+    const item = formats[key] || {};
+    return `${key.toUpperCase()} ${item.ok ? "ok" : "failed"}`;
+  });
+  return parts.length ? `${validation?.ok ? "ok" : "incomplete"} · ${parts.join(" · ")}` : t("notAvailable");
 }
 
 function freeCadVectorText(value) {
@@ -4245,18 +5193,21 @@ function renderViewport() {
   const generatedParam = generated ? selectedGeneratedParameter() : null;
   const generatedObject = generated ? selectedFreeCadObject() : null;
   const generatedSubelement = generated ? selectedFreeCadSubelementRef() : null;
+  const sketchDragPreview = generated ? state.sketchDragPreview : null;
   const generatedSubelementItem = generatedObject && generatedSubelement
     ? freeCadSubelementByRef(generatedObject, generatedSubelement.reference, generatedSubelement.stableId)
     : null;
   $("subtitle").textContent = generated ? t("generatedPreviewSubtitle") : t("designStateVersion", { version: ds.version });
   $("selectionBadge").textContent = generated ? generatedViewportSelectionLabel(generatedObject, generatedParam, generatedSubelement) : t("featureBadge", { name: featureName(feature) });
   $("headBadge").textContent = generated ? t("agentPreview") : ds.rollback_feature_id ? t("rollbackPreview") : t("headPreview");
-  $("measureTitle").textContent = generated ? (generatedSubelement ? t("selectedReference") : generatedObject ? t("selectedObject") : generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
-  $("measureText").textContent = generated
+  $("measureTitle").textContent = sketchDragPreview ? (sketchDragPreview.committing ? t("sketchDragCommit") : t("sketchDragPreview")) : generated ? (generatedSubelement ? t("selectedReference") : generatedObject ? t("selectedObject") : generatedParam ? t("selectedParameter") : t("preview")) : t(`modes.${state.measureMode}`);
+  $("measureText").textContent = sketchDragPreview
+    ? freeCadSketchDragPreviewText(sketchDragPreview)
+    : generated
     ? (generatedSubelement ? (freeCadSubelementSummaryText(generatedSubelementItem) || generatedSubelement.reference) : generatedObject ? (freeCadObjectGeometryText(generatedObject) || freeCadObjectDisplayName(generatedObject)) : generatedParam ? generatedParameterValueText(generatedParam) : state.previewPng ? t("renderedFromEngine", { engine: engineLabel() }) : t("waitingGeneratedPreview"))
     : measurementText();
   const height = p.plate_thickness + (enabledFeatureIds().has("center_boss") ? p.boss_h : 0);
-  $("axisReadout").textContent = generated ? t("stepStlStatus", { status: artifactExportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
+  $("axisReadout").textContent = sketchDragPreview ? freeCadSketchDragPreviewAxisText(sketchDragPreview) : generated ? t("stepStlStatus", { status: artifactExportStatusLabel() }) : t("axisReadout", { x: formatNumber(p.plate_length), y: formatNumber(p.plate_width), z: formatNumber(height) });
   $("viewportContent").innerHTML = generated ? renderGeneratedPreview() : renderModelSvg();
   applyViewportTransform();
   if (generated) {
@@ -4612,6 +5563,7 @@ function renderFreeCadAssemblySection() {
       <div class="kv"><span>${escapeHtml(t("assemblyStatus"))}</span><strong>${escapeHtml(assemblies.map(freeCadAssemblyStatusText).join(" · "))}</strong></div>
       <div class="kv"><span>Native solver</span><strong>${escapeHtml(capabilities.native_solver_available ? "available" : "unavailable")}</strong></div>
       <div class="kv"><span>Persistent native</span><strong>${escapeHtml(capabilities.persistent_native_available ? "enabled" : "off")}</strong></div>
+      <div class="kv"><span>Native blocker</span><strong>${escapeHtml(capabilities.native_persistent_blocker || "none")}</strong></div>
     </div>
     ${assemblies.map((assembly) => renderFreeCadAssemblyBlock(assembly, selected)).join("")}
   </section>`;
@@ -4720,6 +5672,7 @@ function renderFreeCadTechDrawSection() {
     <div class="kv-list">
       <div class="kv"><span>Pages</span><strong>${escapeHtml(String(pages.length))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("exportQuality"))}</span><strong>${escapeHtml(pages.map(freeCadTechDrawPageStatusText).join(" · "))}</strong></div>
+      <div class="kv"><span>Export validation</span><strong>${escapeHtml(freeCadTechDrawValidationText())}</strong></div>
       <div class="kv"><span>Native TechDraw</span><strong>${escapeHtml(capabilities.techdraw_module_available ? "available" : "unavailable")}</strong></div>
       <div class="kv"><span>Native creation</span><strong>${escapeHtml(capabilities.native_creation_enabled ? "enabled" : "off")}</strong></div>
       <div class="kv"><span>PDF exporter</span><strong>${escapeHtml(capabilities.pdf_converter_available ? "available" : "unavailable")}</strong></div>
@@ -4771,6 +5724,7 @@ function renderFreeCadTechDrawPageBlock(page) {
       <div class="kv"><span>${escapeHtml(t("techDrawDimensions"))}</span><strong>${escapeHtml(String(page.dimension_count ?? dimensions.length))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("productGrade"))}</span><strong>${escapeHtml(page.product_grade === false ? "false" : "true")}</strong></div>
       <div class="kv"><span>${escapeHtml(t("exportQuality"))}</span><strong>${escapeHtml(page.layout_diagnostics?.export_quality || page.status || t("notAvailable"))}</strong></div>
+      ${page.layout_engine?.backend ? `<div class="kv"><span>Layout engine</span><strong>${escapeHtml(page.layout_engine.backend)}</strong></div>` : ""}
       ${page.template_path ? `<div class="kv"><span>Template</span><strong>${escapeHtml(page.template_path)}</strong></div>` : ""}
     </div>
     <div class="feature-actions">
@@ -5118,22 +6072,38 @@ function renderFreeCadSketchPropertySection(obj) {
     .slice(0, 16);
   return `<section class="section">
     <h3>${icon("ruler")} ${escapeHtml(t("sketchEditMode"))}</h3>
-    <div class="kv-list">
-      <div class="kv"><span>${escapeHtml(t("sketchGeometryList"))}</span><strong>${escapeHtml(sketch.geometry_count ?? geometry.length)}</strong></div>
+	    <div class="kv-list">
+	      <div class="kv"><span>${escapeHtml(t("sketchGeometryList"))}</span><strong>${escapeHtml(sketch.geometry_count ?? geometry.length)}</strong></div>
       <div class="kv"><span>External geometry</span><strong>${escapeHtml(sketch.external_geometry_count ?? 0)}</strong></div>
       <div class="kv"><span>${escapeHtml(t("sketchConstraintList"))}</span><strong>${escapeHtml(sketch.constraint_count ?? constraints.length)}</strong></div>
       <div class="kv"><span>${escapeHtml(t("solverStatus"))}</span><strong>${escapeHtml(freeCadSketchSolverText(sketch))}</strong></div>
       <div class="kv"><span>${escapeHtml(t("degreesOfFreedom"))}</span><strong>${escapeHtml(editMode.degrees_of_freedom ?? sketch.degrees_of_freedom ?? t("notAvailable"))}</strong></div>
-      <div class="kv"><span>Conflicts</span><strong>${escapeHtml(String(conflictingConstraints.length))}</strong></div>
-      <div class="kv"><span>Redundant</span><strong>${escapeHtml(String(redundantConstraints.length))}</strong></div>
-      <div class="kv"><span>${escapeHtml(t("sketchDiagnostics"))}</span><strong>${escapeHtml(freeCadDiagnosticsSummaryText(editMode))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("conflictingConstraints"))}</span><strong>${escapeHtml(String(conflictingConstraints.length))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("redundantConstraints"))}</span><strong>${escapeHtml(String(redundantConstraints.length))}</strong></div>
+	      <div class="kv"><span>${escapeHtml(t("sketchDiagnostics"))}</span><strong>${escapeHtml(freeCadDiagnosticsSummaryText(editMode))}</strong></div>
+	    </div>
+	    ${renderFreeCadSketchSolverMap(sketch, editMode, freeCadObjectKey(obj))}
+	    ${renderFreeCadSketchSolverIssuePanel(obj, sketch, editMode)}
+	    <div class="sketch-tool-row">
+      <button class="typed-action-button ${state.sketchEditTool === "select" ? "active" : ""}" type="button" onclick="setFreeCadSketchTool('select')">${icon("pointer")} ${escapeHtml(t("sketchToolSelect"))}</button>
+      <button class="typed-action-button ${state.sketchEditTool === "line" ? "active" : ""}" type="button" onclick="setFreeCadSketchTool('line')">${icon("edit")} ${escapeHtml(t("addSketchLine"))}</button>
+      <button class="typed-action-button ${state.sketchEditTool === "circle" ? "active" : ""}" type="button" onclick="setFreeCadSketchTool('circle')">${icon("ruler")} ${escapeHtml(t("addSketchCircle"))}</button>
+      <button class="typed-action-button ${state.sketchEditTool === "arc" ? "active" : ""}" type="button" onclick="setFreeCadSketchTool('arc')">${icon("ruler")} ${escapeHtml(t("addSketchArc"))}</button>
+      <label><input type="checkbox" ${state.sketchSnapEnabled ? "checked" : ""} onchange="setFreeCadSketchSnap(this.checked)" /> ${escapeHtml(t("sketchSnap"))}</label>
     </div>
-    <div class="feature-actions">
-      <button class="icon-button" type="button" title="Validate sketch" onclick="validateFreeCadSketch(${escapeHtml(jsString(freeCadObjectKey(obj)))})">${icon("eye")}</button>
-    </div>
-    ${renderFreeCadDiagnostics("sketchDiagnostics", editMode)}
-    ${renderFreeCadSketchGeometryList(obj, geometry)}
-    ${renderFreeCadSketchConstraintList(obj, constraints, editMode)}
+	    <div class="feature-actions">
+	      <button class="icon-button" type="button" title="${escapeHtml(t("validateSketch"))}" onclick="validateFreeCadSketch(${escapeHtml(jsString(freeCadObjectKey(obj)))})">${icon("eye")}</button>
+	      <button class="typed-action-button" type="button" onclick="addFreeCadSketchPrimitive(${escapeHtml(jsString(freeCadObjectKey(obj)))}, 'line')">${icon("edit")} ${escapeHtml(t("addSketchLine"))}</button>
+	      <button class="typed-action-button" type="button" onclick="addFreeCadSketchPrimitive(${escapeHtml(jsString(freeCadObjectKey(obj)))}, 'circle')">${icon("ruler")} ${escapeHtml(t("addSketchCircle"))}</button>
+	      <button class="typed-action-button" type="button" onclick="addFreeCadSketchPrimitive(${escapeHtml(jsString(freeCadObjectKey(obj)))}, 'arc')">${icon("ruler")} ${escapeHtml(t("addSketchArc"))}</button>
+	    </div>
+	    ${renderFreeCadSketchDryRunReview(obj)}
+	    ${renderFreeCadDiagnostics("sketchDiagnostics", editMode)}
+	    ${renderFreeCadSketchConstraintPalette(obj, geometry)}
+	    ${renderFreeCadSketchGeometryList(obj, geometry)}
+	    ${renderFreeCadSketchConstraintList(obj, constraints, editMode)}
+	    ${renderFreeCadSketchConstraintEditor(obj, constraints, editMode)}
+	    ${renderFreeCadSketchPointEditor(obj, geometry)}
     ${editableConstraints.length ? editableConstraints.map((constraint) => freeCadConstraintRow(obj, constraint)).join("") : ""}
   </section>`;
 }
@@ -5151,6 +6121,8 @@ function freeCadSketchSolverText(sketch) {
 function freeCadSketchGeometryText(item) {
   const values = [];
   if (item.construction) values.push("construction");
+  if (item.solver_status) values.push(item.solver_status);
+  if (Array.isArray(item.constraint_indexes) && item.constraint_indexes.length) values.push(`constraints ${item.constraint_indexes.join(",")}`);
   if (freeCadTriplet(item.start) && freeCadTriplet(item.end)) values.push(`${freeCadVectorText(item.start)} -> ${freeCadVectorText(item.end)}`);
   if (freeCadTriplet(item.center)) values.push(`center ${freeCadVectorText(item.center)}`);
   if (Number.isFinite(Number(item.radius))) values.push(`r ${formatNumber(item.radius)}`);
@@ -5158,14 +6130,24 @@ function freeCadSketchGeometryText(item) {
   return values.join(" · ") || t("notAvailable");
 }
 
+function freeCadSketchGeometrySeverity(item) {
+  const severity = String(item?.diagnostic_severity || "").toLowerCase();
+  if (severity === "error" || /conflict|malformed|error/.test(String(item?.solver_status || "").toLowerCase())) return "error";
+  if (severity === "warning" || /redundant|disabled/.test(String(item?.solver_status || "").toLowerCase())) return "warning";
+  if (item?.construction) return "info";
+  return "";
+}
+
 function renderFreeCadSketchGeometryList(obj, geometry) {
   if (!geometry.length) return "";
   const sketchName = freeCadObjectKey(obj);
+  const issueGeometry = freeCadSketchIssueGeometryIndexes(sketchName);
   return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchGeometryList"))}</p>
     <div class="subelement-grid">
       ${geometry.slice(0, 24).map((item) => {
         const selected = freeCadSketchElementSelected(sketchName, "geometry", item.index);
-        return `<div class="subelement-row ${selected ? "active" : item.construction ? "info" : ""}" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(sketchName))}, 'geometry', ${Number(item.index) || 0})">
+        const previewSeverity = issueGeometry.has(Number(item.index)) ? "error" : "";
+        return `<div class="subelement-row ${selected ? "active" : previewSeverity || freeCadSketchGeometrySeverity(item)}" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(sketchName))}, 'geometry', ${Number(item.index) || 0})">
         <strong>#${escapeHtml(item.index ?? "")}</strong>
         <span title="${escapeHtml(freeCadSketchGeometryText(item))}">${escapeHtml([item.type || "Geometry", freeCadSketchGeometryText(item)].filter(Boolean).join(" · "))}</span>
       </div>`;
@@ -5199,20 +6181,1026 @@ function freeCadConstraintText(constraint) {
   return parts.filter(Boolean).join(" · ");
 }
 
+function freeCadConstraintGlyphText(constraint) {
+  if (constraint?.glyph) return String(constraint.glyph).slice(0, 8);
+  const token = normalizeFreeCadToken(constraint?.type || "");
+  const glyphs = {
+    horizontal: "H",
+    vertical: "V",
+    coincident: "C",
+    distance: "D",
+    distancex: "DX",
+    distancey: "DY",
+    radius: "R",
+    diameter: "DIA",
+    equal: "EQ",
+    parallel: "PAR",
+    perpendicular: "PERP",
+    tangent: "TAN",
+    pointonobject: "POO",
+    angle: "ANG",
+    block: "LOCK",
+    symmetric: "SYM",
+  };
+  return glyphs[token] || String(constraint?.type || "C").toUpperCase().slice(0, 6);
+}
+
+function freeCadConstraintPointRoleFromPos(pointPos) {
+  const pos = Number(pointPos);
+  if (pos === 1) return "start";
+  if (pos === 2) return "end";
+  if (pos === 3) return "center";
+  if (pos === 0) return "whole";
+  return "";
+}
+
+function freeCadConstraintGeometryRefs(constraint) {
+  if (!constraint) return [];
+  if (Array.isArray(constraint.geometry_refs)) {
+    return constraint.geometry_refs
+      .filter((ref) => ref && Number.isFinite(Number(ref.geometry_index)))
+      .map((ref) => ({
+        slot: ref.slot || "",
+        geometryIndex: Number(ref.geometry_index),
+        pointRole: ref.point_role || freeCadConstraintPointRoleFromPos(ref.point_pos),
+        pointPos: Number.isFinite(Number(ref.point_pos)) ? Number(ref.point_pos) : null,
+        externalOrAxis: ref.external_or_axis === true || Number(ref.geometry_index) < 0,
+      }));
+  }
+  return [
+    ["first", "first", "firstPos"],
+    ["second", "second", "secondPos"],
+    ["third", "third", "thirdPos"],
+  ].map(([slot, geometryKey, pointKey]) => {
+    const geometryIndex = Number(constraint[geometryKey]);
+    if (!Number.isFinite(geometryIndex)) return null;
+    const pointPos = Number(constraint[pointKey]);
+    return {
+      slot,
+      geometryIndex,
+      pointRole: Number.isFinite(pointPos) ? freeCadConstraintPointRoleFromPos(pointPos) : "",
+      pointPos: Number.isFinite(pointPos) ? pointPos : null,
+      externalOrAxis: geometryIndex < 0,
+    };
+  }).filter(Boolean);
+}
+
+function freeCadConstraintInternalGeometryRefs(constraint) {
+  return freeCadConstraintGeometryRefs(constraint)
+    .filter((ref) => !ref.externalOrAxis && Number(ref.geometryIndex) >= 0);
+}
+
+function freeCadConstraintGeometryIndexSet(constraint) {
+  return new Set(freeCadConstraintInternalGeometryRefs(constraint).map((ref) => Number(ref.geometryIndex)));
+}
+
+function freeCadSketchConstraintGeometryItems(obj, constraint) {
+  return freeCadConstraintInternalGeometryRefs(constraint)
+    .map((ref) => freeCadSketchGeometryByIndex(obj, ref.geometryIndex))
+    .filter(Boolean);
+}
+
+function freeCadConstraintIsReference(constraint) {
+  const text = `${constraint?.status || ""} ${constraint?.solver_status || ""}`.toLowerCase();
+  return constraint?.reference === true || constraint?.driving === false || /reference|driven/.test(text);
+}
+
+function freeCadConstraintRefLabel(ref) {
+  if (!ref) return "";
+  const prefix = ref.slot ? `${ref.slot}:` : "";
+  const point = ref.pointRole && ref.pointRole !== "whole" ? `.${ref.pointRole}` : "";
+  return `${prefix}#${Number(ref.geometryIndex)}${point}`;
+}
+
+function freeCadSketchConstraintsForGeometry(obj, geometry) {
+  const geometryIndex = Number(geometry?.index);
+  if (!obj || !Number.isFinite(geometryIndex)) return [];
+  return (Array.isArray(obj.sketch?.constraints) ? obj.sketch.constraints : []).filter((constraint) => {
+    return freeCadConstraintGeometryRefs(constraint).some((ref) => Number(ref.geometryIndex) === geometryIndex);
+  });
+}
+
+function renderFreeCadConstraintRefChips(obj, constraint, editMode = null) {
+  const sketchName = freeCadObjectKey(obj);
+  const issueConstraints = freeCadSketchIssueConstraintIndexes(sketchName);
+  const severity = issueConstraints.has(Number(constraint?.index)) ? "error" : freeCadConstraintSeverity(constraint, editMode);
+  const refs = freeCadConstraintGeometryRefs(constraint);
+  if (!refs.length) return `<p class="section-note">${escapeHtml(t("constraintReferences"))}: ${escapeHtml(t("none"))}</p>`;
+  return `<p class="section-note">${escapeHtml(t("constraintReferences"))}</p>
+    <div class="constraint-ref-grid">
+      ${refs.map((ref) => {
+        const internal = !ref.externalOrAxis && Number(ref.geometryIndex) >= 0;
+        const onclick = internal
+          ? `selectFreeCadSketchConstraintReference(${escapeHtml(jsString(sketchName))}, ${Number(constraint.index) || 0}, ${Number(ref.geometryIndex)}, ${escapeHtml(jsString(ref.pointRole || ""))})`
+          : "";
+        return `<button class="constraint-ref-chip ${severity}" type="button" ${onclick ? `onclick="${onclick}"` : "disabled"} title="${escapeHtml(t("focusGeometry"))}">
+          ${icon("pointer")} ${escapeHtml(freeCadConstraintRefLabel(ref))}
+        </button>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderFreeCadSketchGeometryConstraintRefs(obj, geometry) {
+  const constraints = freeCadSketchConstraintsForGeometry(obj, geometry);
+  if (!constraints.length) return "";
+  const sketchName = freeCadObjectKey(obj);
+  const issueConstraints = freeCadSketchIssueConstraintIndexes(sketchName);
+  return `<p class="section-note" style="margin-top:10px">${escapeHtml(t("relatedConstraints"))}</p>
+    <div class="constraint-ref-grid">
+      ${constraints.slice(0, 12).map((constraint) => {
+        const severity = issueConstraints.has(Number(constraint.index)) ? "error" : freeCadConstraintSeverity(constraint, obj.sketch?.edit_mode || {});
+        return `<button class="constraint-ref-chip ${severity}" type="button" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(sketchName))}, 'constraint', ${Number(constraint.index) || 0}, '', { preserveDryRunReview: true })" title="${escapeHtml(freeCadConstraintText(constraint))}">
+          ${escapeHtml(freeCadConstraintGlyphText(constraint))} #${escapeHtml(constraint.index ?? "")}
+        </button>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderFreeCadSketchSolverMap(sketch, editMode = {}, sketchName = "") {
+  const stateText = editMode.state || freeCadSketchSolverText(sketch);
+  const dof = editMode.degrees_of_freedom ?? sketch?.degrees_of_freedom;
+  const conflicts = Array.isArray(editMode.conflicting_constraints) ? editMode.conflicting_constraints.map(Number).filter(Number.isFinite) : [];
+  const redundant = Array.isArray(editMode.redundant_constraints) ? editMode.redundant_constraints.map(Number).filter(Number.isFinite) : [];
+  const malformed = Array.isArray(editMode.malformed_constraints) ? editMode.malformed_constraints.map(Number).filter(Number.isFinite) : [];
+  const targetSketchName = sketchName || sketch?.name || sketch?.label || state.selectedFreeCadObjectName;
+  const live = freeCadSketchLiveSolveForSketch(targetSketchName);
+  const issueConstraintIndexes = [...freeCadSketchIssueConstraintIndexes(targetSketchName)];
+  const issueGeometryIndexes = [...freeCadSketchIssueGeometryIndexes(targetSketchName)];
+  const severity = live
+    ? freeCadSketchLiveSolveSeverity(live)
+    : issueConstraintIndexes.length || issueGeometryIndexes.length || conflicts.length || malformed.length ? "error" : redundant.length || Number(dof) > 0 ? "warning" : "info";
+  const issueIndexes = [...new Set([...conflicts, ...malformed, ...redundant, ...issueConstraintIndexes])].slice(0, 8);
+  const displayDof = live && Number.isFinite(Number(live.degreesOfFreedom)) ? live.degreesOfFreedom : dof;
+  const solverText = live ? freeCadSketchLiveSolveStatusText(live) : stateText;
+  const issueGeometryText = issueGeometryIndexes.length ? `${t("sketchGeometryList")} ${issueGeometryIndexes.slice(0, 6).join(", ")}` : "";
+  return `<div class="sketch-solver-strip ${severity}">
+    <strong>${escapeHtml(t("sketchSolverMap"))}: ${escapeHtml(solverText)}</strong>
+    <span>${Number.isFinite(Number(displayDof)) ? `${escapeHtml(t("degreesOfFreedom"))} ${escapeHtml(displayDof)}` : escapeHtml(t("degreesOfFreedom"))}</span>
+    ${issueGeometryText ? `<span>${escapeHtml(issueGeometryText)}</span>` : ""}
+    ${issueIndexes.length ? `<div class="constraint-ref-grid" style="grid-column:1 / -1">
+      ${issueIndexes.map((index) => {
+        const itemSeverity = conflicts.includes(index) || malformed.includes(index) || issueConstraintIndexes.includes(index) ? "error" : "warning";
+        return `<button class="constraint-ref-chip ${itemSeverity}" type="button" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(targetSketchName))}, 'constraint', ${Number(index)}, '', { preserveDryRunReview: true })">
+          ${itemSeverity === "error" ? "ERR" : "WARN"} #${Number(index)}
+        </button>`;
+      }).join("")}
+    </div>` : ""}
+  </div>`;
+}
+
+function freeCadSketchDryRunReviewAppliesTo(sketchName) {
+  const review = state.sketchDryRunReview;
+  if (!review || !sketchName) return false;
+  if (normalizeFreeCadToken(review.sketchName) === normalizeFreeCadToken(sketchName)) return true;
+  return (review.issues || []).some((issue) => {
+    return normalizeFreeCadToken(issue.sketchName) === normalizeFreeCadToken(sketchName);
+  });
+}
+
+function freeCadSketchDryRunConstraintIndexes(sketchName = "") {
+  const review = state.sketchDryRunReview;
+  const indexes = new Set();
+  if (!review || (sketchName && !freeCadSketchDryRunReviewAppliesTo(sketchName))) return indexes;
+  for (const issue of review.issues || []) {
+    if (sketchName && issue.sketchName && normalizeFreeCadToken(issue.sketchName) !== normalizeFreeCadToken(sketchName)) continue;
+    for (const value of issue.constraintIndexes || []) {
+      const index = Number(value);
+      if (Number.isFinite(index)) indexes.add(index);
+    }
+  }
+  return indexes;
+}
+
+function freeCadSketchDryRunGeometryIndexes(sketchName = "") {
+  const review = state.sketchDryRunReview;
+  const indexes = new Set();
+  if (!review || (sketchName && !freeCadSketchDryRunReviewAppliesTo(sketchName))) return indexes;
+  for (const issue of review.issues || []) {
+    if (sketchName && issue.sketchName && normalizeFreeCadToken(issue.sketchName) !== normalizeFreeCadToken(sketchName)) continue;
+    for (const value of issue.geometryIndexes || []) {
+      const index = Number(value);
+      if (Number.isFinite(index)) indexes.add(index);
+    }
+  }
+  for (const patch of review.patch?.patches || []) {
+    if (sketchName && normalizeFreeCadToken(patch.selector?.name || patch.selector?.label) !== normalizeFreeCadToken(sketchName)) continue;
+    const index = Number(patch.geometry_index ?? patch.index);
+    if (Number.isFinite(index)) indexes.add(index);
+  }
+  return indexes;
+}
+
+function freeCadSketchIssueConstraintIndexes(sketchName = "") {
+  return new Set([
+    ...freeCadSketchDryRunConstraintIndexes(sketchName),
+    ...freeCadSketchLiveSolveConstraintIndexes(sketchName),
+  ]);
+}
+
+function freeCadSketchIssueGeometryIndexes(sketchName = "") {
+  return new Set([
+    ...freeCadSketchDryRunGeometryIndexes(sketchName),
+    ...freeCadSketchLiveSolveGeometryIndexes(sketchName),
+  ]);
+}
+
+function freeCadSketchPreviewIssueKey(issue) {
+  return [
+    issue.severity || "",
+    issue.code || "",
+    issue.message || "",
+    (issue.constraintIndexes || []).join(","),
+    (issue.geometryIndexes || []).join(","),
+  ].join("|");
+}
+
+function freeCadSketchPreviewAddIssue(issues, issue) {
+  if (!issue?.message && !issue?.code) return;
+  const normalized = {
+    severity: issue.severity || "warning",
+    code: issue.code || "solver_preview",
+    message: issue.message || issue.error || "Sketch solver preview issue",
+    sketchName: issue.sketchName || "",
+    constraintIndexes: (issue.constraintIndexes || []).map(Number).filter(Number.isFinite),
+    geometryIndexes: (issue.geometryIndexes || []).map(Number).filter(Number.isFinite),
+    status: issue.status || "",
+  };
+  const key = freeCadSketchPreviewIssueKey(normalized);
+  if (!issues.some((item) => freeCadSketchPreviewIssueKey(item) === key)) issues.push(normalized);
+}
+
+function freeCadSketchPreviewConstraintIndexes(value) {
+  return Array.isArray(value) ? value.map(Number).filter(Number.isFinite) : [];
+}
+
+function freeCadSketchPreviewAppendDiagnostics(issues, diagnostics, sketchName = "") {
+  if (!diagnostics || typeof diagnostics !== "object") return;
+  for (const [key, severity] of [
+    ["conflicting_constraints", "error"],
+    ["malformed_constraints", "error"],
+    ["redundant_constraints", "warning"],
+  ]) {
+    const values = freeCadSketchPreviewConstraintIndexes(diagnostics[key]);
+    if (values.length) {
+      freeCadSketchPreviewAddIssue(issues, {
+        severity,
+        code: key,
+        message: `${key}: ${values.join(", ")}`,
+        sketchName,
+        constraintIndexes: values,
+      });
+    }
+  }
+  if (Array.isArray(diagnostics.missing_point_on_point) && diagnostics.missing_point_on_point.length) {
+    freeCadSketchPreviewAddIssue(issues, {
+      severity: "warning",
+      code: "missing_point_on_point",
+      message: JSON.stringify(diagnostics.missing_point_on_point.slice(0, 4)),
+      sketchName,
+    });
+  }
+  for (const item of freeCadDiagnosticItems(diagnostics)) {
+    freeCadSketchPreviewAddIssue(issues, {
+      severity: item.severity || diagnostics.severity || "warning",
+      code: item.code || item.status || "diagnostic",
+      message: item.message || item.error || JSON.stringify(item),
+      sketchName,
+    });
+  }
+}
+
+function freeCadSketchPreviewAppendSketchSummary(issues, sketch, sketchName = "") {
+  if (!sketch) return;
+  const name = sketchName || sketch.name || sketch.label || "";
+  const editMode = sketch.edit_mode || {};
+  freeCadSketchPreviewAppendDiagnostics(issues, editMode, name);
+  const solver = sketch.solver || {};
+  if (solver.error) {
+    freeCadSketchPreviewAddIssue(issues, {
+      severity: "error",
+      code: "solver_error",
+      message: solver.error,
+      sketchName: name,
+    });
+  }
+  for (const geometry of Array.isArray(sketch.geometry) ? sketch.geometry : []) {
+    const severity = freeCadSketchGeometrySeverity(geometry);
+    if (!severity || severity === "info") continue;
+    freeCadSketchPreviewAddIssue(issues, {
+      severity,
+      code: geometry.solver_status || geometry.diagnostic_severity || "geometry_diagnostic",
+      message: freeCadSketchGeometryText(geometry),
+      sketchName: name,
+      geometryIndexes: [geometry.index],
+      constraintIndexes: geometry.constraint_indexes || [],
+    });
+  }
+}
+
+function freeCadSketchPreviewIssues(preview) {
+  const issues = [];
+  if (!preview) return issues;
+  if (preview.ok === false || preview.error) {
+    freeCadSketchPreviewAddIssue(issues, {
+      severity: "error",
+      code: "dry_run_failed",
+      message: preview.error || t("log.unknownError"),
+    });
+  }
+  for (const result of preview.patch_results || []) {
+    const sketchName = result.sketch?.name || result.object?.name || result.object?.label || "";
+    if (result.error) {
+      freeCadSketchPreviewAddIssue(issues, {
+        severity: "error",
+        code: result.op || "patch_result",
+        message: result.error,
+        sketchName,
+      });
+    }
+    if (result.valid === false) {
+      freeCadSketchPreviewAddIssue(issues, {
+        severity: "error",
+        code: `${result.op || "sketch"}.invalid`,
+        message: result.message || "Sketch is invalid after preview solve",
+        sketchName,
+      });
+    }
+    if (result.solver?.error) {
+      freeCadSketchPreviewAddIssue(issues, {
+        severity: "error",
+        code: "solver_error",
+        message: result.solver.error,
+        sketchName,
+      });
+    }
+    freeCadSketchPreviewAppendDiagnostics(issues, result.diagnostics, sketchName);
+    freeCadSketchPreviewAppendSketchSummary(issues, result.sketch_summary, sketchName);
+  }
+  for (const obj of Array.isArray(preview.document_summary?.objects) ? preview.document_summary.objects : []) {
+    if (obj?.sketch) freeCadSketchPreviewAppendSketchSummary(issues, obj.sketch, obj.name || obj.label || "");
+  }
+  return issues;
+}
+
+function freeCadSketchPreviewBlocksCommit(preview) {
+  return freeCadSketchPreviewIssues(preview).some((issue) => {
+    const severity = String(issue.severity || "").toLowerCase();
+    const code = String(issue.code || "").toLowerCase();
+    return severity === "error"
+      || code.includes("conflict")
+      || code.includes("malformed")
+      || code.includes("redundant")
+      || code.includes("dry_run_failed");
+  });
+}
+
+function freeCadSketchReviewCanCommit(parsedPatch) {
+  return (parsedPatch?.patches || []).some((patch) => {
+    return !["solver_status", "validate_sketch"].includes(String(patch?.op || ""));
+  });
+}
+
+function freeCadSketchDryRunReviewMessage(review) {
+  const first = (review?.issues || [])[0];
+  if (!first) return t("notAvailable");
+  return [first.code, first.message].filter(Boolean).join(": ");
+}
+
+function renderFreeCadSketchDryRunReview(obj) {
+  const sketchName = freeCadObjectKey(obj);
+  const review = state.sketchDryRunReview;
+  if (!review || !freeCadSketchDryRunReviewAppliesTo(sketchName)) return "";
+  const issues = review.issues || [];
+  const constraints = Array.from(freeCadSketchDryRunConstraintIndexes(sketchName)).slice(0, 4);
+  return `<div class="sketch-preview-review">
+    <strong>${escapeHtml(t("sketchDryRunReview"))}</strong>
+    <span>${escapeHtml(review.patch?.name || review.detail || freeCadSketchDryRunReviewMessage(review))}</span>
+    <div class="diagnostic-list">
+      ${issues.slice(0, 8).map((issue) => `<div class="diagnostic-row ${freeCadDiagnosticCssClass(issue)}">
+        <strong>${escapeHtml(issue.code || issue.severity || "solver_preview")}</strong>
+        <span>${escapeHtml([issue.message, issue.constraintIndexes?.length ? `constraints ${issue.constraintIndexes.join(",")}` : "", issue.geometryIndexes?.length ? `geometry ${issue.geometryIndexes.join(",")}` : ""].filter(Boolean).join(" · "))}</span>
+      </div>`).join("")}
+    </div>
+	  <div class="feature-actions" style="margin-top:10px">
+	    <button class="typed-action-button" type="button" onclick="clearFreeCadSketchDryRunReview()">${icon("undo")} ${escapeHtml(t("revertDrag"))}</button>
+	    ${freeCadSketchReviewCanCommit(review.patch) ? `<button class="typed-action-button" type="button" onclick="commitFreeCadSketchDryRunReview()">${icon("redo")} ${escapeHtml(t("commitAnyway"))}</button>` : ""}
+	    ${constraints.map((index) => `
+	      <button class="typed-action-button" type="button" onclick="resolveFreeCadSketchDryRunConstraint(${Number(index)}, 'disable')">${icon("trash")} ${escapeHtml(t("disableConstraint", { index }))}</button>
+	      <button class="typed-action-button" type="button" onclick="resolveFreeCadSketchDryRunConstraint(${Number(index)}, 'reference')">${icon("ruler")} ${escapeHtml(t("makeReference", { index }))}</button>
+      `).join("")}
+    </div>
+  </div>`;
+}
+
 function renderFreeCadSketchConstraintList(obj, constraints, editMode = null) {
   if (!constraints.length) return "";
   const sketchName = freeCadObjectKey(obj);
+  const issueConstraints = freeCadSketchIssueConstraintIndexes(sketchName);
   return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchConstraintList"))}</p>
     <div class="subelement-grid">
       ${constraints.slice(0, 24).map((constraint) => {
-        const label = constraint.name || constraint.type || "Constraint";
+        const label = `${freeCadConstraintGlyphText(constraint)} ${constraint.name || constraint.type || "Constraint"}`;
         const selected = freeCadSketchElementSelected(sketchName, "constraint", constraint.index);
-        return `<div class="subelement-row ${selected ? "active" : freeCadConstraintSeverity(constraint, editMode)}" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(sketchName))}, 'constraint', ${Number(constraint.index) || 0})">
+        const previewSeverity = issueConstraints.has(Number(constraint.index)) ? "error" : "";
+        return `<div class="subelement-row ${selected ? "active" : previewSeverity || freeCadConstraintSeverity(constraint, editMode)}" onclick="selectFreeCadSketchElement(${escapeHtml(jsString(sketchName))}, 'constraint', ${Number(constraint.index) || 0})">
           <strong>#${escapeHtml(constraint.index ?? "")}</strong>
           <span title="${escapeHtml(freeCadConstraintText(constraint))}">${escapeHtml([label, freeCadConstraintText(constraint)].filter(Boolean).join(" · "))}</span>
+          <button class="icon-button" type="button" title="${escapeHtml(t("removeConstraint"))}" onclick="event.stopPropagation(); removeFreeCadSketchConstraint(${escapeHtml(jsString(sketchName))}, ${Number(constraint.index) || 0})">${icon("trash")}</button>
         </div>`;
       }).join("")}
     </div>`;
+}
+
+function freeCadSketchConstraintButton(labelKey, iconName, onclick, disabled = false, title = "") {
+  return `<button class="typed-action-button" type="button" ${disabled ? "disabled" : `onclick="${escapeHtml(onclick)}"`} title="${escapeHtml(title || t(labelKey))}">
+    ${icon(iconName)} ${escapeHtml(t(labelKey))}
+  </button>`;
+}
+
+function freeCadSketchConstraintActionButton(label, iconName, onclick, disabled = false, title = "") {
+  return `<button class="typed-action-button" type="button" ${disabled ? "disabled" : `onclick="${escapeHtml(onclick)}"`} title="${escapeHtml(title || label)}">
+    ${icon(iconName)} ${escapeHtml(label)}
+  </button>`;
+}
+
+function freeCadSketchIssueRowKey(row) {
+  return [
+    row.source || "",
+    row.code || "",
+    row.severity || "",
+    (row.constraintIndexes || []).join(","),
+    (row.geometryIndexes || []).join(","),
+    row.message || "",
+  ].join("|");
+}
+
+function freeCadSketchConstraintGeometryIndexes(obj, constraintIndex) {
+  const constraint = freeCadSketchConstraintByIndex(obj, constraintIndex);
+  return freeCadConstraintInternalGeometryRefs(constraint).map((ref) => Number(ref.geometryIndex)).filter(Number.isFinite);
+}
+
+function freeCadSketchIssueAddRow(rows, row) {
+  const normalized = {
+    source: row.source || "",
+    code: row.code || "solver_issue",
+    severity: row.severity || "warning",
+    message: row.message || "",
+    constraintIndexes: (row.constraintIndexes || []).map(Number).filter(Number.isFinite),
+    geometryIndexes: (row.geometryIndexes || []).map(Number).filter(Number.isFinite),
+  };
+  const key = freeCadSketchIssueRowKey(normalized);
+  if (!rows.some((item) => freeCadSketchIssueRowKey(item) === key)) rows.push(normalized);
+}
+
+function freeCadSketchIssueAddConstraintRows(rows, obj, indexes, code, severity, message) {
+  for (const value of indexes || []) {
+    const index = Number(value);
+    if (!Number.isFinite(index)) continue;
+    freeCadSketchIssueAddRow(rows, {
+      source: t("sketchSolverMap"),
+      code,
+      severity,
+      message: message || `${code}: #${index}`,
+      constraintIndexes: [index],
+      geometryIndexes: freeCadSketchConstraintGeometryIndexes(obj, index),
+    });
+  }
+}
+
+function freeCadSketchIssueRows(obj, sketch, editMode = {}) {
+  const rows = [];
+  const sketchName = freeCadObjectKey(obj);
+  freeCadSketchIssueAddConstraintRows(rows, obj, editMode.conflicting_constraints, "conflicting_constraints", "error", t("conflictingConstraints"));
+  freeCadSketchIssueAddConstraintRows(rows, obj, editMode.malformed_constraints, "malformed_constraints", "error", t("malformedConstraints"));
+  freeCadSketchIssueAddConstraintRows(rows, obj, editMode.redundant_constraints, "redundant_constraints", "warning", t("redundantConstraints"));
+  for (const issue of state.sketchDryRunReview?.issues || []) {
+    if (issue.sketchName && normalizeFreeCadToken(issue.sketchName) !== normalizeFreeCadToken(sketchName)) continue;
+    const constraintIndexes = (issue.constraintIndexes || []).map(Number).filter(Number.isFinite);
+    const geometryIndexes = [
+      ...(issue.geometryIndexes || []).map(Number).filter(Number.isFinite),
+      ...constraintIndexes.flatMap((index) => freeCadSketchConstraintGeometryIndexes(obj, index)),
+    ];
+    freeCadSketchIssueAddRow(rows, {
+      source: t("sketchDryRunReview"),
+      code: issue.code || "dry_run_issue",
+      severity: issue.severity || "warning",
+      message: issue.message || "",
+      constraintIndexes,
+      geometryIndexes,
+    });
+  }
+  const live = freeCadSketchLiveSolveForSketch(sketchName);
+  for (const issue of live?.issues || []) {
+    const constraintIndexes = (issue.constraintIndexes || []).map(Number).filter(Number.isFinite);
+    const geometryIndexes = [
+      ...(issue.geometryIndexes || []).map(Number).filter(Number.isFinite),
+      ...constraintIndexes.flatMap((index) => freeCadSketchConstraintGeometryIndexes(obj, index)),
+    ];
+    freeCadSketchIssueAddRow(rows, {
+      source: t("sketchLiveSolve"),
+      code: issue.code || "live_solve_issue",
+      severity: issue.severity || "warning",
+      message: issue.message || "",
+      constraintIndexes,
+      geometryIndexes,
+    });
+  }
+  const dof = editMode.degrees_of_freedom ?? sketch?.degrees_of_freedom;
+  if (Number.isFinite(Number(dof)) && Number(dof) > 0) {
+    freeCadSketchIssueAddRow(rows, {
+      source: t("sketchSolverMap"),
+      code: "degrees_of_freedom",
+      severity: "warning",
+      message: `${t("underConstrained")}: ${formatNumber(dof)} ${t("degreesOfFreedom")}`,
+    });
+  }
+  return rows.slice(0, 12);
+}
+
+function renderFreeCadSketchSolverIssueActions(obj, row) {
+  const objectName = freeCadObjectKey(obj);
+  const constraintIndex = (row.constraintIndexes || []).find((value) => Number.isFinite(Number(value)));
+  const geometryIndex = (row.geometryIndexes || []).find((value) => Number.isFinite(Number(value)));
+  const buttons = [];
+  if (Number.isFinite(Number(constraintIndex))) {
+    const index = Number(constraintIndex);
+    const constraint = freeCadSketchConstraintByIndex(obj, index);
+    const activeAvailable = constraint?.active !== undefined;
+    const referenceAvailable = constraint?.driving !== undefined || constraint?.reference !== undefined;
+    buttons.push(freeCadSketchConstraintActionButton(
+      t("focusConstraint", { index }),
+      "pointer",
+      `selectFreeCadSketchElement(${jsString(objectName)}, 'constraint', ${index}, '', { preserveDryRunReview: true })`
+    ));
+    if (activeAvailable) {
+      buttons.push(freeCadSketchConstraintActionButton(
+        t("disableConstraint", { index }),
+        "trash",
+        `commitFreeCadSketchConstraintState(${jsString(objectName)}, ${index}, 'active', false)`
+      ));
+    }
+    if (referenceAvailable) {
+      buttons.push(freeCadSketchConstraintActionButton(
+        t("makeReference", { index }),
+        "ruler",
+        `commitFreeCadSketchConstraintState(${jsString(objectName)}, ${index}, 'reference', true)`
+      ));
+    }
+    buttons.push(freeCadSketchConstraintButton(
+      "removeConstraint",
+      "trash",
+      `removeFreeCadSketchConstraint(${jsString(objectName)}, ${index})`
+    ));
+  } else if (Number.isFinite(Number(geometryIndex))) {
+    const index = Number(geometryIndex);
+    buttons.push(freeCadSketchConstraintActionButton(
+      t("focusGeometryIndex", { index }),
+      "pointer",
+      `selectFreeCadSketchElement(${jsString(objectName)}, 'geometry', ${index}, '', { preserveDryRunReview: true })`
+    ));
+  }
+  buttons.push(freeCadSketchConstraintButton(
+    "validateSketch",
+    "eye",
+    `validateFreeCadSketch(${jsString(objectName)})`
+  ));
+  return `<div class="feature-actions" style="margin-top:8px">${buttons.join("")}</div>`;
+}
+
+function renderFreeCadSketchSolverIssuePanel(obj, sketch, editMode = {}) {
+  const rows = freeCadSketchIssueRows(obj, sketch, editMode);
+  if (!rows.length) return "";
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchSolverIssues"))}</p>
+    <div class="diagnostic-list">
+      ${rows.map((row) => {
+        const constraints = row.constraintIndexes?.length ? `${t("sketchConstraintList")} ${row.constraintIndexes.slice(0, 6).join(", ")}` : "";
+        const geometry = row.geometryIndexes?.length ? `${t("sketchGeometryList")} ${row.geometryIndexes.slice(0, 6).join(", ")}` : "";
+        return `<div class="diagnostic-row ${freeCadDiagnosticCssClass(row)}">
+          <strong>${escapeHtml([row.source, row.code].filter(Boolean).join(": "))}</strong>
+          <span>${escapeHtml([row.message, constraints, geometry].filter(Boolean).join(" · "))}</span>
+          ${renderFreeCadSketchSolverIssueActions(obj, row)}
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+function freeCadSketchPointDistance(a, b, mode = "Distance") {
+  const first = freeCadTriplet(a?.point);
+  const second = freeCadTriplet(b?.point);
+  if (!first || !second) return 0;
+  const dx = second[0] - first[0];
+  const dy = second[1] - first[1];
+  const dz = second[2] - first[2];
+  if (mode === "DistanceX") return Math.abs(dx);
+  if (mode === "DistanceY") return Math.abs(dy);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function freeCadSketchGeometryFromRef(ref) {
+  const obj = freeCadObjectByName(ref?.sketchName);
+  return obj ? freeCadSketchGeometryByIndex(obj, ref?.geometryIndex) : null;
+}
+
+function freeCadSketchGeometryTypeToken(geometry) {
+  return normalizeFreeCadToken(geometry?.type || geometry?.geometryType || "");
+}
+
+function freeCadSketchGeometryIsLine(geometry) {
+  return /line/.test(freeCadSketchGeometryTypeToken(geometry));
+}
+
+function freeCadSketchGeometryIsCurve(geometry) {
+  return /circle|arc|ellipse/.test(freeCadSketchGeometryTypeToken(geometry));
+}
+
+function freeCadSketchGeometryRadiusValue(geometry, mode = "Radius") {
+  const radius = Number(geometry?.radius ?? geometry?.major_radius);
+  if (!Number.isFinite(radius) || radius <= 0) return 1;
+  return mode === "Diameter" ? radius * 2 : radius;
+}
+
+function freeCadSketchConstraintNumericValue(type, defaultValue) {
+  const raw = window.prompt(t("constraintValuePrompt", { type }), formatNumber(defaultValue));
+  if (raw === null) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    log(t("log.patchFailed", { message: t("constraintValuePrompt", { type }) }));
+    return null;
+  }
+  return value;
+}
+
+function renderFreeCadSketchConstraintPalette(obj, geometry) {
+  const selectedGeometry = selectedFreeCadSketchGeometry(obj, geometry);
+  const objectName = freeCadObjectKey(obj);
+  const geometryRef = selectedGeometry ? freeCadSketchGeometryRef(objectName, selectedGeometry.index) : null;
+  const geometryAnchor = freeCadSketchGeometryRefStillExists(state.sketchGeometryConstraintAnchor)
+    ? state.sketchGeometryConstraintAnchor
+    : null;
+  const pointRef = selectedFreeCadSketchPointRef();
+  const pointAnchor = freeCadSketchPointStillExists(state.sketchCoincidenceAnchor)
+    ? state.sketchCoincidenceAnchor
+    : null;
+  const buttons = [];
+
+  if (selectedGeometry) {
+    const sameGeometryAnchor = freeCadSketchGeometryRefsEqual(geometryAnchor, geometryRef);
+    buttons.push(freeCadSketchConstraintButton(
+      "setGeometryAnchor",
+      "pointer",
+      `setFreeCadSketchGeometryConstraintAnchor(${jsString(objectName)}, ${Number(selectedGeometry.index) || 0})`,
+      false,
+      freeCadSketchGeometryLabel(geometryRef)
+    ));
+    if (geometryAnchor) {
+      buttons.push(freeCadSketchConstraintButton(
+        "clearGeometryAnchor",
+        "pointer",
+        "clearFreeCadSketchGeometryConstraintAnchor()",
+        false,
+        freeCadSketchGeometryLabel(geometryAnchor)
+      ));
+    }
+    for (const [labelKey, constraintType] of [
+      ["addHorizontalConstraint", "Horizontal"],
+      ["addVerticalConstraint", "Vertical"],
+      ["addBlockConstraint", "Block"],
+    ]) {
+      buttons.push(freeCadSketchConstraintButton(
+        labelKey,
+        "ruler",
+        `addFreeCadSketchConstraint(${jsString(objectName)}, ${jsString(constraintType)}, ${Number(selectedGeometry.index) || 0})`
+      ));
+    }
+    if (Number.isFinite(Number(selectedGeometry.radius ?? selectedGeometry.major_radius))) {
+      buttons.push(freeCadSketchConstraintButton(
+        "addRadiusConstraint",
+        "ruler",
+        `addFreeCadSketchRadiusConstraint(${jsString(objectName)}, 'Radius', ${Number(selectedGeometry.index) || 0})`
+      ));
+      buttons.push(freeCadSketchConstraintButton(
+        "addDiameterConstraint",
+        "ruler",
+        `addFreeCadSketchRadiusConstraint(${jsString(objectName)}, 'Diameter', ${Number(selectedGeometry.index) || 0})`
+      ));
+    }
+    if (geometryAnchor && !sameGeometryAnchor && normalizeFreeCadToken(geometryAnchor.sketchName) === normalizeFreeCadToken(objectName)) {
+      const anchorGeometry = freeCadSketchGeometryFromRef(geometryAnchor);
+      const bothLines = freeCadSketchGeometryIsLine(anchorGeometry) && freeCadSketchGeometryIsLine(selectedGeometry);
+      const hasCurve = freeCadSketchGeometryIsCurve(anchorGeometry) || freeCadSketchGeometryIsCurve(selectedGeometry);
+      const pairConstraints = [
+        ["addEqualConstraint", "Equal", bothLines || hasCurve],
+        ["addParallelConstraint", "Parallel", bothLines],
+        ["addPerpendicularConstraint", "Perpendicular", bothLines],
+        ["addTangentConstraint", "Tangent", hasCurve],
+      ];
+      for (const [labelKey, constraintType, supported] of pairConstraints) {
+        if (!supported) continue;
+        buttons.push(freeCadSketchConstraintButton(
+          labelKey,
+          "ruler",
+          `addFreeCadSketchPairConstraint(${jsString(objectName)}, ${jsString(constraintType)}, ${Number(selectedGeometry.index) || 0})`,
+          false,
+          `${freeCadSketchGeometryLabel(geometryAnchor)} -> ${freeCadSketchGeometryLabel(geometryRef)}`
+        ));
+      }
+    }
+  }
+
+  if (pointRef && pointAnchor && !freeCadSketchPointRefsEqual(pointAnchor, pointRef)
+    && normalizeFreeCadToken(pointAnchor.sketchName) === normalizeFreeCadToken(pointRef.sketchName)) {
+    for (const [labelKey, constraintType] of [
+      ["addDistanceConstraint", "Distance"],
+      ["addDistanceXConstraint", "DistanceX"],
+      ["addDistanceYConstraint", "DistanceY"],
+    ]) {
+      buttons.push(freeCadSketchConstraintButton(
+        labelKey,
+        "ruler",
+        `addFreeCadSketchPointDistanceConstraint(${jsString(objectName)}, ${jsString(constraintType)}, ${Number(pointRef.geometryIndex) || 0}, ${jsString(pointRef.pointRole)})`,
+        false,
+        `${freeCadSketchPointLabel(pointAnchor)} -> ${freeCadSketchPointLabel(pointRef)}`
+      ));
+    }
+  }
+
+  if (pointRef && geometryAnchor
+    && normalizeFreeCadToken(geometryAnchor.sketchName) === normalizeFreeCadToken(pointRef.sketchName)
+    && Number(geometryAnchor.geometryIndex) !== Number(pointRef.geometryIndex)) {
+    buttons.push(freeCadSketchConstraintButton(
+      "addPointOnObjectConstraint",
+      "ruler",
+      `addFreeCadSketchPointOnObjectConstraint(${jsString(objectName)}, ${Number(pointRef.geometryIndex) || 0}, ${jsString(pointRef.pointRole)})`,
+      false,
+      `${freeCadSketchPointLabel(pointRef)} -> ${freeCadSketchGeometryLabel(geometryAnchor)}`
+    ));
+  }
+
+  if (!buttons.length) return "";
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchConstraintPalette"))}</p>
+    <div class="feature-actions">${buttons.join("")}</div>`;
+}
+
+function selectedFreeCadSketchGeometry(obj, geometry) {
+  const selected = state.selectedFreeCadSketchElement;
+  const sketchName = freeCadObjectKey(obj);
+  if (!selected || selected.kind !== "geometry") return null;
+  if (normalizeFreeCadToken(selected.sketchName) !== normalizeFreeCadToken(sketchName)) return null;
+  return geometry.find((item) => Number(item.index) === Number(selected.index)) || null;
+}
+
+function freeCadSketchPointRoles(geometry) {
+  return ["start", "end", "center", "location", "point"].filter((key) => freeCadTriplet(geometry?.[key]));
+}
+
+function freeCadSketchGeometryByIndex(obj, geometryIndex) {
+  return (Array.isArray(obj?.sketch?.geometry) ? obj.sketch.geometry : [])
+    .find((item) => Number(item.index) === Number(geometryIndex)) || null;
+}
+
+function freeCadSketchGeometryRef(objectName, geometryIndex) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj)) return null;
+  const geometry = freeCadSketchGeometryByIndex(obj, geometryIndex);
+  if (!geometry) return null;
+  return {
+    sketchName: freeCadObjectKey(obj),
+    geometryIndex: Number(geometry.index),
+    geometryType: geometry.type || "",
+  };
+}
+
+function freeCadSketchGeometryRefsEqual(a, b) {
+  return Boolean(a && b)
+    && normalizeFreeCadToken(a.sketchName) === normalizeFreeCadToken(b.sketchName)
+    && Number(a.geometryIndex) === Number(b.geometryIndex);
+}
+
+function freeCadSketchGeometryRefStillExists(ref) {
+  return Boolean(ref && freeCadSketchGeometryRef(ref.sketchName, ref.geometryIndex));
+}
+
+function freeCadSketchConstraintByIndex(obj, constraintIndex) {
+  return (Array.isArray(obj?.sketch?.constraints) ? obj.sketch.constraints : [])
+    .find((item) => Number(item.index) === Number(constraintIndex)) || null;
+}
+
+function selectedFreeCadSketchConstraint(obj, constraints) {
+  const selected = state.selectedFreeCadSketchElement;
+  const sketchName = freeCadObjectKey(obj);
+  if (!selected || selected.kind !== "constraint") return null;
+  if (normalizeFreeCadToken(selected.sketchName) !== normalizeFreeCadToken(sketchName)) return null;
+  return (Array.isArray(constraints) ? constraints : [])
+    .find((item) => Number(item.index) === Number(selected.index)) || null;
+}
+
+function focusFreeCadSketchConstraintReferences(objectName, constraintIndex) {
+  const obj = freeCadObjectByName(objectName);
+  const constraint = freeCadSketchConstraintByIndex(obj, constraintIndex);
+  if (!obj || !freeCadObjectIsSketch(obj) || !constraint) return false;
+  state.previewMode = "generated";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = null;
+  state.selectedFreeCadAssemblyJoint = null;
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDragPreview = null;
+  if (!freeCadSketchDryRunReviewAppliesTo(freeCadObjectKey(obj))) {
+    state.sketchDryRunReview = null;
+  }
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "constraint",
+    index: Number(constraint.index) || 0,
+    pointRole: "",
+  };
+  log(`${freeCadObjectDisplayName(obj)} ${t("constraintReferences")} #${Number(constraint.index) || 0}`);
+  persistWorkbenchSession();
+  renderAll();
+  return true;
+}
+
+function renderFreeCadSketchConstraintGlyphActions(obj, constraint, editMode = null) {
+  if (!obj || !constraint) return "";
+  const objectName = freeCadObjectKey(obj);
+  const constraintIndex = Number(constraint.index) || 0;
+  const internalRefs = freeCadConstraintInternalGeometryRefs(constraint);
+  const activeAvailable = constraint.active !== undefined;
+  const referenceAvailable = constraint.driving !== undefined || constraint.reference !== undefined;
+  const isActive = constraint.active !== false;
+  const isReference = freeCadConstraintIsReference(constraint);
+  const buttons = [
+    freeCadSketchConstraintButton(
+      "focusAllReferences",
+      "pointer",
+      `focusFreeCadSketchConstraintReferences(${jsString(objectName)}, ${constraintIndex})`,
+      !internalRefs.length,
+      internalRefs.map(freeCadConstraintRefLabel).join(" -> ") || t("none")
+    ),
+    freeCadSketchConstraintButton(
+      "validateSketch",
+      "eye",
+      `validateFreeCadSketch(${jsString(objectName)})`
+    ),
+  ];
+  if (activeAvailable) {
+    const label = t(isActive ? "disableConstraint" : "enableConstraint", { index: constraintIndex });
+    buttons.push(freeCadSketchConstraintActionButton(
+      label,
+      isActive ? "trash" : "eye",
+      `commitFreeCadSketchConstraintState(${jsString(objectName)}, ${constraintIndex}, 'active', ${isActive ? "false" : "true"})`,
+      false,
+      label
+    ));
+  }
+  if (referenceAvailable) {
+    const label = t(isReference ? "makeDriving" : "makeReference", { index: constraintIndex });
+    buttons.push(freeCadSketchConstraintActionButton(
+      label,
+      "ruler",
+      `commitFreeCadSketchConstraintState(${jsString(objectName)}, ${constraintIndex}, 'reference', ${isReference ? "false" : "true"})`,
+      false,
+      label
+    ));
+  }
+  buttons.push(freeCadSketchConstraintButton(
+    "removeConstraint",
+    "trash",
+    `removeFreeCadSketchConstraint(${jsString(objectName)}, ${constraintIndex})`
+  ));
+  return `<div class="feature-actions">${buttons.join("")}</div>`;
+}
+
+function renderFreeCadSketchConstraintEditor(obj, constraints, editMode = null) {
+  const constraint = selectedFreeCadSketchConstraint(obj, constraints);
+  if (!constraint) return "";
+  const objectName = freeCadObjectKey(obj);
+  const constraintIndex = Number(constraint.index) || 0;
+  const id = `freecad-constraint-name-${safeDomId(objectName)}-${safeDomId(constraintIndex)}`;
+  const activeAvailable = constraint.active !== undefined;
+  const drivingAvailable = constraint.driving !== undefined;
+  const issueConstraints = freeCadSketchIssueConstraintIndexes(objectName);
+  const severity = issueConstraints.has(Number(constraint.index)) ? "error" : freeCadConstraintSeverity(constraint, editMode);
+  const glyphLabel = `${freeCadConstraintGlyphText(constraint)} #${constraintIndex}`;
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchConstraintEditor"))} #${escapeHtml(constraint.index)}</p>
+    <div class="constraint-glyph-card ${severity}">
+      <div class="constraint-glyph-header">
+        <span class="constraint-glyph-mark">${escapeHtml(freeCadConstraintGlyphText(constraint))}</span>
+        <div class="constraint-glyph-copy">
+          <strong>${escapeHtml(glyphLabel)} ${escapeHtml(constraint.type || "Constraint")}</strong>
+          <span>${escapeHtml(freeCadConstraintText(constraint) || t("notAvailable"))}</span>
+        </div>
+      </div>
+      ${renderFreeCadConstraintRefChips(obj, constraint, editMode)}
+      ${renderFreeCadSketchConstraintGlyphActions(obj, constraint, editMode)}
+    </div>
+    <div class="param-row">
+      <label for="${escapeHtml(id)}">${escapeHtml(t("constraintName"))}</label>
+      <input class="param-input" id="${escapeHtml(id)}" type="text" value="${escapeHtml(constraint.name || "")}" onchange="commitFreeCadSketchConstraintName(${escapeHtml(jsString(objectName))}, ${constraintIndex}, this.value)" />
+      <span class="unit"></span>
+    </div>
+    <div class="feature-actions">
+      ${activeAvailable ? `<label class="typed-action-toggle"><input type="checkbox" ${constraint.active !== false ? "checked" : ""} onchange="commitFreeCadSketchConstraintState(${escapeHtml(jsString(objectName))}, ${constraintIndex}, 'active', this.checked)" /> ${escapeHtml(t("constraintActive"))}</label>` : ""}
+      ${drivingAvailable ? `<label class="typed-action-toggle"><input type="checkbox" ${constraint.driving === false ? "checked" : ""} onchange="commitFreeCadSketchConstraintState(${escapeHtml(jsString(objectName))}, ${constraintIndex}, 'reference', this.checked)" /> ${escapeHtml(t("constraintReference"))}</label>` : ""}
+      <button class="typed-action-button" type="button" onclick="removeFreeCadSketchConstraint(${escapeHtml(jsString(objectName))}, ${constraintIndex})">${icon("trash")} ${escapeHtml(t("removeConstraint"))}</button>
+    </div>`;
+}
+
+function freeCadSketchPointPositionForRole(role) {
+  const key = normalizeFreeCadToken(role);
+  if (key === "start" || key === "startpoint") return 1;
+  if (key === "end" || key === "endpoint") return 2;
+  if (key === "center" || key === "centre" || key === "location") return 3;
+  return 1;
+}
+
+function freeCadSketchPointRef(objectName, geometryIndex, pointRole) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj) || !pointRole) return null;
+  const geometry = freeCadSketchGeometryByIndex(obj, geometryIndex);
+  const point = freeCadTriplet(geometry?.[pointRole]);
+  if (!geometry || !point) return null;
+  return {
+    sketchName: freeCadObjectKey(obj),
+    geometryIndex: Number(geometry.index),
+    pointRole,
+    pointPos: freeCadSketchPointPositionForRole(pointRole),
+    point,
+  };
+}
+
+function selectedFreeCadSketchPointRef() {
+  const selected = state.selectedFreeCadSketchElement;
+  if (!selected || selected.kind !== "geometry" || !selected.pointRole) return null;
+  return freeCadSketchPointRef(selected.sketchName, selected.index, selected.pointRole);
+}
+
+function freeCadSketchPointRefsEqual(a, b) {
+  return Boolean(a && b)
+    && normalizeFreeCadToken(a.sketchName) === normalizeFreeCadToken(b.sketchName)
+    && Number(a.geometryIndex) === Number(b.geometryIndex)
+    && normalizeFreeCadToken(a.pointRole) === normalizeFreeCadToken(b.pointRole);
+}
+
+function freeCadSketchPointStillExists(ref) {
+  return Boolean(ref && freeCadSketchPointRef(ref.sketchName, ref.geometryIndex, ref.pointRole));
+}
+
+function freeCadSketchGeometryLabel(ref) {
+  const obj = freeCadObjectByName(ref?.sketchName);
+  const geometry = obj ? freeCadSketchGeometryByIndex(obj, ref?.geometryIndex) : null;
+  if (!obj || !ref) return "";
+  return `${freeCadObjectDisplayName(obj)} #${Number(ref.geometryIndex)} ${geometry?.type || ref.geometryType || ""}`.trim();
+}
+
+function freeCadSketchElementStillExists(selected) {
+  if (!selected?.sketchName) return false;
+  const obj = freeCadObjectByName(selected.sketchName);
+  if (!obj || !freeCadObjectIsSketch(obj)) return false;
+  if (selected.kind === "constraint") return Boolean(freeCadSketchConstraintByIndex(obj, selected.index));
+  const geometry = freeCadSketchGeometryByIndex(obj, selected.index);
+  if (!geometry) return false;
+  if (selected.pointRole) return Boolean(freeCadTriplet(geometry[selected.pointRole]));
+  return true;
+}
+
+function freeCadSketchPointLabel(ref) {
+  const obj = freeCadObjectByName(ref?.sketchName);
+  if (!obj || !ref) return "";
+  return `${freeCadObjectDisplayName(obj)} #${Number(ref.geometryIndex)}.${ref.pointRole}`;
+}
+
+function renderFreeCadSketchPointEditor(obj, geometry) {
+  const selected = selectedFreeCadSketchGeometry(obj, geometry);
+  const roles = selected ? freeCadSketchPointRoles(selected) : [];
+  if (!selected || !roles.length) return "";
+  const objectName = freeCadObjectKey(obj);
+  const pointRef = selectedFreeCadSketchPointRef();
+  const anchor = freeCadSketchPointStillExists(state.sketchCoincidenceAnchor) ? state.sketchCoincidenceAnchor : null;
+  const canAddCoincident = Boolean(pointRef && anchor)
+    && normalizeFreeCadToken(anchor.sketchName) === normalizeFreeCadToken(objectName)
+    && !freeCadSketchPointRefsEqual(anchor, pointRef);
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("sketchPointEditor"))} #${escapeHtml(selected.index)}</p>
+    ${roles.map((role) => {
+      const point = freeCadTriplet(selected[role]) || [0, 0, 0];
+      return ["X", "Y", "Z"].map((axis, axisIndex) => {
+        const id = `freecad-sketch-point-${safeDomId(objectName)}-${safeDomId(selected.index)}-${safeDomId(role)}-${axis}`;
+        return `<div class="param-row">
+          <label for="${escapeHtml(id)}">${escapeHtml(role)} ${axis}</label>
+          <input class="param-input" id="${escapeHtml(id)}" type="number" step="0.5" value="${escapeHtml(formatNumber(point[axisIndex]))}" onchange="commitFreeCadSketchGeometryPoint(${escapeHtml(jsString(objectName))}, ${Number(selected.index)}, ${escapeHtml(jsString(role))}, ${axisIndex}, this.value)" />
+          <span class="unit">${escapeHtml(t("unitMm"))}</span>
+        </div>`;
+      }).join("");
+    }).join("")}
+	    <div class="feature-actions">
+	      <button class="typed-action-button" type="button" onclick="addFreeCadSketchConstraint(${escapeHtml(jsString(objectName))}, 'Horizontal', ${Number(selected.index)})">${icon("ruler")} ${escapeHtml(t("addHorizontalConstraint"))}</button>
+	      <button class="typed-action-button" type="button" onclick="addFreeCadSketchConstraint(${escapeHtml(jsString(objectName))}, 'Vertical', ${Number(selected.index)})">${icon("ruler")} ${escapeHtml(t("addVerticalConstraint"))}</button>
+	      <label class="typed-action-toggle"><input type="checkbox" ${selected.construction ? "checked" : ""} onchange="toggleFreeCadSketchGeometryConstruction(${escapeHtml(jsString(objectName))}, ${Number(selected.index)}, this.checked)" /> ${icon("layers")} ${escapeHtml(t("toggleConstruction"))}</label>
+      ${pointRef ? `<button class="typed-action-button ${freeCadSketchPointRefsEqual(anchor, pointRef) ? "active" : ""}" type="button" onclick="setFreeCadSketchCoincidenceAnchor(${escapeHtml(jsString(objectName))}, ${Number(selected.index)}, ${escapeHtml(jsString(pointRef.pointRole))})" title="${escapeHtml(freeCadSketchPointLabel(pointRef))}">${icon("pointer")} ${escapeHtml(t("setCoincidenceAnchor"))}</button>` : ""}
+	      ${anchor ? `<button class="typed-action-button" type="button" onclick="clearFreeCadSketchCoincidenceAnchor()" title="${escapeHtml(freeCadSketchPointLabel(anchor))}">${icon("pointer")} ${escapeHtml(t("clearCoincidenceAnchor"))}</button>` : ""}
+	      ${pointRef && anchor ? `<button class="typed-action-button" type="button" ${canAddCoincident ? `onclick="addFreeCadSketchCoincidentConstraint(${escapeHtml(jsString(objectName))}, ${Number(selected.index)}, ${escapeHtml(jsString(pointRef.pointRole))})"` : "disabled"} title="${escapeHtml(freeCadSketchPointLabel(anchor))}">${icon("ruler")} ${escapeHtml(t("addCoincidentConstraint"))}</button>` : ""}
+	    </div>
+	    ${renderFreeCadSketchGeometryConstraintRefs(obj, selected)}`;
 }
 
 function freeCadEditableProperties(obj) {
@@ -5573,7 +7561,10 @@ async function commitGeneratedParameter(name, rawValue) {
 }
 
 async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
-  if (!parsedPatch?.patches?.length || !state.serverSessionId || !state.activeServerVersionId) return false;
+  if (!parsedPatch?.patches?.length || !state.serverSessionId || !state.activeServerVersionId) {
+    clearFreeCadSketchDragPreview();
+    return false;
+  }
   const previous = {
     script: state.script,
     previewPng: state.previewPng,
@@ -5588,11 +7579,16 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     activeServerVersionId: state.activeServerVersionId,
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
     selectedFreeCadAssemblyJoint: state.selectedFreeCadAssemblyJoint,
+    selectedFreeCadSketchElement: state.selectedFreeCadSketchElement,
+    sketchCoincidenceAnchor: state.sketchCoincidenceAnchor,
+    sketchGeometryConstraintAnchor: state.sketchGeometryConstraintAnchor,
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
   };
 
   $("applyButton").disabled = true;
+  cancelFreeCadSketchLiveSolve();
   state.patch = { op: "patch_fcstd_document", patches: parsedPatch.patches };
+  state.sketchDryRunReview = null;
   state.exportStatus = "rendering";
   state.previewPng = null;
   setStatus("updatingPreview");
@@ -5629,6 +7625,15 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     if (state.selectedFreeCadAssemblyJoint && !freeCadAssemblyJointStillExists(state.selectedFreeCadAssemblyJoint)) {
       state.selectedFreeCadAssemblyJoint = null;
     }
+    if (state.selectedFreeCadSketchElement && !freeCadSketchElementStillExists(state.selectedFreeCadSketchElement)) {
+      state.selectedFreeCadSketchElement = null;
+    }
+    if (state.sketchCoincidenceAnchor && !freeCadSketchPointStillExists(state.sketchCoincidenceAnchor)) {
+      state.sketchCoincidenceAnchor = null;
+    }
+    if (state.sketchGeometryConstraintAnchor && !freeCadSketchGeometryRefStillExists(state.sketchGeometryConstraintAnchor)) {
+      state.sketchGeometryConstraintAnchor = null;
+    }
     state.previewPng = patched.preview_png_b64 || null;
     state.artifacts = patched.exports || {};
     state.artifactRefs = patched.artifact_refs || {};
@@ -5662,6 +7667,9 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     state.documentSummary = previous.documentSummary;
     state.selectedFreeCadSubelement = previous.selectedFreeCadSubelement;
     state.selectedFreeCadAssemblyJoint = previous.selectedFreeCadAssemblyJoint;
+    state.selectedFreeCadSketchElement = previous.selectedFreeCadSketchElement;
+    state.sketchCoincidenceAnchor = previous.sketchCoincidenceAnchor;
+    state.sketchGeometryConstraintAnchor = previous.sketchGeometryConstraintAnchor;
     state.assemblyConnectorAnchor = previous.assemblyConnectorAnchor;
     state.exportStatus = previous.exportStatus;
     state.patch = previous.patch;
@@ -5671,8 +7679,177 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     return false;
   } finally {
     $("applyButton").disabled = false;
+    clearFreeCadSketchDragPreview();
     renderAll();
   }
+}
+
+const FREECAD_SKETCH_SOLVER_PATCH_OPS = new Set([
+  "add_geometry",
+  "set_constraint_value",
+  "set_geometry_point",
+  "move_geometry",
+  "move_sketch_geometry",
+  "set_geometry_construction",
+  "toggle_geometry_construction",
+  "add_constraint",
+  "remove_constraint",
+  "set_constraint_state",
+  "add_endpoint_coincidence",
+  "solver_status",
+  "validate_sketch",
+]);
+
+function freeCadPatchAffectsSketchSolver(patch) {
+  return FREECAD_SKETCH_SOLVER_PATCH_OPS.has(String(patch?.op || ""));
+}
+
+function freeCadPatchSketchSelector(patch) {
+  const selector = patch?.sketch_selector || patch?.selector;
+  return selector && typeof selector === "object" ? selector : null;
+}
+
+function freeCadSelectorCopy(selector) {
+  if (!selector || typeof selector !== "object") return null;
+  const copy = {};
+  for (const key of ["name", "label", "type_id"]) {
+    if (selector[key]) copy[key] = selector[key];
+  }
+  return Object.keys(copy).length ? copy : null;
+}
+
+function freeCadPatchSelectorKey(selector) {
+  if (!selector || typeof selector !== "object") return "";
+  return normalizeFreeCadToken([selector.name, selector.label, selector.type_id].filter(Boolean).join("|"));
+}
+
+function freeCadPatchSketchName(parsedPatch) {
+  for (const patch of parsedPatch?.patches || []) {
+    if (!freeCadPatchAffectsSketchSolver(patch)) continue;
+    const selector = freeCadPatchSketchSelector(patch);
+    const obj = freeCadObjectByName(selector?.name || selector?.label || "");
+    if (obj && freeCadObjectIsSketch(obj)) return freeCadObjectKey(obj);
+    if (selector?.name || selector?.label) return selector.name || selector.label;
+  }
+  return "";
+}
+
+function freeCadSketchPreviewPatch(parsedPatch) {
+  const patches = (parsedPatch?.patches || []).map((patch) => {
+    return freeCadPatchAffectsSketchSolver(patch) && patch.solve === undefined ? { ...patch, solve: true } : { ...patch };
+  });
+  const validated = new Set();
+  for (const patch of patches) {
+    if (patch.op === "validate_sketch") {
+      const key = freeCadPatchSelectorKey(freeCadPatchSketchSelector(patch));
+      if (key) validated.add(key);
+    }
+  }
+  for (const patch of patches.slice()) {
+    if (!freeCadPatchAffectsSketchSolver(patch)) continue;
+    const selector = freeCadSelectorCopy(freeCadPatchSketchSelector(patch));
+    const key = freeCadPatchSelectorKey(selector);
+    if (!selector || !key || validated.has(key)) continue;
+    patches.push({ op: "validate_sketch", selector, solve: true });
+    validated.add(key);
+  }
+  return { ...parsedPatch, patches };
+}
+
+async function previewFreeCadDocumentPatch(parsedPatch, userInstruction, options = {}) {
+  if (!parsedPatch?.patches?.length || !state.serverSessionId || !state.activeServerVersionId) {
+    return {
+      ok: false,
+      error: "FreeCAD document state is not ready for solver preview",
+      dry_run: true,
+      would_create_version: false,
+    };
+  }
+  const previewPatch = freeCadSketchPreviewPatch(parsedPatch);
+  const quiet = options.quiet === true;
+  if (!quiet) {
+    $("applyButton").disabled = true;
+    setStatus("checkingSketchSolver");
+    renderAll();
+  }
+  try {
+    const preview = await fetchJson("/api/freecad/document/patch", {
+      session_id: state.serverSessionId,
+      version_id: state.activeServerVersionId,
+      patches: previewPatch.patches,
+      user_instruction: userInstruction,
+      dry_run: true,
+    });
+    const willNotCreateVersion = preview.would_create_version === false;
+    return { ...preview, would_create_version: willNotCreateVersion ? false : preview.would_create_version };
+  } finally {
+    if (!quiet) $("applyButton").disabled = false;
+  }
+}
+
+function storeFreeCadSketchDryRunReview(parsedPatch, detail, preview, issues = null) {
+  const resolvedIssues = Array.isArray(issues) ? issues : freeCadSketchPreviewIssues(preview);
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDryRunReview = {
+    schema: "freecad.sketch_solver_preview/v1",
+    sketchName: freeCadPatchSketchName(parsedPatch) || resolvedIssues.find((issue) => issue.sketchName)?.sketchName || state.selectedFreeCadObjectName,
+    detail: detail || freeCadPatchDetail(parsedPatch),
+    patch: parsedPatch,
+    preview,
+    issues: resolvedIssues,
+  };
+  persistWorkbenchSession();
+  return state.sketchDryRunReview;
+}
+
+async function previewAndCommitFreeCadDocumentPatch(parsedPatch, userInstruction) {
+  if (!parsedPatch?.patches?.some(freeCadPatchAffectsSketchSolver)) {
+    return applyFreeCadDocumentPatch(parsedPatch, userInstruction);
+  }
+  try {
+    const preview = await previewFreeCadDocumentPatch(parsedPatch, userInstruction);
+    const issues = freeCadSketchPreviewIssues(preview);
+    if (preview.ok === false || freeCadSketchPreviewBlocksCommit(preview)) {
+      const review = storeFreeCadSketchDryRunReview(parsedPatch, userInstruction, preview, issues);
+      setStatus("sketchDryRunBlocked");
+      log(t(preview.ok === false ? "log.sketchDryRunFailed" : "log.sketchDryRunBlocked", {
+        message: freeCadSketchDryRunReviewMessage(review),
+      }));
+      renderAll();
+      return false;
+    }
+    clearFreeCadSketchDryRunReview({ clearDragPreview: false, persist: false, render: false });
+    log(t("log.sketchDryRunOk", { name: parsedPatch.name || freeCadPatchSketchName(parsedPatch) || t("freecadScript") }));
+    return applyFreeCadDocumentPatch(parsedPatch, userInstruction);
+  } catch (error) {
+    const preview = { ok: false, error: error.message, dry_run: true, would_create_version: false };
+    const review = storeFreeCadSketchDryRunReview(parsedPatch, userInstruction, preview);
+    setStatus("sketchDryRunBlocked");
+    log(t("log.sketchDryRunFailed", { message: freeCadSketchDryRunReviewMessage(review) }));
+    renderAll();
+    return false;
+  }
+}
+
+async function commitFreeCadSketchDryRunReview() {
+  const review = state.sketchDryRunReview;
+  if (!review?.patch?.patches?.length) return false;
+  const patch = review.patch;
+  const detail = review.detail || freeCadPatchDetail(patch);
+  clearFreeCadSketchDryRunReview({ clearDragPreview: false, persist: false, render: false });
+  return applyFreeCadDocumentPatch(patch, detail);
+}
+
+async function resolveFreeCadSketchDryRunConstraint(constraintIndex, action) {
+  const review = state.sketchDryRunReview;
+  const sketchName = review?.sketchName || state.selectedFreeCadObjectName;
+  const index = Number(constraintIndex);
+  if (!sketchName || !Number.isFinite(index)) return false;
+  clearFreeCadSketchDryRunReview({ persist: false, render: false });
+  if (action === "reference") {
+    return commitFreeCadSketchConstraintState(sketchName, index, "reference", true);
+  }
+  return commitFreeCadSketchConstraintState(sketchName, index, "active", false);
 }
 
 async function applyPatches(patches, label, detail) {
@@ -5685,6 +7862,12 @@ async function applyPatches(patches, label, detail) {
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
+  state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   state.assemblyConnectorAnchor = null;
   setStatus("applyingPatch");
   try {
@@ -5752,6 +7935,9 @@ function showParametricDesign() {
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   state.selectionMode = "feature";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   renderAll();
@@ -5764,12 +7950,18 @@ function showGeneratedModel() {
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
   state.assemblyConnectorAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   if (freeCadSelectionAvailable()) state.selectionMode = "object";
   renderAll();
 }
 
 function showGeneratedParameters() {
   state.previewMode = "generated";
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   renderAll();
   const first = state.generatedParameters?.[0];
   if (first) focusGeneratedParameter(first.name);
@@ -5781,6 +7973,12 @@ function focusGeneratedParameter(name) {
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
+  state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   state.assemblyConnectorAnchor = null;
   renderAll();
   const input = $(`generated-param-${safeDomId(name)}`);
@@ -5799,6 +7997,11 @@ function selectFreeCadObject(name) {
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
   state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   if (freeCadSelectionAvailable()) state.selectionMode = "object";
   log(t("log.selectedFreeCadObject", { name: freeCadObjectDisplayName(obj) }));
   renderAll();
@@ -5826,6 +8029,11 @@ function selectFreeCadSubelement(objectName, reference, kind, stableId = "", met
   };
   state.selectedFreeCadAssemblyJoint = null;
   state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   log(t("log.selectedFreeCadSubelement", {
     kind: kind || "subelement",
     name: freeCadObjectDisplayName(obj),
@@ -5834,22 +8042,48 @@ function selectFreeCadSubelement(objectName, reference, kind, stableId = "", met
   renderAll();
 }
 
-function selectFreeCadSketchElement(sketchName, kind, index) {
+function selectFreeCadSketchElement(sketchName, kind, index, pointRole = "", options = {}) {
   const obj = freeCadObjectByName(sketchName);
-  if (!obj || !freeCadObjectIsSketch(obj)) return;
+  if (!obj || !freeCadObjectIsSketch(obj)) return false;
   const numericIndex = Number(index);
   state.previewMode = "generated";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadAssemblyJoint = null;
+  if (state.sketchCoincidenceAnchor && normalizeFreeCadToken(state.sketchCoincidenceAnchor.sketchName) !== normalizeFreeCadToken(freeCadObjectKey(obj))) {
+    state.sketchCoincidenceAnchor = null;
+  }
+  if (state.sketchGeometryConstraintAnchor && normalizeFreeCadToken(state.sketchGeometryConstraintAnchor.sketchName) !== normalizeFreeCadToken(freeCadObjectKey(obj))) {
+    state.sketchGeometryConstraintAnchor = null;
+  }
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDragPreview = null;
+  if (options.preserveDryRunReview !== true && !freeCadSketchDryRunReviewAppliesTo(freeCadObjectKey(obj))) {
+    state.sketchDryRunReview = null;
+  }
   state.selectedFreeCadSketchElement = {
     sketchName: freeCadObjectKey(obj),
     kind: kind || "geometry",
     index: Number.isFinite(numericIndex) ? numericIndex : 0,
+    pointRole: pointRole || "",
   };
   log(`${freeCadObjectDisplayName(obj)} ${kind || "sketch"} #${state.selectedFreeCadSketchElement.index}`);
-  renderAll();
+  persistWorkbenchSession();
+  if (options.render !== false) renderAll();
+  return true;
+}
+
+function selectFreeCadSketchConstraintReference(sketchName, constraintIndex, geometryIndex, pointRole = "") {
+  const obj = freeCadObjectByName(sketchName);
+  const geometry = freeCadSketchGeometryByIndex(obj, geometryIndex);
+  if (!obj || !freeCadObjectIsSketch(obj) || !geometry) return false;
+  const role = pointRole && freeCadTriplet(geometry?.[pointRole]) ? pointRole : "";
+  const selected = selectFreeCadSketchElement(sketchName, "geometry", geometryIndex, role, { preserveDryRunReview: true });
+  if (selected) {
+    log(`${freeCadObjectDisplayName(obj)} ${t("constraintReferences")} #${Number(constraintIndex)} -> #${Number(geometryIndex)}${role ? `.${role}` : ""}`);
+  }
+  return selected;
 }
 
 async function validateFreeCadSketch(objectName) {
@@ -5863,6 +8097,384 @@ async function validateFreeCadSketch(objectName) {
       solve: true,
     }],
     name: `${freeCadObjectDisplayName(obj)}.validateSketch`,
+  };
+  try {
+    const preview = await previewFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+    const issues = freeCadSketchPreviewIssues(preview);
+    if (preview.ok === false || issues.length) {
+      const review = storeFreeCadSketchDryRunReview(patch, freeCadPatchDetail(patch), preview, issues);
+      setStatus("sketchDryRunBlocked");
+      log(t(preview.ok === false ? "log.sketchDryRunFailed" : "log.sketchDryRunBlocked", {
+        message: freeCadSketchDryRunReviewMessage(review),
+      }));
+      renderAll();
+      return false;
+    }
+    if (preview.document_summary) state.documentSummary = preview.document_summary;
+    clearFreeCadSketchDryRunReview({ clearDragPreview: false, persist: false, render: false });
+    log(t("log.sketchDryRunOk", { name: patch.name }));
+    setStatus("previewExportReady");
+    renderAll();
+    return true;
+  } catch (error) {
+    const preview = { ok: false, error: error.message, dry_run: true, would_create_version: false };
+    const review = storeFreeCadSketchDryRunReview(patch, freeCadPatchDetail(patch), preview);
+    setStatus("sketchDryRunBlocked");
+    log(t("log.sketchDryRunFailed", { message: freeCadSketchDryRunReviewMessage(review) }));
+    renderAll();
+    return false;
+  }
+}
+
+async function addFreeCadSketchConstraintPayload(objectName, constraint, nameSuffix, selectionIndex = null, pointRole = "") {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj) || !constraint?.type) return false;
+  const fallbackIndex = Number.isFinite(Number(selectionIndex))
+    ? Number(selectionIndex)
+    : Number.isFinite(Number(constraint.first))
+    ? Number(constraint.first)
+    : 0;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "geometry",
+    index: fallbackIndex,
+    pointRole: pointRole || "",
+  };
+  const patch = {
+    patches: [{
+      op: "add_constraint",
+      selector: freeCadObjectSelector(obj),
+      constraint,
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.addConstraint:${nameSuffix || constraint.type}`,
+  };
+  return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function addFreeCadSketchConstraint(objectName, constraintType, geometryIndex) {
+  if (!constraintType || !Number.isFinite(Number(geometryIndex))) return false;
+  return addFreeCadSketchConstraintPayload(
+    objectName,
+    { type: constraintType, first: Number(geometryIndex) },
+    constraintType,
+    Number(geometryIndex)
+  );
+}
+
+function setFreeCadSketchGeometryConstraintAnchor(objectName, geometryIndex) {
+  const ref = freeCadSketchGeometryRef(objectName, geometryIndex);
+  if (!ref) return false;
+  state.selectedFreeCadObjectName = ref.sketchName;
+  state.selectedFreeCadSketchElement = {
+    sketchName: ref.sketchName,
+    kind: "geometry",
+    index: ref.geometryIndex,
+    pointRole: "",
+  };
+  state.sketchGeometryConstraintAnchor = ref;
+  persistWorkbenchSession();
+  renderAll();
+  return true;
+}
+
+function clearFreeCadSketchGeometryConstraintAnchor() {
+  state.sketchGeometryConstraintAnchor = null;
+  persistWorkbenchSession();
+  renderAll();
+}
+
+async function addFreeCadSketchRadiusConstraint(objectName, constraintType, geometryIndex) {
+  const obj = freeCadObjectByName(objectName);
+  const geometry = freeCadSketchGeometryByIndex(obj, geometryIndex);
+  if (!obj || !freeCadObjectIsSketch(obj) || !geometry || !constraintType) return false;
+  const value = freeCadSketchConstraintNumericValue(
+    constraintType,
+    freeCadSketchGeometryRadiusValue(geometry, constraintType)
+  );
+  if (value === null) return false;
+  return addFreeCadSketchConstraintPayload(
+    objectName,
+    { type: constraintType, first: Number(geometry.index), value },
+    `${constraintType}:#${geometry.index}`,
+    Number(geometry.index)
+  );
+}
+
+async function addFreeCadSketchPairConstraint(objectName, constraintType, geometryIndex) {
+  const anchor = freeCadSketchGeometryRefStillExists(state.sketchGeometryConstraintAnchor)
+    ? state.sketchGeometryConstraintAnchor
+    : null;
+  const target = freeCadSketchGeometryRef(objectName, geometryIndex);
+  if (!anchor || !target || !constraintType) return false;
+  if (normalizeFreeCadToken(anchor.sketchName) !== normalizeFreeCadToken(target.sketchName)) return false;
+  if (freeCadSketchGeometryRefsEqual(anchor, target)) return false;
+  return addFreeCadSketchConstraintPayload(
+    objectName,
+    { type: constraintType, first: Number(anchor.geometryIndex), second: Number(target.geometryIndex) },
+    `${constraintType}:#${anchor.geometryIndex}:#${target.geometryIndex}`,
+    Number(target.geometryIndex)
+  );
+}
+
+async function addFreeCadSketchPointDistanceConstraint(objectName, constraintType, geometryIndex, pointRole) {
+  const anchor = freeCadSketchPointStillExists(state.sketchCoincidenceAnchor)
+    ? state.sketchCoincidenceAnchor
+    : null;
+  const target = freeCadSketchPointRef(objectName, geometryIndex, pointRole);
+  if (!anchor || !target || !constraintType) return false;
+  if (normalizeFreeCadToken(anchor.sketchName) !== normalizeFreeCadToken(target.sketchName)) return false;
+  if (freeCadSketchPointRefsEqual(anchor, target)) return false;
+  const value = freeCadSketchConstraintNumericValue(
+    constraintType,
+    freeCadSketchPointDistance(anchor, target, constraintType)
+  );
+  if (value === null) return false;
+  return addFreeCadSketchConstraintPayload(
+    objectName,
+    {
+      type: constraintType,
+      first: Number(anchor.geometryIndex),
+      first_pos: Number(anchor.pointPos),
+      second: Number(target.geometryIndex),
+      second_pos: Number(target.pointPos),
+      value,
+    },
+    `${constraintType}:#${anchor.geometryIndex}.${anchor.pointRole}:#${target.geometryIndex}.${target.pointRole}`,
+    Number(target.geometryIndex),
+    target.pointRole
+  );
+}
+
+async function addFreeCadSketchPointOnObjectConstraint(objectName, geometryIndex, pointRole) {
+  const target = freeCadSketchPointRef(objectName, geometryIndex, pointRole);
+  const anchor = freeCadSketchGeometryRefStillExists(state.sketchGeometryConstraintAnchor)
+    ? state.sketchGeometryConstraintAnchor
+    : null;
+  if (!target || !anchor) return false;
+  if (normalizeFreeCadToken(anchor.sketchName) !== normalizeFreeCadToken(target.sketchName)) return false;
+  if (Number(anchor.geometryIndex) === Number(target.geometryIndex)) return false;
+  return addFreeCadSketchConstraintPayload(
+    objectName,
+    {
+      type: "PointOnObject",
+      first: Number(target.geometryIndex),
+      first_pos: Number(target.pointPos),
+      second: Number(anchor.geometryIndex),
+    },
+    `PointOnObject:#${target.geometryIndex}.${target.pointRole}:#${anchor.geometryIndex}`,
+    Number(target.geometryIndex),
+    target.pointRole
+  );
+}
+
+async function removeFreeCadSketchConstraint(objectName, constraintIndex) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj) || !Number.isFinite(Number(constraintIndex))) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "constraint",
+    index: Number(constraintIndex),
+    pointRole: "",
+  };
+  const patch = {
+    patches: [{
+      op: "remove_constraint",
+      selector: freeCadObjectSelector(obj),
+      constraint_index: Number(constraintIndex),
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.removeConstraint:#${constraintIndex}`,
+  };
+  return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadSketchConstraintState(objectName, constraintIndex, field, rawValue) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj) || !Number.isFinite(Number(constraintIndex)) || !field) return false;
+  const constraint = freeCadSketchConstraintByIndex(obj, constraintIndex);
+  if (!constraint) return false;
+  const patchItem = {
+    op: "set_constraint_state",
+    selector: freeCadObjectSelector(obj),
+    constraint_index: Number(constraintIndex),
+    solve: true,
+  };
+  if (field === "name" || field === "new_name") {
+    patchItem.new_name = String(rawValue ?? "");
+  } else if (field === "reference") {
+    patchItem.reference = Boolean(rawValue);
+  } else if (field === "active" || field === "driving" || field === "virtual_space") {
+    patchItem[field] = Boolean(rawValue);
+  } else {
+    return false;
+  }
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "constraint",
+    index: Number(constraintIndex),
+    pointRole: "",
+  };
+  const patch = {
+    patches: [patchItem],
+    name: `${freeCadObjectDisplayName(obj)}.constraint#${constraintIndex}.${field}`,
+  };
+  cancelFreeCadSketchLiveSolve();
+  state.sketchDryRunReview = null;
+  return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadSketchConstraintName(objectName, constraintIndex, rawValue) {
+  return commitFreeCadSketchConstraintState(objectName, constraintIndex, "new_name", rawValue);
+}
+
+function setFreeCadSketchCoincidenceAnchor(objectName, geometryIndex, pointRole) {
+  const ref = freeCadSketchPointRef(objectName, geometryIndex, pointRole);
+  if (!ref) return false;
+  state.selectedFreeCadObjectName = ref.sketchName;
+  state.selectedFreeCadSketchElement = {
+    sketchName: ref.sketchName,
+    kind: "geometry",
+    index: ref.geometryIndex,
+    pointRole: ref.pointRole,
+  };
+  state.sketchCoincidenceAnchor = ref;
+  persistWorkbenchSession();
+  renderAll();
+  return true;
+}
+
+function clearFreeCadSketchCoincidenceAnchor() {
+  state.sketchCoincidenceAnchor = null;
+  persistWorkbenchSession();
+  renderAll();
+}
+
+async function addFreeCadSketchCoincidentConstraint(objectName, geometryIndex, pointRole) {
+  const obj = freeCadObjectByName(objectName);
+  const anchor = freeCadSketchPointStillExists(state.sketchCoincidenceAnchor) ? state.sketchCoincidenceAnchor : null;
+  const target = freeCadSketchPointRef(objectName, geometryIndex, pointRole);
+  if (!obj || !freeCadObjectIsSketch(obj) || !anchor || !target) return false;
+  if (normalizeFreeCadToken(anchor.sketchName) !== normalizeFreeCadToken(target.sketchName)) return false;
+  if (freeCadSketchPointRefsEqual(anchor, target)) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "geometry",
+    index: target.geometryIndex,
+    pointRole: target.pointRole,
+  };
+  const patch = {
+    patches: [{
+      op: "add_endpoint_coincidence",
+      selector: freeCadObjectSelector(obj),
+      first: {
+        geometry_index: anchor.geometryIndex,
+        point_role: anchor.pointRole,
+      },
+      second: {
+        geometry_index: target.geometryIndex,
+        point_role: target.pointRole,
+      },
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.coincident:#${anchor.geometryIndex}.${anchor.pointRole}:#${target.geometryIndex}.${target.pointRole}`,
+  };
+  const ok = await previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+  if (ok) {
+    state.sketchCoincidenceAnchor = null;
+    persistWorkbenchSession();
+    renderAll();
+  }
+  return ok;
+}
+
+async function toggleFreeCadSketchGeometryConstruction(objectName, geometryIndex, construction = null) {
+  const obj = freeCadObjectByName(objectName);
+  const geometry = freeCadSketchGeometryByIndex(obj, geometryIndex);
+  if (!obj || !freeCadObjectIsSketch(obj) || !geometry) return false;
+  const nextConstruction = construction === null ? !Boolean(geometry.construction) : Boolean(construction);
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "geometry",
+    index: Number(geometry.index),
+    pointRole: state.selectedFreeCadSketchElement?.pointRole || "",
+  };
+  const patch = {
+    patches: [{
+      op: "set_geometry_construction",
+      selector: freeCadObjectSelector(obj),
+      geometry_index: Number(geometry.index),
+      construction: nextConstruction,
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.construction:#${geometry.index}`,
+  };
+  return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function freeCadSketchGeometryBounds(obj) {
+  const sketch = obj?.sketch || {};
+  const points = [];
+  for (const geometry of Array.isArray(sketch.geometry) ? sketch.geometry : []) {
+    for (const key of ["start", "end", "center", "location", "point"]) {
+      const point = freeCadTriplet(geometry?.[key]);
+      if (point) points.push(point);
+    }
+  }
+  if (!points.length) return { min: [0, 0, 0], max: [40, 30, 0], size: [40, 30, 0] };
+  const min = [0, 1, 2].map((axis) => Math.min(...points.map((point) => point[axis])));
+  const max = [0, 1, 2].map((axis) => Math.max(...points.map((point) => point[axis])));
+  const size = [0, 1, 2].map((axis) => Math.max(10, max[axis] - min[axis]));
+  return { min, max, size };
+}
+
+function freeCadSketchPrimitiveGeometry(obj, kind, anchorPoint = null) {
+  const bounds = freeCadSketchGeometryBounds(obj);
+  const anchor = freeCadTriplet(anchorPoint);
+  const origin = anchor || [
+    bounds.min[0] + bounds.size[0] * 0.15,
+    bounds.max[1] + Math.max(10, bounds.size[1] * 0.2),
+    0,
+  ];
+  const span = Math.max(8, Math.min(40, Math.max(bounds.size[0], bounds.size[1]) * 0.35));
+  if (kind === "circle") {
+    return { type: "circle", center: origin, radius: span * 0.5 };
+  }
+  if (kind === "arc") {
+    return {
+      type: "arc",
+      center: origin,
+      radius: span * 0.5,
+      start_angle_degrees: 15,
+      end_angle_degrees: 145,
+    };
+  }
+  return {
+    type: "line",
+    start: origin,
+    end: [origin[0] + span, origin[1], origin[2]],
+  };
+}
+
+async function addFreeCadSketchPrimitive(objectName, kind, anchorPoint = null) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj)) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  const geometry = freeCadSketchPrimitiveGeometry(obj, kind, anchorPoint);
+  const patch = {
+    patches: [{
+      op: "add_geometry",
+      selector: freeCadObjectSelector(obj),
+      geometry,
+      auto_constraints: true,
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.addGeometry:${kind}`,
   };
   return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
 }
@@ -6210,6 +8822,11 @@ function selectFreeCadAssemblyJoint(assemblyName, jointName) {
   };
   state.selectedFreeCadSubelement = null;
   state.selectedFreeCadSketchElement = null;
+  state.sketchCoincidenceAnchor = null;
+  state.sketchGeometryConstraintAnchor = null;
+  state.sketchDragPreview = null;
+  state.sketchLiveSolve = null;
+  state.sketchDryRunReview = null;
   renderAll();
   return true;
 }
@@ -6376,7 +8993,67 @@ async function commitFreeCadConstraintValue(objectName, constraintIndex, rawValu
   if (!obj || !Number.isFinite(value) || !Number.isFinite(Number(constraintIndex))) return false;
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   const patch = freeCadConstraintPatchResult(obj, Number(constraintIndex), value);
+  if (freeCadObjectIsSketch(obj)) {
+    return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+  }
   return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+function freeCadSketchGeometryPointPatch(objectName, geometryIndex, pointRole, pointValue) {
+  const obj = freeCadObjectByName(objectName);
+  const point = freeCadTriplet(pointValue);
+  if (!obj || !freeCadObjectIsSketch(obj) || !point || !Number.isFinite(Number(geometryIndex))) return null;
+  return {
+    patches: [{
+      op: "set_geometry_point",
+      selector: freeCadObjectSelector(obj),
+      geometry_index: Number(geometryIndex),
+      point_role: pointRole,
+      value: point,
+      solve: true,
+    }],
+    name: `${freeCadObjectDisplayName(obj)}.geometry#${geometryIndex}.${pointRole}`,
+    value: point.map(formatNumber).join(", "),
+    unit: t("unitMm"),
+  };
+}
+
+function selectFreeCadSketchGeometryPointForPatch(objectName, geometryIndex, pointRole) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj || !freeCadObjectIsSketch(obj) || !Number.isFinite(Number(geometryIndex))) return false;
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSketchElement = {
+    sketchName: freeCadObjectKey(obj),
+    kind: "geometry",
+    index: Number(geometryIndex),
+    pointRole,
+  };
+  return true;
+}
+
+async function commitFreeCadSketchGeometryPointValue(objectName, geometryIndex, pointRole, pointValue) {
+  const patch = freeCadSketchGeometryPointPatch(objectName, geometryIndex, pointRole, pointValue);
+  if (!patch || !selectFreeCadSketchGeometryPointForPatch(objectName, geometryIndex, pointRole)) return false;
+  return applyFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function previewAndCommitFreeCadSketchGeometryPointValue(objectName, geometryIndex, pointRole, pointValue) {
+  const patch = freeCadSketchGeometryPointPatch(objectName, geometryIndex, pointRole, pointValue);
+  if (!patch || !selectFreeCadSketchGeometryPointForPatch(objectName, geometryIndex, pointRole)) return false;
+  return previewAndCommitFreeCadDocumentPatch(patch, freeCadPatchDetail(patch));
+}
+
+async function commitFreeCadSketchGeometryPoint(objectName, geometryIndex, pointRole, axisIndex, rawValue) {
+  const obj = freeCadObjectByName(objectName);
+  const value = Number(rawValue);
+  if (!obj || !freeCadObjectIsSketch(obj) || !Number.isFinite(value) || !Number.isFinite(Number(geometryIndex))) return false;
+  const geometry = (Array.isArray(obj.sketch?.geometry) ? obj.sketch.geometry : [])
+    .find((item) => Number(item.index) === Number(geometryIndex));
+  const point = freeCadTriplet(geometry?.[pointRole]);
+  const numericAxis = Number(axisIndex);
+  if (!geometry || !point || numericAxis < 0 || numericAxis > 2) return false;
+  point[numericAxis] = value;
+  return previewAndCommitFreeCadSketchGeometryPointValue(objectName, geometryIndex, pointRole, point);
 }
 
 function freeCadPatchHasValue(parsedPatch) {
@@ -7156,10 +9833,37 @@ window.focusGeneratedParameter = focusGeneratedParameter;
 window.selectFreeCadObject = selectFreeCadObject;
 window.selectFreeCadSubelement = selectFreeCadSubelement;
 window.selectFreeCadSketchElement = selectFreeCadSketchElement;
+window.selectFreeCadSketchConstraintReference = selectFreeCadSketchConstraintReference;
+window.focusFreeCadSketchConstraintReferences = focusFreeCadSketchConstraintReferences;
 window.validateFreeCadSketch = validateFreeCadSketch;
+window.setFreeCadSketchTool = setFreeCadSketchTool;
+window.setFreeCadSketchSnap = setFreeCadSketchSnap;
+window.addFreeCadSketchPrimitive = addFreeCadSketchPrimitive;
+window.addFreeCadSketchConstraint = addFreeCadSketchConstraint;
+window.addFreeCadSketchConstraintPayload = addFreeCadSketchConstraintPayload;
+window.setFreeCadSketchGeometryConstraintAnchor = setFreeCadSketchGeometryConstraintAnchor;
+window.clearFreeCadSketchGeometryConstraintAnchor = clearFreeCadSketchGeometryConstraintAnchor;
+window.addFreeCadSketchRadiusConstraint = addFreeCadSketchRadiusConstraint;
+window.addFreeCadSketchPairConstraint = addFreeCadSketchPairConstraint;
+window.addFreeCadSketchPointDistanceConstraint = addFreeCadSketchPointDistanceConstraint;
+window.addFreeCadSketchPointOnObjectConstraint = addFreeCadSketchPointOnObjectConstraint;
+window.removeFreeCadSketchConstraint = removeFreeCadSketchConstraint;
+window.commitFreeCadSketchConstraintState = commitFreeCadSketchConstraintState;
+window.commitFreeCadSketchConstraintName = commitFreeCadSketchConstraintName;
+window.previewFreeCadDocumentPatch = previewFreeCadDocumentPatch;
+window.clearFreeCadSketchDryRunReview = clearFreeCadSketchDryRunReview;
+window.commitFreeCadSketchDryRunReview = commitFreeCadSketchDryRunReview;
+window.resolveFreeCadSketchDryRunConstraint = resolveFreeCadSketchDryRunConstraint;
+window.setFreeCadSketchCoincidenceAnchor = setFreeCadSketchCoincidenceAnchor;
+window.clearFreeCadSketchCoincidenceAnchor = clearFreeCadSketchCoincidenceAnchor;
+window.addFreeCadSketchCoincidentConstraint = addFreeCadSketchCoincidentConstraint;
+window.toggleFreeCadSketchGeometryConstruction = toggleFreeCadSketchGeometryConstruction;
 window.commitFreeCadObjectProperty = commitFreeCadObjectProperty;
 window.commitFreeCadPlacementComponent = commitFreeCadPlacementComponent;
 window.commitFreeCadConstraintValue = commitFreeCadConstraintValue;
+window.commitFreeCadSketchGeometryPointValue = commitFreeCadSketchGeometryPointValue;
+window.previewAndCommitFreeCadSketchGeometryPointValue = previewAndCommitFreeCadSketchGeometryPointValue;
+window.commitFreeCadSketchGeometryPoint = commitFreeCadSketchGeometryPoint;
 window.rollbackToServerVersion = rollbackToServerVersion;
 window.toggleLocale = toggleLocale;
 

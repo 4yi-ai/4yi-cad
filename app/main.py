@@ -55,6 +55,44 @@ from app.session_store import SessionStore, SqliteSessionStore
 # scanner classify this one container as a fullstack service, not an undeployed
 # standalone frontend.
 _INDEX_HTML = Path(__file__).resolve().parents[1] / "index.html"
+DEFAULT_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
+FREECAD_IMPORT_FORMATS = ("fcstd", "step", "stp", "iges", "igs", "brep")
+
+
+def _freecad_upload_max_bytes() -> int:
+    raw = (
+        os.environ.get("CAD_FREECAD_UPLOAD_MAX_BYTES")
+        or os.environ.get("FOURYI_CAD_UPLOAD_MAX_BYTES")
+        or ""
+    ).strip()
+    if not raw:
+        return DEFAULT_FREECAD_UPLOAD_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_FREECAD_UPLOAD_MAX_BYTES
+    return value if value > 0 else DEFAULT_FREECAD_UPLOAD_MAX_BYTES
+
+
+def _estimated_base64_decoded_size(data_b64: str) -> int:
+    compact = "".join(str(data_b64 or "").split())
+    if not compact:
+        return 0
+    padding = len(compact) - len(compact.rstrip("="))
+    return max(0, (len(compact) * 3) // 4 - padding)
+
+
+def _enforce_freecad_upload_size(data_b64: str, *, label: str) -> None:
+    max_bytes = _freecad_upload_max_bytes()
+    size = _estimated_base64_decoded_size(data_b64)
+    if size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"{label} is {size} bytes; max allowed is {max_bytes} bytes. "
+                "Increase CAD_FREECAD_UPLOAD_MAX_BYTES for larger private-beta files."
+            ),
+        )
 
 
 class GenerateRequest(BaseModel):
@@ -151,9 +189,17 @@ class FreeCadDocumentPatchItem(BaseModel):
         "attach_sketch",
         "add_geometry",
         "add_external_geometry",
+        "set_geometry_point",
+        "move_geometry",
+        "move_sketch_geometry",
+        "set_geometry_construction",
+        "toggle_geometry_construction",
         "add_constraint",
+        "add_endpoint_coincidence",
         "remove_constraint",
+        "set_constraint_state",
         "solver_status",
+        "validate_sketch",
         "create_assembly",
         "add_part_to_assembly",
         "remove_part_from_assembly",
@@ -205,6 +251,35 @@ class FreeCadDocumentPatchItem(BaseModel):
     external_geometries: list[dict[str, Any]] | None = Field(default=None, max_length=40)
     constraint: dict[str, Any] | None = None
     constraints: list[dict[str, Any]] | None = Field(default=None, max_length=40)
+    geometry_index: int | None = Field(default=None, ge=0)
+    geometry_indexes: list[int] | None = Field(default=None, max_length=80)
+    geometry_indices: list[int] | None = Field(default=None, max_length=80)
+    index: int | None = Field(default=None, ge=0)
+    point_role: str | None = Field(default=None, min_length=1, max_length=40)
+    role: str | None = Field(default=None, min_length=1, max_length=40)
+    point_pos: int | None = Field(default=None, ge=0)
+    first: Any = None
+    first_index: int | None = Field(default=None, ge=0)
+    first_pos: int | None = Field(default=None, ge=0)
+    second: Any = None
+    second_index: int | None = Field(default=None, ge=0)
+    second_pos: int | None = Field(default=None, ge=0)
+    third: Any = None
+    third_index: int | None = Field(default=None, ge=0)
+    third_pos: int | None = Field(default=None, ge=0)
+    args: list[Any] | None = Field(default=None, max_length=12)
+    construction: bool | None = None
+    toggle: bool | None = None
+    auto_constraints: bool | None = None
+    auto_constraint_tolerance: float | None = None
+    new_name: str | None = Field(default=None, max_length=160)
+    constraint_new_name: str | None = Field(default=None, max_length=160)
+    rename_to: str | None = Field(default=None, max_length=160)
+    active: bool | None = None
+    enabled: bool | None = None
+    driving: bool | None = None
+    virtual_space: bool | None = None
+    virtual: bool | None = None
     value: Any = None
     distance: float | None = None
     expression: str | None = Field(default=None, min_length=1, max_length=1000)
@@ -235,6 +310,15 @@ class FreeCadDocumentPatchItem(BaseModel):
     measure_type: str | None = Field(default=None, min_length=1, max_length=80)
     reference: str | None = Field(default=None, min_length=1, max_length=160)
     references: list[str] | None = Field(default=None, max_length=20)
+    stable_id: str | None = Field(default=None, max_length=200)
+    stable_ids: list[str] | None = Field(default=None, max_length=80)
+    stable_reference: str | None = Field(default=None, max_length=200)
+    stable_references: list[str] | None = Field(default=None, max_length=80)
+    stable_signature: dict[str, Any] | None = None
+    stable_signatures: list[Any] | None = Field(default=None, max_length=80)
+    signature: dict[str, Any] | str | None = None
+    signature_version: str | None = Field(default=None, max_length=80)
+    ref_history: list[Any] | None = Field(default=None, max_length=80)
     element: str | None = Field(default=None, min_length=1, max_length=160)
     subelement: str | None = Field(default=None, min_length=1, max_length=160)
     base: list[float] | None = Field(default=None, min_length=3, max_length=3)
@@ -263,6 +347,7 @@ class FreeCadDocumentPatchRequest(BaseModel):
     session_id: str | None = Field(default=None, min_length=1)
     version_id: str | None = Field(default=None, min_length=1)
     user_instruction: str | None = Field(default=None, max_length=4000)
+    dry_run: bool = False
 
 
 def _get_gateway(app: FastAPI):
@@ -424,6 +509,7 @@ def _resolve_fcstd_b64(
     resolved_version_id = version_id
 
     if fcstd_b64 is not None:
+        _enforce_freecad_upload_size(fcstd_b64, label="FCStd document")
         if session_id and version_id:
             source_version = store.get_version(session_id, version_id)
         return fcstd_b64, source_version, resolved_version_id
@@ -815,8 +901,18 @@ def create_app(
             "error": result.get("error"),
         }
 
+    @app.get("/api/freecad/upload_policy")
+    async def freecad_upload_policy():
+        max_bytes = _freecad_upload_max_bytes()
+        return {
+            "max_bytes": max_bytes,
+            "max_mb": round(max_bytes / 1024 / 1024, 2),
+            "formats": list(FREECAD_IMPORT_FORMATS),
+        }
+
     @app.post("/api/freecad/import_model")
     async def freecad_import_model(req: FreeCadImportModelRequest):
+        _enforce_freecad_upload_size(req.data_b64, label="FreeCAD import")
         res = await asyncio.to_thread(
             run_freecad_import_sandboxed,
             req.format,
@@ -1012,22 +1108,61 @@ def create_app(
             run_freecad_document_patch_sandboxed,
             patches,
             fcstd_b64,
+            dry_run=req.dry_run,
             timeout_s=180,
             cpu_seconds=120,
             address_space_mb=4096,
         )
         result = _freecad_exec_result_from_sandbox(res, "FreeCAD document patch failed")
-        patch_results = (res.result or {}).get("patch_results") if res.result else []
+        raw_result = res.result or {}
+        patch_results = raw_result.get("patch_results") if raw_result else []
         if not result.ok:
             response = _freecad_response(result, session_id=session_id)
             response["patch_results"] = patch_results or []
+            response["dry_run"] = bool(req.dry_run)
+            if req.dry_run:
+                response["would_create_version"] = False
             return response
-        inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+
+        source_version_id = source_version.id if source_version else resolved_version_id
+        source_summary = (
+            (source_version.metadata or {}).get("document_summary")
+            if source_version
+            else None
+        )
+        if req.dry_run and raw_result.get("document_summary"):
+            inspection = {
+                "ok": True,
+                "engine": "freecad",
+                "error": raw_result.get("document_summary_error"),
+                "document_summary": raw_result.get("document_summary"),
+                "freecad_version": raw_result.get("freecad_version") or result.freecad_version,
+            }
+        else:
+            inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+
+        if req.dry_run:
+            response = _freecad_response(result, session_id=session_id, version=None)
+            response.update(
+                {
+                    "dry_run": True,
+                    "would_create_version": False,
+                    "source_version_id": source_version_id,
+                    "patch_results": patch_results or [],
+                    "document_summary": inspection.get("document_summary"),
+                    "document_summary_error": inspection.get("error"),
+                }
+            )
+            if source_summary and inspection.get("ok") and inspection.get("document_summary"):
+                response["document_state_diff"] = typed_state_diff(
+                    source_summary,
+                    inspection["document_summary"],
+                )
+            return response
 
         version = None
         if session_id:
             try:
-                source_version_id = source_version.id if source_version else resolved_version_id
                 metadata = dict(source_version.metadata if source_version else {})
                 metadata.update(
                     {

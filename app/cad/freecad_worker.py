@@ -91,10 +91,13 @@ TECHDRAW_DIMENSION_TYPE = "TechDraw::DrawViewDimension"
 TECHDRAW_FALLBACK_VIEWS_PROPERTY = "FourYiTechDrawFallbackViews"
 TECHDRAW_FALLBACK_STATE_OBJECT = "FourYiTechDrawState"
 TECHDRAW_FALLBACK_PAGES_PROPERTY = "FourYiTechDrawFallbackPages"
+SKETCH_EXTERNAL_GEOMETRY_META_PROPERTY = "FourYiSketchExternalGeometryMeta"
+TOPOLOGICAL_REPAIR_REPORT_PROPERTY = "FourYiTopologyRepairReport"
 FEATURE_FALLBACK_STATE_OBJECT = "FourYiFeatureState"
 FEATURE_FALLBACK_FEATURES_PROPERTY = "FourYiFallbackFeatures"
 ASSEMBLY_FALLBACK_STATE_OBJECT = "FourYiAssemblyState"
 ASSEMBLY_FALLBACK_ASSEMBLIES_PROPERTY = "FourYiFallbackAssemblies"
+_NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE = None
 PARTDESIGN_FEATURE_TYPES = {
     PARTDESIGN_BODY_TYPE,
     "PartDesign::AdditiveBox",
@@ -212,7 +215,7 @@ SUPPORTED_TECHDRAW_PROJECTION_NAMES = {
 
 
 def emit(payload):
-    print(PREFIX + json.dumps(payload, ensure_ascii=False), flush=True)
+    print(PREFIX + json.dumps(payload, ensure_ascii=True), flush=True)
 
 
 def shape_volume(shape):
@@ -818,6 +821,88 @@ def property_summary(obj):
     return props
 
 
+SKETCH_CONSTRAINT_GLYPHS = {
+    "horizontal": "H",
+    "vertical": "V",
+    "coincident": "C",
+    "distance": "D",
+    "distancex": "DX",
+    "distancey": "DY",
+    "radius": "R",
+    "diameter": "DIA",
+    "equal": "EQ",
+    "parallel": "PAR",
+    "perpendicular": "PERP",
+    "tangent": "TAN",
+    "pointonobject": "POO",
+    "angle": "ANG",
+    "block": "LOCK",
+    "symmetric": "SYM",
+}
+
+
+def sketch_constraint_glyph(type_name):
+    token = safe_text(type_name, 80).lower().replace(" ", "").replace("_", "")
+    return SKETCH_CONSTRAINT_GLYPHS.get(token) or safe_text(type_name, 12).upper()[:6] or "C"
+
+
+def sketch_constraint_point_role(point_pos):
+    try:
+        pos = int(point_pos)
+    except Exception:
+        return ""
+    return {
+        0: "whole",
+        1: "start",
+        2: "end",
+        3: "center",
+    }.get(pos, "")
+
+
+def sketch_constraint_ref_summary(item, slot, geometry_key, point_key):
+    value = item.get(geometry_key)
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        geometry_index = value
+    elif isinstance(value, float) and value.is_integer():
+        geometry_index = int(value)
+    else:
+        return None
+    ref = {
+        "slot": slot,
+        "geometry_index": geometry_index,
+    }
+    if geometry_index < 0:
+        ref["external_or_axis"] = True
+    point_pos = item.get(point_key)
+    if isinstance(point_pos, bool):
+        point_pos = None
+    if isinstance(point_pos, (int, float)):
+        try:
+            point_pos = int(point_pos)
+            ref["point_pos"] = point_pos
+            role = sketch_constraint_point_role(point_pos)
+            if role:
+                ref["point_role"] = role
+        except Exception:
+            pass
+    return ref
+
+
+def sketch_constraint_ref_summaries(item):
+    refs = []
+    for slot, geometry_key, point_key in [
+        ("first", "first", "firstPos"),
+        ("second", "second", "secondPos"),
+        ("third", "third", "thirdPos"),
+    ]:
+        ref = sketch_constraint_ref_summary(item, slot, geometry_key, point_key)
+        if ref is not None:
+            refs.append(ref)
+    return refs
+
+
 def constraint_summary(constraint, index):
     item = {
         "index": index,
@@ -856,6 +941,15 @@ def constraint_summary(constraint, index):
                 item[attr[0].lower() + attr[1:]] = safe_value(getattr(constraint, attr))
             except Exception:
                 pass
+    item["glyph"] = sketch_constraint_glyph(item.get("type"))
+    refs = sketch_constraint_ref_summaries(item)
+    if refs:
+        item["geometry_refs"] = refs
+        item["geometry_indexes"] = sorted({
+            ref["geometry_index"]
+            for ref in refs
+            if isinstance(ref.get("geometry_index"), int) and ref.get("geometry_index") >= 0
+        })
     return item
 
 
@@ -1018,6 +1112,99 @@ def annotate_sketch_constraints(constraints, edit_mode):
     return annotated
 
 
+def sketch_constraint_geometry_refs(constraint):
+    structured_refs = constraint.get("geometry_refs") if isinstance(constraint, dict) else None
+    if isinstance(structured_refs, list):
+        refs = []
+        for ref in structured_refs:
+            if not isinstance(ref, dict):
+                continue
+            value = ref.get("geometry_index")
+            if isinstance(value, int) and value >= 0:
+                refs.append(value)
+            elif isinstance(value, float) and value.is_integer() and value >= 0:
+                refs.append(int(value))
+        if refs:
+            return sorted(set(refs))
+    refs = []
+    for key in ["first", "second", "third"]:
+        value = constraint.get(key) if isinstance(constraint, dict) else None
+        if isinstance(value, bool) or value is None:
+            continue
+        if isinstance(value, int):
+            index = value
+        elif isinstance(value, float) and value.is_integer():
+            index = int(value)
+        else:
+            continue
+        if index >= 0:
+            refs.append(index)
+    return sorted(set(refs))
+
+
+def annotate_sketch_geometry(geometries, constraints, edit_mode):
+    by_geometry = {}
+    for constraint in list(constraints or []):
+        constraint_index = constraint.get("index") if isinstance(constraint, dict) else None
+        severity = freecad_constraint_diagnostic_severity(constraint)
+        for geometry_index in sketch_constraint_geometry_refs(constraint):
+            by_geometry.setdefault(geometry_index, []).append({
+                "constraint_index": constraint_index,
+                "type": safe_text(constraint.get("type"), 80) if isinstance(constraint, dict) else "",
+                "name": safe_text(constraint.get("name"), 160) if isinstance(constraint, dict) else "",
+                "status": safe_text(constraint.get("status"), 80) if isinstance(constraint, dict) else "",
+                "solver_status": safe_text(constraint.get("solver_status"), 80) if isinstance(constraint, dict) else "",
+                "severity": severity,
+            })
+    annotated = []
+    for geometry in list(geometries or []):
+        item = dict(geometry)
+        index = item.get("index")
+        refs = by_geometry.get(index, [])
+        if refs:
+            item["constraint_indexes"] = [
+                ref.get("constraint_index")
+                for ref in refs
+                if ref.get("constraint_index") is not None
+            ]
+            item["related_constraint_count"] = len(refs)
+            diagnostics = [
+                ref
+                for ref in refs
+                if ref.get("severity") in {"error", "warning"}
+            ]
+            if diagnostics:
+                item["constraint_diagnostics"] = diagnostics[:24]
+            if any(ref.get("severity") == "error" for ref in refs):
+                item["solver_status"] = "conflicting_constraint"
+                item["diagnostic_severity"] = "error"
+            elif any(ref.get("severity") == "warning" for ref in refs):
+                item["solver_status"] = "redundant_constraint"
+                item["diagnostic_severity"] = "warning"
+        annotated.append(item)
+    return annotated
+
+
+def freecad_constraint_diagnostic_severity(constraint):
+    if not isinstance(constraint, dict):
+        return ""
+    severity = safe_text(constraint.get("diagnostic_severity"), 40)
+    if severity in {"error", "warning", "info"}:
+        return severity
+    text = "{} {} {}".format(
+        safe_text(constraint.get("status"), 80),
+        safe_text(constraint.get("solver_status"), 80),
+        safe_text(constraint.get("error"), 160),
+    ).lower()
+    if "conflict" in text or "inconsistent" in text or "over" in text:
+        return "error"
+    if "redundant" in text or "disabled" in text:
+        return "warning"
+    if "reference" in text or "virtual" in text:
+        return "info"
+    return ""
+
+
 def vector_summary(value):
     if value is None:
         return None
@@ -1090,6 +1277,7 @@ def sketch_attachment_support_summary(sketch):
 
 def sketch_external_geometry_summary(sketch):
     values = []
+    metadata = sketch_external_geometry_metadata(sketch)
     try:
         external_geometry = list(getattr(sketch, "ExternalGeometry", []) or [])
     except Exception:
@@ -1097,14 +1285,41 @@ def sketch_external_geometry_summary(sketch):
     for index, item in enumerate(external_geometry):
         try:
             obj, subelements = item
-            values.append({
+            entry = {
                 "index": index,
                 "object": object_ref(obj),
                 "subelements": [safe_text(value) for value in list(subelements or [])],
-            })
+            }
+            if index < len(metadata):
+                entry["metadata"] = metadata[index]
+            values.append(entry)
         except Exception:
             values.append({"index": index, "value": safe_value(item)})
     return values
+
+
+def sketch_external_geometry_metadata(sketch):
+    payload = json_property_value(sketch, SKETCH_EXTERNAL_GEOMETRY_META_PROPERTY)
+    if isinstance(payload, dict):
+        values = payload.get("external_geometry")
+    else:
+        values = payload
+    if not isinstance(values, list):
+        return []
+    return [item for item in values if isinstance(item, dict)]
+
+
+def save_sketch_external_geometry_metadata(sketch, entries):
+    payload = {
+        "schema": "freecad.sketch_external_geometry_refs.v1",
+        "external_geometry": [item for item in list(entries or []) if isinstance(item, dict)],
+    }
+    return set_json_property(
+        sketch,
+        SKETCH_EXTERNAL_GEOMETRY_META_PROPERTY,
+        payload,
+        "4yi Sketcher external geometry stable refs",
+    )
 
 
 def sketch_solver_status(sketch, *, solve=False):
@@ -1169,6 +1384,7 @@ def sketch_summary(obj):
     fully_constrained = solver.get("fully_constrained")
     edit_mode = sketch_edit_mode_summary(obj, constraints, solver)
     constraints = annotate_sketch_constraints(constraints, edit_mode)
+    geometries = annotate_sketch_geometry(geometries, constraints, edit_mode)
     return {
         "name": safe_text(getattr(obj, "Name", "")),
         "label": safe_text(getattr(obj, "Label", "")),
@@ -2188,13 +2404,79 @@ def techdraw_layout_diagnostics(page, views, dimensions, *, fallback=False):
     }
 
 
+def techdraw_autolayout_page(page):
+    if not isinstance(page, dict):
+        return page
+    if page.get("autolayout") is False:
+        return page
+    result = dict(page)
+    page_width = float(result.get("page_width") or 297.0)
+    page_height = float(result.get("page_height") or 210.0)
+    margin = float(result.get("margin") or 14.0)
+    title_height = float(result.get("title_block_height") or 26.0)
+    views = [dict(item) for item in list(result.get("views") or []) if isinstance(item, dict)]
+    dimensions = [dict(item) for item in list(result.get("dimensions") or []) if isinstance(item, dict)]
+    usable_width = max(20.0, page_width - margin * 2.0)
+    usable_height = max(20.0, page_height - margin * 2.0 - title_height)
+    if views:
+        columns = max(1, min(3, int(math.ceil(math.sqrt(len(views))))))
+        rows = max(1, int(math.ceil(len(views) / columns)))
+        cell_width = usable_width / columns
+        cell_height = usable_height / rows
+        for index, view in enumerate(views):
+            col = index % columns
+            row = index // columns
+            if view.get("x") is None:
+                view["x"] = round(margin + cell_width * (col + 0.5), 3)
+            if view.get("y") is None:
+                view["y"] = round(margin + cell_height * (row + 0.5), 3)
+            if view.get("scale") is None:
+                width = float(view.get("width") or cell_width * 0.74)
+                height = float(view.get("height") or cell_height * 0.74)
+                view["scale"] = round(min(cell_width * 0.78 / max(width, 1.0), cell_height * 0.78 / max(height, 1.0), 1.0), 4)
+            view["layout_slot"] = {
+                "schema": "freecad.techdraw_layout_slot.v1",
+                "row": row,
+                "column": col,
+                "columns": columns,
+                "rows": rows,
+            }
+    for index, dimension in enumerate(dimensions):
+        if dimension.get("x") is None:
+            dimension["x"] = round(margin + 12.0 + index * 18.0, 3)
+        if dimension.get("y") is None:
+            dimension["y"] = round(max(margin, page_height - title_height - 10.0 - (index % 3) * 8.0), 3)
+        dimension["layout_slot"] = {
+            "schema": "freecad.techdraw_dimension_layout_slot.v1",
+            "index": index,
+            "mode": safe_text(dimension.get("dimension_mode") or "single", 40),
+        }
+    title_block = result.get("title_block") if isinstance(result.get("title_block"), dict) else {}
+    result.update({
+        "views": views,
+        "dimensions": dimensions,
+        "layout_engine": {
+            "schema": "freecad.techdraw_layout_engine.v1",
+            "backend": "typed_autolayout",
+            "page_width": page_width,
+            "page_height": page_height,
+            "margin": margin,
+            "title_block_height": title_height,
+            "title_block_fields": sorted(title_block.keys()),
+            "view_count": len(views),
+            "dimension_count": len(dimensions),
+        },
+    })
+    return result
+
+
 def techdraw_fallback_pages(doc):
     state = load_techdraw_fallback_state(doc)
     pages = []
     for page in sorted(list(state.get("pages", {}).values()), key=lambda item: safe_text(item.get("name", ""))):
         if not isinstance(page, dict) or not page.get("name"):
             continue
-        normalized = dict(page)
+        normalized = techdraw_autolayout_page(page)
         views = list(normalized.get("views") or [])
         dimensions = list(normalized.get("dimensions") or [])
         normalized["view_count"] = len(views)
@@ -2473,6 +2755,329 @@ def topological_lineage_migration(before, after):
         "missing_refs": missing[:80],
         "added_refs": added[:80],
     }
+
+
+def topological_ref_migration_map(migration):
+    if not isinstance(migration, dict):
+        return {}
+    values = {}
+    for item in list(migration.get("migrated_refs") or []):
+        if not isinstance(item, dict):
+            continue
+        stable_id = safe_text(item.get("stable_id"), 160)
+        before = item.get("before") if isinstance(item.get("before"), dict) else {}
+        after = item.get("after") if isinstance(item.get("after"), dict) else {}
+        if not stable_id or not after.get("reference"):
+            continue
+        values[stable_id] = {
+            "stable_id": stable_id,
+            "before_reference": safe_text(before.get("reference"), 80),
+            "after_reference": safe_text(after.get("reference"), 80),
+            "before_object": before.get("object") if isinstance(before.get("object"), dict) else {},
+            "after_object": after.get("object") if isinstance(after.get("object"), dict) else {},
+            "ref_history": list(item.get("ref_history") or []),
+        }
+    return values
+
+
+def topological_ref_native_lookup(migration_map):
+    lookup = {}
+    for item in list((migration_map or {}).values()):
+        before_obj = item.get("before_object") if isinstance(item.get("before_object"), dict) else {}
+        before_ref = safe_text(item.get("before_reference"), 80)
+        if not before_ref:
+            continue
+        for key in [
+            safe_text(before_obj.get("name"), 120),
+            safe_text(before_obj.get("label"), 120),
+        ]:
+            if key:
+                lookup[(key, before_ref)] = item
+    return lookup
+
+
+def doc_object_by_ref(doc, ref):
+    if doc is None or not isinstance(ref, dict):
+        return None
+    candidates = []
+    for obj in list(getattr(doc, "Objects", []) or []):
+        if ref.get("name") and safe_text(getattr(obj, "Name", ""), 120) == safe_text(ref.get("name"), 120):
+            candidates.append(obj)
+        elif ref.get("label") and safe_text(getattr(obj, "Label", ""), 120) == safe_text(ref.get("label"), 120):
+            candidates.append(obj)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def native_ref_key_candidates(obj, reference):
+    ref = safe_text(reference, 80)
+    if not obj or not ref:
+        return []
+    keys = []
+    try:
+        name = safe_text(getattr(obj, "Name", ""), 120)
+        if name:
+            keys.append((name, ref))
+    except Exception:
+        pass
+    try:
+        label = safe_text(getattr(obj, "Label", ""), 120)
+        if label:
+            keys.append((label, ref))
+    except Exception:
+        pass
+    return keys
+
+
+def native_ref_migration_for(obj, reference, lookup):
+    for key in native_ref_key_candidates(obj, reference):
+        migration = lookup.get(key)
+        if migration:
+            return migration
+    return None
+
+
+def migrate_native_ref_tuple(doc, value, lookup):
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return value, 0
+    obj, refs = value
+    if not hasattr(obj, "Name"):
+        return value, 0
+    is_single_ref = isinstance(refs, str)
+    ref_values = [refs] if is_single_ref else list(refs or [])
+    if not ref_values:
+        return value, 0
+    new_obj = obj
+    new_refs = []
+    changed_count = 0
+    for ref in ref_values:
+        migration = native_ref_migration_for(obj, ref, lookup)
+        if not migration:
+            new_refs.append(ref)
+            continue
+        after_ref = safe_text(migration.get("after_reference"), 80)
+        after_obj = doc_object_by_ref(doc, migration.get("after_object")) or obj
+        new_obj = after_obj
+        new_refs.append(after_ref or ref)
+        changed_count += 1
+    if not changed_count:
+        return value, 0
+    migrated_refs = new_refs[0] if is_single_ref else tuple(new_refs)
+    return (new_obj, migrated_refs), changed_count
+
+
+def migrate_native_ref_property_value(doc, value, lookup):
+    migrated, count = migrate_native_ref_tuple(doc, value, lookup)
+    if count:
+        return migrated, count
+    if isinstance(value, list):
+        result = []
+        total = 0
+        for item in value:
+            migrated_item, migrated_count = migrate_native_ref_tuple(doc, item, lookup)
+            result.append(migrated_item)
+            total += migrated_count
+        return result, total
+    if isinstance(value, tuple):
+        result = []
+        total = 0
+        for item in value:
+            migrated_item, migrated_count = migrate_native_ref_tuple(doc, item, lookup)
+            result.append(migrated_item)
+            total += migrated_count
+        return tuple(result), total
+    return value, 0
+
+
+def apply_native_topological_ref_migration(doc, migration_map):
+    lookup = topological_ref_native_lookup(migration_map)
+    report = {
+        "schema": "freecad.native_topological_ref_repair.v1",
+        "updated_native_ref_count": 0,
+        "updated_native_property_count": 0,
+        "updated_native_properties": [],
+    }
+    if doc is None or not lookup:
+        return report
+    native_ref_properties = [
+        "AttachmentSupport",
+        "ExternalGeometry",
+        "Reference1",
+        "Reference2",
+        "References2D",
+        "References3D",
+        "Support",
+    ]
+    for obj in list(getattr(doc, "Objects", []) or []):
+        for prop in native_ref_properties:
+            if not hasattr(obj, prop):
+                continue
+            try:
+                old_value = getattr(obj, prop)
+            except Exception:
+                continue
+            new_value, migrated_count = migrate_native_ref_property_value(doc, old_value, lookup)
+            if not migrated_count:
+                continue
+            try:
+                setattr(obj, prop, new_value)
+            except Exception as exc:
+                report["updated_native_properties"].append({
+                    "object": object_ref(obj),
+                    "property": prop,
+                    "migrated_ref_count": migrated_count,
+                    "status": "failed",
+                    "error": safe_text(exc, 220),
+                })
+                continue
+            report["updated_native_ref_count"] += migrated_count
+            report["updated_native_property_count"] += 1
+            report["updated_native_properties"].append({
+                "object": object_ref(obj),
+                "property": prop,
+                "migrated_ref_count": migrated_count,
+                "status": "updated",
+            })
+    if report["updated_native_ref_count"]:
+        try:
+            doc.recompute()
+            report["recomputed"] = True
+        except Exception as exc:
+            report["recomputed"] = False
+            report["recompute_error"] = safe_text(exc, 220)
+    return report
+
+
+def migrated_topological_payload(value, migration_map):
+    if isinstance(value, list):
+        changed = False
+        result = []
+        for item in value:
+            migrated, item_changed = migrated_topological_payload(item, migration_map)
+            result.append(migrated)
+            changed = changed or item_changed
+        return result, changed
+    if not isinstance(value, dict):
+        return value, False
+
+    result = {}
+    changed = False
+    for key, item in value.items():
+        migrated, item_changed = migrated_topological_payload(item, migration_map)
+        result[key] = migrated
+        changed = changed or item_changed
+
+    stable_id = safe_text(
+        result.get("stable_id")
+        or result.get("stableId")
+        or result.get("resolved_stable_id")
+        or result.get("legacy_stable_id")
+        or result.get("legacyStableId"),
+        160,
+    )
+    migration = migration_map.get(stable_id)
+    if migration:
+        before_ref = migration.get("before_reference")
+        after_ref = migration.get("after_reference")
+        for key in ["reference", "subelement", "element", "stable_reference", "stableReference"]:
+            if key in result and (not result.get(key) or safe_text(result.get(key), 80) == before_ref):
+                result[key] = after_ref
+                changed = True
+        if result.get("reference") != after_ref:
+            result["reference"] = after_ref
+            changed = True
+        if migration.get("ref_history"):
+            result["ref_history"] = migration.get("ref_history")
+            changed = True
+        result["topological_migration"] = {
+            "schema": "freecad.topological_ref_repair.v1",
+            "stable_id": stable_id,
+            "before_reference": before_ref,
+            "after_reference": after_ref,
+        }
+        changed = True
+
+    frame = result.get("connector_frame") if isinstance(result.get("connector_frame"), dict) else None
+    if frame and isinstance(result.get("subelements"), list):
+        frame_migration = frame.get("topological_migration") if isinstance(frame.get("topological_migration"), dict) else None
+        if frame_migration and frame_migration.get("after_reference"):
+            subelements = list(result.get("subelements") or [])
+            before_ref = safe_text(frame_migration.get("before_reference"), 80)
+            for index, item in enumerate(subelements):
+                if item and safe_text(item, 80) == before_ref:
+                    subelements[index] = frame_migration.get("after_reference")
+                    result["subelements"] = subelements
+                    changed = True
+                    break
+
+    return result, changed
+
+
+def json_property_value(obj, name):
+    try:
+        raw = getattr(obj, name, "")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def apply_topological_ref_migration(doc, migration):
+    migration_map = topological_ref_migration_map(migration)
+    report = {
+        "schema": "freecad.topological_ref_repair_report.v1",
+        "attempted_ref_count": len(migration_map),
+        "updated_property_count": 0,
+        "updated_properties": [],
+        "native": {
+            "schema": "freecad.native_topological_ref_repair.v1",
+            "updated_native_ref_count": 0,
+            "updated_native_property_count": 0,
+            "updated_native_properties": [],
+        },
+    }
+    if doc is None or not migration_map:
+        return report
+
+    metadata_properties = [
+        SKETCH_EXTERNAL_GEOMETRY_META_PROPERTY,
+        "FourYiConnectorFrame",
+        "FourYiRefHistory",
+        "FourYiTechDrawDimensionMeta",
+        TECHDRAW_FALLBACK_VIEWS_PROPERTY,
+        TECHDRAW_FALLBACK_PAGES_PROPERTY,
+        FEATURE_FALLBACK_FEATURES_PROPERTY,
+        ASSEMBLY_FALLBACK_ASSEMBLIES_PROPERTY,
+    ]
+    for obj in list(getattr(doc, "Objects", []) or []):
+        properties = set(list(getattr(obj, "PropertiesList", []) or []))
+        for prop in metadata_properties:
+            if prop not in properties:
+                continue
+            payload = json_property_value(obj, prop)
+            if payload is None:
+                continue
+            migrated, changed = migrated_topological_payload(payload, migration_map)
+            if not changed:
+                continue
+            if set_json_property(obj, prop, migrated, "4yi topological ref migrated metadata"):
+                report["updated_property_count"] += 1
+                report["updated_properties"].append({
+                    "object": object_ref(obj),
+                    "property": prop,
+                })
+    report["native"] = apply_native_topological_ref_migration(doc, migration_map)
+    holder = (
+        feature_state_holder(doc, create=True)
+        or techdraw_state_holder(doc, create=True)
+        or assembly_state_holder(doc, create=True)
+    )
+    if holder is not None:
+        set_json_property(holder, TOPOLOGICAL_REPAIR_REPORT_PROPERTY, report, "4yi topological ref repair report")
+    return report
 
 
 def properties_by_name(properties):
@@ -3050,6 +3655,190 @@ def assign_constraint_value(sketch, patch):
     }
 
 
+def patch_bool_value(patch, *keys):
+    for key in keys:
+        if key not in patch or patch.get(key) is None:
+            continue
+        value = patch.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        raise ValueError(keys[0] + " must be boolean")
+    return None
+
+
+def sketch_constraint_bool_value(sketch, index, attr):
+    try:
+        constraint = sketch.Constraints[index]
+        if hasattr(constraint, attr):
+            return bool(getattr(constraint, attr))
+    except Exception:
+        pass
+    return None
+
+
+def write_sketch_constraint_back(sketch, index, constraint):
+    try:
+        constraints = list(sketch.Constraints)
+        constraints[index] = constraint
+        sketch.Constraints = constraints
+        return True
+    except Exception:
+        return False
+
+
+def set_sketch_constraint_bool(sketch, index, attr, desired, *, setter_methods=(), toggle_methods=()):
+    before = sketch_constraint_bool_value(sketch, index, attr)
+    detail = {
+        "property": attr,
+        "old_value": before,
+        "requested_value": bool(desired),
+        "method": "",
+    }
+    if before is not None and before == bool(desired):
+        detail["new_value"] = before
+        detail["method"] = "unchanged"
+        return detail
+    for method_name in setter_methods:
+        method = getattr(sketch, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            method(index, bool(desired))
+        except TypeError:
+            try:
+                method(index, int(bool(desired)))
+            except Exception:
+                continue
+        except Exception:
+            continue
+        after = sketch_constraint_bool_value(sketch, index, attr)
+        if after is None or after == bool(desired):
+            detail["new_value"] = after
+            detail["method"] = method_name
+            return detail
+    if before is not None:
+        for method_name in toggle_methods:
+            method = getattr(sketch, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                method(index)
+            except Exception:
+                continue
+            after = sketch_constraint_bool_value(sketch, index, attr)
+            if after is None or after == bool(desired):
+                detail["new_value"] = after
+                detail["method"] = method_name
+                return detail
+    try:
+        constraint = sketch.Constraints[index]
+        if hasattr(constraint, attr):
+            setattr(constraint, attr, bool(desired))
+            write_sketch_constraint_back(sketch, index, constraint)
+            after = sketch_constraint_bool_value(sketch, index, attr)
+            if after is None or after == bool(desired):
+                detail["new_value"] = after
+                detail["method"] = "constraint_attribute"
+                return detail
+    except Exception:
+        pass
+    raise ValueError("selected Sketcher runtime does not support setting constraint " + attr)
+
+
+def rename_sketch_constraint(sketch, index, new_name):
+    name = safe_text(new_name, 160)
+    old_name = safe_text(getattr(sketch.Constraints[index], "Name", ""))
+    if hasattr(sketch, "renameConstraint"):
+        sketch.renameConstraint(index, name)
+    else:
+        constraint = sketch.Constraints[index]
+        if not hasattr(constraint, "Name"):
+            raise ValueError("selected Sketcher runtime does not support constraint rename")
+        constraint.Name = name
+        write_sketch_constraint_back(sketch, index, constraint)
+    return {
+        "property": "Name",
+        "old_value": old_name,
+        "new_value": safe_text(getattr(sketch.Constraints[index], "Name", "")),
+        "method": "renameConstraint" if hasattr(sketch, "renameConstraint") else "constraint_attribute",
+    }
+
+
+def set_sketch_constraint_state(sketch, patch, doc=None):
+    ensure_sketch(sketch)
+    index = find_constraint_index(sketch, patch)
+    before = constraint_summary(sketch.Constraints[index], index)
+    updates = []
+    new_name = (
+        patch.get("new_name")
+        if patch.get("new_name") is not None
+        else patch.get("constraint_new_name")
+        if patch.get("constraint_new_name") is not None
+        else patch.get("rename_to")
+    )
+    if new_name is not None:
+        updates.append(rename_sketch_constraint(sketch, index, new_name))
+    active = patch_bool_value(patch, "active", "enabled")
+    if active is not None:
+        updates.append(set_sketch_constraint_bool(
+            sketch,
+            index,
+            "IsActive",
+            active,
+            setter_methods=("setActive",),
+            toggle_methods=("toggleActive",),
+        ))
+    driving = patch_bool_value(patch, "driving")
+    reference = patch_bool_value(patch, "reference")
+    if reference is not None:
+        driving = not reference
+    if driving is not None:
+        updates.append(set_sketch_constraint_bool(
+            sketch,
+            index,
+            "IsDriving",
+            driving,
+            setter_methods=("setDriving",),
+            toggle_methods=("toggleDriving",),
+        ))
+    virtual_space = patch_bool_value(patch, "virtual_space", "virtual")
+    if virtual_space is not None:
+        updates.append(set_sketch_constraint_bool(
+            sketch,
+            index,
+            "InVirtualSpace",
+            virtual_space,
+            setter_methods=("setVirtualSpace",),
+            toggle_methods=("toggleVirtualSpace",),
+        ))
+    if not updates:
+        raise ValueError("set_constraint_state requires new_name, active, driving, reference, or virtual_space")
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
+    return {
+        "constraint_index": index,
+        "old_constraint": before,
+        "new_constraint": constraint_summary(sketch.Constraints[index], index),
+        "updates": updates,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
+
+
 def safe_feature_name(value, fallback="Feature"):
     text = safe_text(value or fallback, 80)
     cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in text)
@@ -3338,9 +4127,47 @@ def make_sketch_geometry(payload):
     raise ValueError("unsupported Sketcher geometry type: " + safe_text(kind))
 
 
+def add_auto_sketch_constraints(sketch, geometry_index, geometry, *, tolerance=1e-6):
+    results = []
+    if Sketcher is None:
+        return results
+    if not (hasattr(geometry, "StartPoint") and hasattr(geometry, "EndPoint")):
+        return results
+    try:
+        start = geometry.StartPoint
+        end = geometry.EndPoint
+        dx = abs(float(end.x) - float(start.x))
+        dy = abs(float(end.y) - float(start.y))
+    except Exception:
+        return results
+    constraint_type = None
+    if dy <= float(tolerance) and dx > float(tolerance):
+        constraint_type = "Horizontal"
+    elif dx <= float(tolerance) and dy > float(tolerance):
+        constraint_type = "Vertical"
+    if not constraint_type:
+        return results
+    try:
+        constraint_index = sketch.addConstraint(Sketcher.Constraint(constraint_type, int(geometry_index)))
+        if isinstance(constraint_index, (list, tuple)):
+            constraint_index = constraint_index[0]
+        constraint_index = int(constraint_index)
+        results.append(constraint_summary(sketch.Constraints[constraint_index], constraint_index))
+    except Exception as exc:
+        results.append({
+            "geometry_index": int(geometry_index),
+            "type": constraint_type,
+            "status": "failed",
+            "error": safe_text(exc, 220),
+        })
+    return results
+
+
 def add_sketch_geometries(sketch, patch):
     ensure_sketch(sketch)
     results = []
+    auto_constraints = []
+    auto_constraint_enabled = bool(patch.get("auto_constraints") or patch.get("autoConstraints"))
     for item in patch_items(
         patch,
         "geometry",
@@ -3356,7 +4183,224 @@ def add_sketch_geometries(sketch, patch):
             summary = sketch_geometry_summary(geometry, int(geometry_index), sketch)
             summary["geometry_index"] = int(geometry_index)
             results.append(summary)
-    return {"geometry_results": results}
+            if auto_constraint_enabled:
+                auto_constraints.extend(
+                    add_auto_sketch_constraints(
+                        sketch,
+                        int(geometry_index),
+                        geometry,
+                        tolerance=float(patch.get("auto_constraint_tolerance") or 1e-6),
+                    )
+                )
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    return {
+        "geometry_results": results,
+        "auto_constraints": auto_constraints,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
+
+
+SKETCH_GEOMETRY_POINT_ATTRS = {
+    "start": "StartPoint",
+    "startpoint": "StartPoint",
+    "end": "EndPoint",
+    "endpoint": "EndPoint",
+    "center": "Center",
+    "centre": "Center",
+    "location": "Location",
+    "point": "Point",
+}
+
+SKETCH_GEOMETRY_POINT_POSITIONS = {
+    "start": 1,
+    "startpoint": 1,
+    "end": 2,
+    "endpoint": 2,
+    "center": 3,
+    "centre": 3,
+    "location": 3,
+    "point": 1,
+}
+
+
+def sketch_geometry_point_attr(value):
+    key = normalized_kind(value or "point")
+    attr = SKETCH_GEOMETRY_POINT_ATTRS.get(key)
+    if not attr:
+        raise ValueError("unsupported Sketcher geometry point role: " + safe_text(value))
+    return attr
+
+
+def sketch_geometry_point_position(value):
+    key = normalized_kind(value or "point")
+    position = SKETCH_GEOMETRY_POINT_POSITIONS.get(key)
+    if position is None:
+        raise ValueError("unsupported Sketcher geometry point role: " + safe_text(value))
+    return position
+
+
+def sketch_geometry_index_from_patch(sketch, patch):
+    value = patch.get("geometry_index")
+    if value is None:
+        value = patch.get("index")
+    if value is None:
+        raise ValueError("set_geometry_point requires geometry_index")
+    index = int(value)
+    try:
+        count = len(sketch.Geometry)
+    except Exception:
+        count = 0
+    if index < 0 or index >= count:
+        raise ValueError("geometry_index out of range: " + str(index))
+    return index
+
+
+def sketch_geometry_indexes_from_patch(sketch, patch):
+    raw = patch.get("geometry_indexes")
+    if raw is None:
+        raw = patch.get("geometry_indices")
+    if raw is None:
+        return [sketch_geometry_index_from_patch(sketch, patch)]
+    if not isinstance(raw, list) or len(raw) > 80:
+        raise ValueError("geometry_indexes must be a list with at most 80 items")
+    indexes = []
+    for value in raw:
+        indexes.append(sketch_geometry_index_from_patch(sketch, {"geometry_index": value}))
+    return indexes
+
+
+def sketch_geometry_point_ref(sketch, patch, key):
+    payload = patch.get(key)
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ValueError(key + " point reference must be an object")
+    merged = dict(payload)
+    for suffix in ["geometry_index", "index", "point_role", "role", "point", "point_pos", "pos"]:
+        prefixed = key + "_" + suffix
+        if patch.get(prefixed) is not None and merged.get(suffix) is None:
+            merged[suffix] = patch.get(prefixed)
+    geometry_index = sketch_geometry_index_from_patch(sketch, merged)
+    point_role = merged.get("point_role") or merged.get("role") or merged.get("point")
+    point_pos = merged.get("point_pos")
+    if point_pos is None:
+        point_pos = merged.get("pos")
+    if point_pos is None:
+        point_pos = sketch_geometry_point_position(point_role)
+    point_pos = int(point_pos)
+    if point_role is None:
+        point_role = "start" if point_pos == 1 else "end" if point_pos == 2 else "center"
+    attr = sketch_geometry_point_attr(point_role)
+    geometries = list(getattr(sketch, "Geometry", []) or [])
+    geometry = geometries[geometry_index]
+    if not hasattr(geometry, attr):
+        raise ValueError("{} Sketcher geometry has no {}".format(key, attr))
+    return {
+        "geometry_index": geometry_index,
+        "point_role": safe_text(point_role, 40),
+        "point_pos": point_pos,
+        "point": vector_summary(getattr(geometry, attr, None)),
+        "geometry": sketch_geometry_summary(geometry, geometry_index, sketch),
+    }
+
+
+def set_sketch_geometry_point(doc, sketch, patch):
+    ensure_sketch(sketch)
+    index = sketch_geometry_index_from_patch(sketch, patch)
+    point_role = patch.get("point_role") or patch.get("point") or patch.get("role") or "point"
+    attr = sketch_geometry_point_attr(point_role)
+    value = patch.get("value")
+    if value is None:
+        value = patch.get("vector")
+    if value is None:
+        value = patch.get("position")
+    new_point = vector_from_value(value, "geometry." + point_role)
+    geometries = list(getattr(sketch, "Geometry", []) or [])
+    geometry = geometries[index]
+    if not hasattr(geometry, attr):
+        raise ValueError("selected Sketcher geometry has no " + attr)
+    old_summary = sketch_geometry_summary(geometry, index, sketch)
+    old_point = vector_summary(getattr(geometry, attr, None))
+    setattr(geometry, attr, new_point)
+    geometries[index] = geometry
+    wrote_geometry = False
+    try:
+        sketch.Geometry = geometries
+        wrote_geometry = True
+    except Exception as exc:
+        set_method = getattr(sketch, "setGeometry", None)
+        if callable(set_method):
+            try:
+                set_method(index, geometry)
+                wrote_geometry = True
+            except Exception:
+                raise exc
+        else:
+            raise
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
+    return {
+        "sketch": object_ref(sketch),
+        "geometry_index": index,
+        "point_role": point_role,
+        "property": attr,
+        "old_point": old_point,
+        "new_point": vector_summary(new_point),
+        "old_geometry": old_summary,
+        "new_geometry": sketch_geometry_summary(geometry, index, sketch),
+        "wrote_geometry": wrote_geometry,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
+
+
+def set_sketch_geometry_construction(doc, sketch, patch):
+    ensure_sketch(sketch)
+    if not hasattr(sketch, "setConstruction"):
+        raise ValueError("selected Sketcher runtime does not support construction geometry edits")
+    indexes = sketch_geometry_indexes_from_patch(sketch, patch)
+    toggle = bool(patch.get("toggle")) or patch.get("construction") is None
+    results = []
+    for index in indexes:
+        old_value = False
+        if hasattr(sketch, "getConstruction"):
+            try:
+                old_value = bool(sketch.getConstruction(index))
+            except Exception:
+                old_value = False
+        new_value = (not old_value) if toggle else bool(patch.get("construction"))
+        sketch.setConstruction(index, new_value)
+        geometry = list(getattr(sketch, "Geometry", []) or [])[index]
+        summary = sketch_geometry_summary(geometry, index, sketch)
+        summary.update({
+            "geometry_index": index,
+            "old_construction": old_value,
+            "new_construction": new_value,
+        })
+        results.append(summary)
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
+    return {
+        "sketch": object_ref(sketch),
+        "geometry_results": results,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
 
 
 def add_sketch_external_geometry(doc, sketch, patch):
@@ -3404,6 +4448,7 @@ def add_sketch_external_geometry(doc, sketch, patch):
     if patch.get("stable_reference") and not stable_references:
         stable_references = [patch.get("stable_reference")]
     old_count = len(sketch_external_geometry_summary(sketch))
+    metadata = sketch_external_geometry_metadata(sketch)
     results = []
     for index, reference in enumerate(items):
         stable_id = stable_ids[index] if index < len(stable_ids) else ""
@@ -3418,7 +4463,20 @@ def add_sketch_external_geometry(doc, sketch, patch):
             stable_reference=stable_reference,
         )
         sketch.addExternal(safe_text(getattr(source, "Name", "")), resolved_reference)
-        results.append({"source": object_ref(source), "reference": resolved_reference, "reference_diagnostics": detail})
+        meta = {
+            "index": old_count + index,
+            "source": object_ref(source),
+            "reference": resolved_reference,
+            "stable_id": detail.get("resolved_stable_id") or stable_id,
+            "legacy_stable_id": detail.get("legacy_stable_id") or "",
+            "stable_reference": detail.get("stable_reference") or stable_reference,
+            "signature": detail.get("signature") or signature,
+            "ref_history": detail.get("ref_history") or [],
+            "reference_diagnostics": detail,
+        }
+        metadata.append(meta)
+        results.append({"source": object_ref(source), "reference": resolved_reference, "metadata": meta, "reference_diagnostics": detail})
+    save_sketch_external_geometry_metadata(sketch, metadata)
     try:
         doc.recompute()
     except Exception:
@@ -3544,7 +4602,7 @@ def make_sketch_constraint(payload):
     return Sketcher.Constraint(constraint_type, *args)
 
 
-def add_sketch_constraints(sketch, patch):
+def add_sketch_constraints(sketch, patch, doc=None):
     ensure_sketch(sketch)
     results = []
     for item in patch_items(
@@ -3565,17 +4623,86 @@ def add_sketch_constraints(sketch, patch):
             except Exception:
                 pass
         results.append(constraint_summary(sketch.Constraints[constraint_index], constraint_index))
-    return {"constraint_results": results}
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
+    return {
+        "constraint_results": results,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
 
 
-def remove_sketch_constraint(sketch, patch):
+def add_sketch_endpoint_coincidence(doc, sketch, patch):
+    ensure_sketch(sketch)
+    if Sketcher is None:
+        raise ValueError("Sketcher module is unavailable in this FreeCAD runtime")
+    first = sketch_geometry_point_ref(sketch, patch, "first")
+    second = sketch_geometry_point_ref(sketch, patch, "second")
+    if (
+        first["geometry_index"] == second["geometry_index"]
+        and first["point_pos"] == second["point_pos"]
+    ):
+        raise ValueError("endpoint coincidence requires two different sketch points")
+    constraint = Sketcher.Constraint(
+        "Coincident",
+        first["geometry_index"],
+        first["point_pos"],
+        second["geometry_index"],
+        second["point_pos"],
+    )
+    constraint_index = sketch.addConstraint(constraint)
+    if isinstance(constraint_index, (list, tuple)):
+        constraint_index = constraint_index[0]
+    constraint_index = int(constraint_index)
+    name = patch.get("name") or patch.get("constraint_name")
+    if name:
+        try:
+            sketch.renameConstraint(constraint_index, safe_text(name, 160))
+        except Exception:
+            pass
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
+    return {
+        "sketch": object_ref(sketch),
+        "constraint": constraint_summary(sketch.Constraints[constraint_index], constraint_index),
+        "constraint_index": constraint_index,
+        "first": first,
+        "second": second,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
+    }
+
+
+def remove_sketch_constraint(sketch, patch, doc=None):
     ensure_sketch(sketch)
     index = find_constraint_index(sketch, patch.get("constraint") or patch)
     removed = constraint_summary(sketch.Constraints[index], index)
     sketch.delConstraint(index)
+    solver = None
+    if patch.get("solve", True):
+        solver = sketch_solver_status(sketch, solve=True)
+    try:
+        if doc is not None:
+            doc.recompute()
+    except Exception:
+        pass
     return {
         "removed_constraint": removed,
         "constraint_index": index,
+        "solver": solver,
+        "sketch_summary": sketch_summary(sketch),
     }
 
 
@@ -3931,6 +5058,10 @@ def native_assembly_available(*, require_joints=False):
         return False
     if not native_assembly_reload_safe():
         return False
+    if truthy_env("FOURYI_FREECAD_RUN_ASSEMBLY_RELOAD_REGRESSION"):
+        regression = native_assembly_reload_regression()
+        if regression.get("ok") is False:
+            return False
     if Assembly is None:
         return False
     if require_joints and JointObject is None:
@@ -3942,23 +5073,121 @@ def native_assembly_solver_available():
     return Assembly is not None and JointObject is not None
 
 
+def native_assembly_reload_regression():
+    global _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE
+    if _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE is not None:
+        return _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE
+    if not truthy_env("FOURYI_FREECAD_RUN_ASSEMBLY_RELOAD_REGRESSION"):
+        return {
+            "schema": "freecad.native_assembly_reload_regression.v1",
+            "status": "not_run",
+            "ok": None,
+            "reason": "FOURYI_FREECAD_RUN_ASSEMBLY_RELOAD_REGRESSION is not enabled",
+        }
+    if Assembly is None:
+        return {
+            "schema": "freecad.native_assembly_reload_regression.v1",
+            "status": "unavailable",
+            "ok": False,
+            "reason": "Assembly module unavailable",
+        }
+    if not native_assembly_reload_safe():
+        return {
+            "schema": "freecad.native_assembly_reload_regression.v1",
+            "status": "skipped",
+            "ok": False,
+            "reason": "runtime version is not marked reload-safe",
+        }
+    doc = None
+    reopened = None
+    path = os.path.join(os.environ.get("FOURYI_FREECAD_OUT", "/tmp"), "native_assembly_reload_regression.FCStd")
+    try:
+        doc = FreeCAD.newDocument("FourYiNativeAssemblyReloadRegression")
+        assembly = doc.addObject(ASSEMBLY_TYPE, "Assembly")
+        created_type_id = safe_text(getattr(assembly, "TypeId", ""))
+        doc.recompute()
+        doc.saveAs(path)
+        doc_name = safe_text(getattr(doc, "Name", ""))
+        doc = None
+        if doc_name:
+            try:
+                FreeCAD.closeDocument(doc_name)
+            except Exception:
+                pass
+        reopened = FreeCAD.openDocument(path)
+        assemblies = [
+            obj for obj in list(getattr(reopened, "Objects", []) or [])
+            if is_assembly_object(obj)
+        ]
+        _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE = {
+            "schema": "freecad.native_assembly_reload_regression.v1",
+            "status": "passed" if assemblies else "failed",
+            "ok": bool(assemblies),
+            "path": path,
+            "assembly_count": len(assemblies),
+            "created_type_id": created_type_id,
+        }
+        return _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE
+    except Exception as exc:
+        _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE = {
+            "schema": "freecad.native_assembly_reload_regression.v1",
+            "status": "failed",
+            "ok": False,
+            "path": path,
+            "error": safe_text(exc, 300),
+        }
+        return _NATIVE_ASSEMBLY_RELOAD_REGRESSION_CACHE
+    finally:
+        for candidate in [reopened, doc]:
+            if candidate is None:
+                continue
+            try:
+                FreeCAD.closeDocument(candidate.Name)
+            except Exception:
+                pass
+
+
 def assembly_runtime_capabilities():
     module_available = Assembly is not None
     joint_object_available = JointObject is not None
     persist_enabled = native_assembly_persistence_enabled()
     reload_safe = native_assembly_reload_safe()
+    reload_regression = native_assembly_reload_regression()
+    regression_ok = reload_regression.get("ok")
+    regression_blocks = regression_ok is False and reload_regression.get("status") not in {"not_run", "skipped"}
+    persistent_available = bool(persist_enabled and reload_safe and module_available and not regression_blocks)
+    if not persist_enabled:
+        blocker = "persistent_native_disabled"
+    elif not reload_safe:
+        blocker = "persistent_native_reload_not_verified"
+    elif not module_available:
+        blocker = "assembly_module_unavailable"
+    elif not joint_object_available:
+        blocker = "joint_object_unavailable"
+    elif regression_blocks:
+        blocker = "native_assembly_reload_regression_failed"
+    else:
+        blocker = None
     return {
         "schema": "freecad.assembly_capabilities.v1",
+        "freecad_version": ".".join(str(part) for part in freecad_version_tuple()),
+        "min_reload_safe_version": "1.2.0",
         "assembly_module_available": module_available,
         "joint_object_available": joint_object_available,
         "persistent_native_enabled": persist_enabled,
         "persistent_native_reload_safe": reload_safe,
-        "persistent_native_available": bool(persist_enabled and reload_safe and module_available),
+        "persistent_native_available": persistent_available,
         "native_solver_available": bool(module_available and joint_object_available),
         "default_backend": "native_persistent" if native_assembly_available() else "typed_state_native_solver",
+        "native_persistent_default_ready": bool(persistent_available and joint_object_available),
+        "native_persistent_blocker": blocker,
+        "native_assembly_reload_regression": reload_regression,
+        "reload_regression_required": not reload_safe,
+        "isolated_worker_required_for_forced_native": bool(persist_enabled and not reload_safe),
         "supported_joint_types": sorted(SUPPORTED_ASSEMBLY_JOINT_TYPES),
         "opt_out_env": "FOURYI_FREECAD_DISABLE_NATIVE_ASSEMBLY=1",
         "force_env": "FOURYI_FREECAD_FORCE_NATIVE_ASSEMBLY=1",
+        "reload_regression_env": "FOURYI_FREECAD_RUN_ASSEMBLY_RELOAD_REGRESSION=1",
         "legacy_opt_in_env": "FOURYI_FREECAD_PERSIST_NATIVE_ASSEMBLY",
     }
 
@@ -4580,6 +5809,7 @@ def select_or_seed_techdraw_view_model(doc, selector):
 
 
 def save_techdraw_page_model(doc, state, page):
+    page = techdraw_autolayout_page(page)
     name = safe_text(page.get("name"), 80)
     if not name:
         raise ValueError("TechDraw fallback page requires name")
@@ -6375,16 +7605,24 @@ def apply_document_patches(doc, patches):
             detail = assign_property_value(obj, patch.get("property"), patch.get("value"))
         elif op == "set_constraint_value":
             detail = assign_constraint_value(obj, patch)
+        elif op == "set_constraint_state":
+            detail = set_sketch_constraint_state(obj, patch, doc)
         elif op == "set_placement":
             detail = set_object_placement(obj, patch)
         elif op == "set_expression":
             detail = set_object_expression(obj, patch)
         elif op == "add_geometry":
             detail = add_sketch_geometries(obj, patch)
+        elif op in {"set_geometry_point", "move_geometry", "move_sketch_geometry"}:
+            detail = set_sketch_geometry_point(doc, obj, patch)
+        elif op in {"set_geometry_construction", "toggle_geometry_construction"}:
+            detail = set_sketch_geometry_construction(doc, obj, patch)
         elif op == "add_constraint":
-            detail = add_sketch_constraints(obj, patch)
+            detail = add_sketch_constraints(obj, patch, doc)
+        elif op == "add_endpoint_coincidence":
+            detail = add_sketch_endpoint_coincidence(doc, obj, patch)
         elif op == "remove_constraint":
-            detail = remove_sketch_constraint(obj, patch)
+            detail = remove_sketch_constraint(obj, patch, doc)
         elif op in {
             "create_sketch",
             "attach_sketch",
@@ -6412,6 +7650,13 @@ def apply_document_patches(doc, patches):
             "add_techdraw_cosmetic_line",
             "export_techdraw_pdf",
             "add_techdraw_dimension",
+            "set_geometry_point",
+            "move_geometry",
+            "move_sketch_geometry",
+            "set_geometry_construction",
+            "toggle_geometry_construction",
+            "add_endpoint_coincidence",
+            "set_constraint_state",
         }:
             pass
         else:
@@ -6421,6 +7666,8 @@ def apply_document_patches(doc, patches):
         except Exception:
             pass
         after_lineage = document_topological_lineage(doc)
+        migration = topological_lineage_migration(before_lineage, after_lineage)
+        repair_report = apply_topological_ref_migration(doc, migration)
         result = {
             "index": index,
             "op": op,
@@ -6441,7 +7688,8 @@ def apply_document_patches(doc, patches):
                     "digest": topological_lineage_digest(after_lineage),
                     "ref_count": after_lineage.get("ref_count", 0),
                 },
-                "migration": topological_lineage_migration(before_lineage, after_lineage),
+                "migration": migration,
+                "repair": repair_report,
             },
         }
         if isinstance(detail, dict):
@@ -6803,6 +8051,63 @@ def export_techdraw_pdf(doc, out_dir, svg_path=None):
     return None, {"ok": False, "error": "empty PDF export", "exporter": converter}
 
 
+def validate_export_file(path, expected_format):
+    if not path:
+        return {"ok": False, "format": expected_format, "error": "not exported"}
+    if not os.path.isfile(path):
+        return {"ok": False, "format": expected_format, "path": safe_text(path), "error": "missing file"}
+    try:
+        size = os.path.getsize(path)
+    except Exception as exc:
+        return {"ok": False, "format": expected_format, "path": safe_text(path), "error": safe_text(exc)}
+    result = {
+        "ok": size > 0,
+        "format": expected_format,
+        "path": safe_text(path),
+        "size": size,
+    }
+    if size <= 0:
+        result["error"] = "empty file"
+        return result
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(96)
+    except Exception as exc:
+        result.update({"ok": False, "error": safe_text(exc)})
+        return result
+    if expected_format == "svg":
+        text = head.decode("utf-8", errors="ignore").lstrip()
+        result["ok"] = text.startswith("<svg") or "<?xml" in text[:24]
+        result["header"] = text[:32]
+    elif expected_format == "dxf":
+        text = head.decode("utf-8", errors="ignore")
+        result["ok"] = "SECTION" in text or text.lstrip().startswith("0")
+        result["header"] = text[:32]
+    elif expected_format == "pdf":
+        result["ok"] = head.startswith(b"%PDF")
+        result["header"] = head[:12].decode("latin-1", errors="ignore")
+    if not result["ok"] and not result.get("error"):
+        result["error"] = "format header check failed"
+    return result
+
+
+def techdraw_export_validation(svg_path, dxf_path, pdf_path, pdf_status):
+    svg = validate_export_file(svg_path, "svg")
+    dxf = validate_export_file(dxf_path, "dxf")
+    pdf = validate_export_file(pdf_path, "pdf")
+    if isinstance(pdf_status, dict):
+        pdf["export_status"] = pdf_status
+        if pdf_status.get("ok") is False:
+            pdf["ok"] = False
+            pdf["error"] = pdf_status.get("error") or pdf.get("error") or "PDF exporter failed"
+    values = {"svg": svg, "dxf": dxf, "pdf": pdf}
+    return {
+        "schema": "freecad.techdraw_export_validation.v1",
+        "ok": all(item.get("ok") for item in values.values()),
+        "formats": values,
+    }
+
+
 def import_model(path, fmt):
     normalized = (fmt or "").lower()
     if normalized == "fcstd":
@@ -6895,6 +8200,20 @@ try:
         with open(user_script, "r", encoding="utf-8") as fh:
             exec(compile(fh.read(), user_script, "exec"), namespace)
 
+    if os.environ.get("FOURYI_FREECAD_DRY_RUN") == "1":
+        try:
+            doc.recompute()
+        except Exception:
+            pass
+        emit({
+            "ok": True,
+            "document_summary": document_summary(doc),
+            "patch_results": patch_results,
+            "dry_run": True,
+            "freecad_version": ".".join(str(part) for part in FreeCAD.Version()[:3]),
+        })
+        raise SystemExit(0)
+
     objects = exportable_shape_objects(objects_from_namespace(namespace))
     if not objects:
         emit({"ok": False, "error": "script did not create a result shape or document object"})
@@ -6954,16 +8273,21 @@ try:
         techdraw_fallback_reason = "document mixes native TechDraw views with typed fallback pages"
     elif not native_view_count:
         techdraw_fallback_reason = "document has no native TechDraw drawing views"
+    techdraw_validation = techdraw_export_validation(
+        techdraw_svg_path,
+        techdraw_dxf_path,
+        techdraw_pdf_path,
+        techdraw_pdf_status,
+    )
     techdraw_export_status = {
         "mode": techdraw_mode,
         "product_grade": bool(
             techdraw_mode == "native_techdraw"
-            and techdraw_svg_path
-            and techdraw_dxf_path
-            and techdraw_pdf_status.get("ok")
+            and techdraw_validation.get("ok")
         ),
         "native_first": True,
         "fallback_reason": techdraw_fallback_reason,
+        "validation": techdraw_validation,
         "capabilities": techdraw_capabilities,
         "fallback_page_count": fallback_page_count,
         "native_page_count": native_page_count,
@@ -7110,6 +8434,7 @@ def run_freecad_document_patch(
     patches: list[dict],
     fcstd_b64: str,
     *,
+    dry_run: bool = False,
     freecadcmd: str | None = None,
     timeout: float = 90.0,
     workdir: str | None = None,
@@ -7133,6 +8458,7 @@ def run_freecad_document_patch(
         document_path=str(document_path),
         mode="patch",
         patches_path=str(patches_path),
+        dry_run=dry_run,
     )
 
 
@@ -7147,6 +8473,7 @@ def _run_freecad_harness(
     document_path: str | None = None,
     mode: str | None = None,
     patches_path: str | None = None,
+    dry_run: bool = False,
 ) -> dict:
     binary = freecadcmd or resolve_freecadcmd()
     if not binary:
@@ -7174,6 +8501,8 @@ def _run_freecad_harness(
         env["FOURYI_FREECAD_MODE"] = mode
     if patches_path:
         env["FOURYI_FREECAD_PATCHES_PATH"] = patches_path
+    if dry_run:
+        env["FOURYI_FREECAD_DRY_RUN"] = "1"
     try:
         proc = subprocess.run(
             [binary, str(harness_script)],
@@ -7199,6 +8528,18 @@ def _run_freecad_harness(
         }
     if not payload.get("ok"):
         return {"ok": False, "error": payload.get("error") or "FreeCADCmd execution failed"}
+
+    if dry_run:
+        return {
+            "ok": True,
+            "preview_png_b64": None,
+            "exports": {},
+            "patch_results": payload.get("patch_results") or [],
+            "document_summary": payload.get("document_summary") or {},
+            "dry_run": True,
+            "freecad_exit_code": proc.returncode,
+            "freecad_version": payload.get("freecad_version"),
+        }
 
     step_path = payload.get("step_path")
     stl_path = payload.get("stl_path")
@@ -7383,6 +8724,7 @@ def main() -> None:
             run_freecad_document_patch(
                 request.get("patches", []),
                 request.get("fcstd_b64", ""),
+                dry_run=bool(request.get("dry_run")),
             ),
             sys.stdout,
         )

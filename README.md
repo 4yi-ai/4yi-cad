@@ -33,10 +33,11 @@ Single FastAPI process, single origin, single container.
   `DesignState` JSON, scripts, patches, geometry summaries, and version metadata.
 - `app/artifact_store.py` — filesystem artifact store for PNG/STEP/STL/FCStd/TechDraw,
   referenced from version metadata instead of being stored in SQLite.
-- `index.html` — vanilla SPA at the repo root, served same-origin; **client holds
-  conversation history** and replays it to the stateless server; retries on 503
-  (cold start). Living at the root also makes the deploy scanner see one fullstack
-  service (not an undeployed standalone frontend).
+- `index.html` — vanilla SPA at the repo root, served same-origin; the browser
+  keeps a local conversation cache while the server persists lightweight
+  session/version/artifact metadata. It retries on 503 (cold start). Living at
+  the root also makes the deploy scanner see one fullstack service (not an
+  undeployed standalone frontend).
 
 ### Session storage boundary
 The platform injects no DB/object-storage and idle auto-pause scales the pod to
@@ -105,7 +106,9 @@ this repo URL + branch). Proposal must have: one public service, `runtime_port`
 = `$PORT`, `health_path` = `/healthz`, `auth_policy: platform_sso`, and a
 `platform_runtime.gateway` block (`apiBaseEnv: [OPENAI_BASE_URL]`,
 `apiKeyEnv: [OPENAI_API_KEY]`, `TEXT_MODEL` slot with `defaultModel` +
-`allowedModels`). Size memory to measured peak RSS, schedulable on one node.
+`allowedModels`). Set `CAD_FREECAD_UPLOAD_MAX_BYTES=104857600` for the Private
+Beta 100 MB upload cap. Size memory to measured peak RSS, schedulable on one
+node, and configure durable storage before claiming Public Beta/GA persistence.
 
 > **Pre-public-release license gate:** FreeCAD ships GPL components and any ported
 > Text23D code must be license-compatible — resolve before making the repo public.

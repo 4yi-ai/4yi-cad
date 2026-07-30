@@ -88,6 +88,13 @@ def test_worker_defines_stable_subelement_ref_v2_semantics():
         '"ref_history"',
         "document_topological_lineage",
         "topological_lineage_migration",
+        "apply_topological_ref_migration",
+        "apply_native_topological_ref_migration",
+        "freecad.native_topological_ref_repair.v1",
+        "AttachmentSupport",
+        "References3D",
+        "FourYiTopologyRepairReport",
+        "freecad.topological_ref_repair_report.v1",
         '"schema": "freecad.patch_topological_lineage.v1"',
         '"schema": "freecad.operation_history.v1"',
         "stable_signature_score",
@@ -112,6 +119,12 @@ def test_worker_defines_assembly_lcs_and_runtime_capability_diagnostics():
         '"native_solver_available"',
         '"persistent_native_available"',
         '"persistent_native_reload_safe"',
+        '"native_persistent_blocker"',
+        '"reload_regression_required"',
+        "native_assembly_reload_regression",
+        "freecad.native_assembly_reload_regression.v1",
+        "FOURYI_FREECAD_RUN_ASSEMBLY_RELOAD_REGRESSION",
+        '"min_reload_safe_version": "1.2.0"',
         "native_assembly_reload_safe",
         "FOURYI_FREECAD_FORCE_NATIVE_ASSEMBLY",
         "ensure_assembly_connector_lcs",
@@ -127,6 +140,27 @@ def test_worker_defines_sketch_edit_mode_conflict_lists_and_techdraw_capabilitie
 
     for marker in (
         "sketch_constraint_indexes",
+        "sketch_constraint_ref_summaries",
+        "sketch_constraint_glyph",
+        '"geometry_refs"',
+        '"geometry_indexes"',
+        '"point_role"',
+        '"external_or_axis"',
+        "set_sketch_geometry_point",
+        "set_sketch_geometry_construction",
+        "set_sketch_constraint_state",
+        "add_sketch_endpoint_coincidence",
+        "annotate_sketch_geometry",
+        "sketch_constraint_geometry_refs",
+        '"related_constraint_count"',
+        '"constraint_diagnostics"',
+        "SKETCH_GEOMETRY_POINT_POSITIONS",
+        "toggleDriving",
+        "toggleActive",
+        "add_auto_sketch_constraints",
+        "auto_constraints",
+        "FourYiSketchExternalGeometryMeta",
+        "freecad.sketch_external_geometry_refs.v1",
         '"conflicting_constraints"',
         '"redundant_constraints"',
         '"malformed_constraints"',
@@ -137,6 +171,10 @@ def test_worker_defines_sketch_edit_mode_conflict_lists_and_techdraw_capabilitie
         "native_techdraw_detail",
         "merge_techdraw_page_summaries",
         "FourYiTechDrawDimensionMeta",
+        "techdraw_export_validation",
+        "freecad.techdraw_export_validation.v1",
+        "techdraw_autolayout_page",
+        "freecad.techdraw_layout_engine.v1",
         '"native_first"',
         '"fallback_reason"',
     ):
@@ -789,6 +827,63 @@ print("{FREECAD_RESULT_PREFIX}" + json.dumps({{
     ]
 
 
+def test_run_freecad_document_patch_dry_run_skips_file_exports(tmp_path):
+    fake = tmp_path / "fake_freecadcmd_patch_dry_run.py"
+    fake.write_text(
+        f"""
+import json
+import os
+import pathlib
+
+doc_path = pathlib.Path(os.environ["FOURYI_FREECAD_DOCUMENT_PATH"])
+patches_path = pathlib.Path(os.environ["FOURYI_FREECAD_PATCHES_PATH"])
+assert os.environ["FOURYI_FREECAD_MODE"] == "patch"
+assert os.environ["FOURYI_FREECAD_DRY_RUN"] == "1"
+assert doc_path.read_bytes() == b"FCStd dry run"
+assert json.loads(patches_path.read_text(encoding="utf-8")) == [
+    {{"op": "validate_sketch", "selector": {{"name": "Sketch"}}, "solve": True}}
+]
+print("{FREECAD_RESULT_PREFIX}" + json.dumps({{
+    "ok": True,
+    "dry_run": True,
+    "document_summary": {{
+        "document": {{"name": "Doc"}},
+        "objects": [{{"name": "Sketch", "type_id": "Sketcher::SketchObject"}}],
+        "geometry": {{"object_count": 1, "valid": True}},
+        "sketches": [],
+        "assemblies": [],
+        "techdraw": [],
+    }},
+    "patch_results": [
+        {{"index": 0, "op": "validate_sketch", "valid": True, "degrees_of_freedom": 0}}
+    ],
+    "freecad_version": "1.0.4",
+}}))
+""",
+        encoding="utf-8",
+    )
+    wrapper = tmp_path / "fake_freecadcmd_patch_dry_run"
+    wrapper.write_text(f"#!/bin/sh\nexec {PY} {fake} \"$@\"\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+
+    result = run_freecad_document_patch(
+        [{"op": "validate_sketch", "selector": {"name": "Sketch"}, "solve": True}],
+        base64.b64encode(b"FCStd dry run").decode("ascii"),
+        dry_run=True,
+        freecadcmd=str(wrapper),
+        workdir=str(tmp_path / "patch-dry-run-work"),
+        timeout=5,
+    )
+
+    assert result["ok"] is True
+    assert result["dry_run"] is True
+    assert result["exports"] == {}
+    assert result["preview_png_b64"] is None
+    assert result["document_summary"]["document"]["name"] == "Doc"
+    assert result["patch_results"][0]["op"] == "validate_sketch"
+    assert result["freecad_version"] == "1.0.4"
+
+
 def test_run_freecad_import_model_rejects_unsupported_format_before_runtime():
     result = run_freecad_import_model("dxf", base64.b64encode(b"0").decode("ascii"))
 
@@ -949,6 +1044,18 @@ result = [box, sketch]
                 ],
             },
             {
+                "op": "set_geometry_construction",
+                "selector": {"name": "Sketch"},
+                "geometry_index": 0,
+                "construction": True,
+            },
+            {
+                "op": "add_endpoint_coincidence",
+                "selector": {"name": "Sketch"},
+                "first": {"geometry_index": 0, "point_role": "start"},
+                "second": {"geometry_index": 2, "point_role": "start"},
+            },
+            {
                 "op": "add_constraint",
                 "selector": {"name": "Sketch"},
                 "constraints": [
@@ -968,6 +1075,12 @@ result = [box, sketch]
                 "op": "remove_constraint",
                 "selector": {"name": "Sketch"},
                 "constraint_name": "line_horizontal",
+            },
+            {
+                "op": "set_constraint_state",
+                "selector": {"name": "Sketch"},
+                "constraint_name": "line_width",
+                "new_name": "line_width_reference",
             },
             {
                 "op": "validate_sketch",
@@ -1103,8 +1216,11 @@ result = [box, sketch]
         "add_external_geometry",
         "solver_status",
         "add_geometry",
+        "set_geometry_construction",
+        "add_endpoint_coincidence",
         "add_constraint",
         "remove_constraint",
+        "set_constraint_state",
         "validate_sketch",
         "create_assembly",
         "add_part_to_assembly",
@@ -1164,11 +1280,13 @@ result = [box, sketch]
     assert face_sketch["map_mode"] == "FlatFace"
     assert face_sketch["attachment_support"][0]["object"]["name"] == "BaseBox"
     assert sketch["geometry_count"] == 8
+    assert sketch["geometry"][0]["construction"] is True
     assert sketch["geometry"][1]["construction"] is True
-    assert sketch["constraint_count"] == 1
-    assert sketch["constraints"][0]["type"] == "DistanceX"
-    assert sketch["constraints"][0]["name"] == "line_width"
-    assert sketch["constraints"][0]["value"] == 20.0
+    assert sketch["constraint_count"] == 2
+    assert any(item["type"] == "Coincident" for item in sketch["constraints"])
+    distance_constraint = next(item for item in sketch["constraints"] if item["type"] == "DistanceX")
+    assert distance_constraint["name"] == "line_width_reference"
+    assert distance_constraint["value"] == 20.0
     assembly = next(item for item in summary["assemblies"] if item["name"] == "Assembly")
     assert assembly["fallback"] is True
     assert assembly["solver_backend"] == "native_transient"
@@ -1312,3 +1430,93 @@ def test_local_freecadcmd_assembly_joint_types_and_solver():
         assert "lcs" in joint["reference1"]["connector_frame"]
         assert assembly["solver_diagnostics"]["severity"] in {"ok", "info", "warning", "error"}
     assert assemblies["AsmDistance"]["joints"][1]["distance"] == 12.0
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_sketch_geometry_point_patch_round_trip():
+    source = run_freecad_script(
+        """
+doc = FreeCAD.newDocument("SketchGeometryPointPatch")
+box = doc.addObject("Part::Box", "BaseBox")
+box.Length = 10
+box.Width = 8
+box.Height = 6
+sketch = doc.addObject("Sketcher::SketchObject", "Sketch")
+sketch.addGeometry(Part.LineSegment(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0)), False)
+doc.recompute()
+result = [box, sketch]
+""",
+        timeout=90,
+    )
+    assert source["ok"] is True
+
+    patched = run_freecad_document_patch(
+        [
+            {
+                "op": "set_geometry_point",
+                "selector": {"name": "Sketch"},
+                "geometry_index": 0,
+                "point_role": "end",
+                "value": [20, 0, 0],
+                "solve": True,
+            }
+        ],
+        source["exports"]["fcstd"],
+        timeout=90,
+    )
+    assert patched["ok"] is True
+    result = patched["patch_results"][0]
+    assert result["new_point"] == [20.0, 0.0, 0.0]
+    assert result["topological_lineage"]["repair"]["schema"] == "freecad.topological_ref_repair_report.v1"
+
+    inspected = run_freecad_document_inspect(patched["exports"]["fcstd"], timeout=90)
+    assert inspected["ok"] is True
+    sketch = next(item for item in inspected["document_summary"]["sketches"] if item["name"] == "Sketch")
+    line = next(item for item in sketch["geometry"] if item["index"] == 0)
+    assert line["end"] == [20.0, 0.0, 0.0]
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_sketch_add_geometry_auto_constraint():
+    source = run_freecad_script(
+        """
+doc = FreeCAD.newDocument("SketchAutoConstraint")
+box = doc.addObject("Part::Box", "BaseBox")
+box.Length = 1
+box.Width = 1
+box.Height = 1
+sketch = doc.addObject("Sketcher::SketchObject", "Sketch")
+doc.recompute()
+result = [box, sketch]
+""",
+        timeout=90,
+    )
+    assert source["ok"] is True
+
+    patched = run_freecad_document_patch(
+        [
+            {
+                "op": "add_geometry",
+                "selector": {"name": "Sketch"},
+                "geometry": {"type": "line", "start": [0, 0, 0], "end": [20, 0, 0]},
+                "auto_constraints": True,
+                "solve": True,
+            }
+        ],
+        source["exports"]["fcstd"],
+        timeout=90,
+    )
+    assert patched["ok"] is True
+    result = patched["patch_results"][0]
+    assert result["auto_constraints"][0]["type"] == "Horizontal"
+
+    inspected = run_freecad_document_inspect(patched["exports"]["fcstd"], timeout=90)
+    assert inspected["ok"] is True
+    sketch = next(item for item in inspected["document_summary"]["sketches"] if item["name"] == "Sketch")
+    assert any(item["type"] == "Horizontal" for item in sketch["constraints"])

@@ -153,6 +153,51 @@ def test_production_smoke_reports_storage_and_worker_boundary(tmp_path):
     assert body["freecad_worker"]["security_controls"]["egress_blocked"] is False
 
 
+def test_freecad_upload_policy_defaults_to_100mb(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAD_FREECAD_UPLOAD_MAX_BYTES", raising=False)
+    monkeypatch.delenv("FOURYI_CAD_UPLOAD_MAX_BYTES", raising=False)
+    resp = _client_with_store(tmp_path).get("/api/freecad/upload_policy")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["max_bytes"] == 100 * 1024 * 1024
+    assert body["max_mb"] == 100
+    assert "fcstd" in body["formats"]
+    assert "step" in body["formats"]
+
+
+def test_freecad_upload_policy_uses_env_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAD_FREECAD_UPLOAD_MAX_BYTES", "524288000")
+
+    resp = _client_with_store(tmp_path).get("/api/freecad/upload_policy")
+
+    assert resp.status_code == 200
+    assert resp.json()["max_bytes"] == 524288000
+
+
+def test_freecad_import_model_rejects_oversize_payload_before_sandbox(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("CAD_FREECAD_UPLOAD_MAX_BYTES", "5")
+
+    def fake_import_sandboxed(*args, **kwargs):
+        raise AssertionError("oversize upload must not reach FreeCAD sandbox")
+
+    monkeypatch.setattr("app.main.run_freecad_import_sandboxed", fake_import_sandboxed)
+    resp = _client_with_store(tmp_path).post(
+        "/api/freecad/import_model",
+        json={
+            "format": "fcstd",
+            "data_b64": "MTIzNDU2",
+            "filename": "too-large.FCStd",
+        },
+    )
+
+    assert resp.status_code == 413
+    assert "max allowed is 5 bytes" in resp.json()["detail"]
+
+
 def test_session_api_creates_reads_and_appends_versions(tmp_path):
     client = _client_with_store(tmp_path)
     state = default_design_state()
@@ -710,36 +755,8 @@ def test_freecad_document_patch_accepts_typed_feature_tree_ops(tmp_path, monkeyp
                     "fcstd": "UEFUQ0hGQ1N0ZA==",
                 },
                 "patch_results": [
-                    {"index": 0, "op": "create_feature", "created_name": "Boss"},
-                    {"index": 1, "op": "set_placement"},
-                    {"index": 2, "op": "set_expression"},
-                    {"index": 3, "op": "set_body_tip"},
-                    {"index": 4, "op": "create_sketch"},
-                    {"index": 5, "op": "attach_sketch"},
-                    {"index": 6, "op": "add_external_geometry"},
-                    {"index": 7, "op": "solver_status"},
-                    {"index": 8, "op": "add_geometry"},
-                    {"index": 9, "op": "add_constraint"},
-                    {"index": 10, "op": "remove_constraint"},
-                    {"index": 11, "op": "create_assembly"},
-                    {"index": 12, "op": "add_part_to_assembly"},
-                    {"index": 13, "op": "set_assembly_part_placement"},
-                    {"index": 14, "op": "ground_assembly_part"},
-                    {"index": 15, "op": "create_joint"},
-                    {"index": 16, "op": "update_joint"},
-                    {"index": 17, "op": "solve_assembly"},
-                    {"index": 18, "op": "remove_part_from_assembly"},
-                    {"index": 19, "op": "create_techdraw_page"},
-                    {"index": 20, "op": "add_techdraw_view"},
-                    {"index": 21, "op": "add_techdraw_projection_group"},
-                    {"index": 22, "op": "add_techdraw_section_view"},
-                    {"index": 23, "op": "add_techdraw_detail_view"},
-                    {"index": 24, "op": "add_techdraw_centerline"},
-                    {"index": 25, "op": "add_techdraw_cosmetic_vertex"},
-                    {"index": 26, "op": "add_techdraw_cosmetic_line"},
-                    {"index": 27, "op": "export_techdraw_pdf"},
-                    {"index": 28, "op": "add_techdraw_dimension"},
-                    {"index": 29, "op": "delete_feature"},
+                    {"index": index, "op": patch["op"]}
+                    for index, patch in enumerate(patches)
                 ],
             },
         )
@@ -808,6 +825,9 @@ def test_freecad_document_patch_accepts_typed_feature_tree_ops(tmp_path, monkeyp
             "selector": {"name": "Sketch"},
             "source_selector": {"name": "Box"},
             "references": ["Edge1"],
+            "stable_ids": ["edge-stable-1"],
+            "stable_references": ["Edge1"],
+            "stable_signatures": [{"kind": "Edge", "length": 20}],
         },
         {
             "op": "solver_status",
@@ -817,16 +837,52 @@ def test_freecad_document_patch_accepts_typed_feature_tree_ops(tmp_path, monkeyp
             "op": "add_geometry",
             "selector": {"name": "Sketch"},
             "geometry": {"type": "line_segment", "start": [0, 0, 0], "end": [20, 0, 0]},
+            "auto_constraints": True,
+            "auto_constraint_tolerance": 0.001,
+        },
+        {
+            "op": "set_geometry_construction",
+            "selector": {"name": "Sketch"},
+            "geometry_index": 0,
+            "construction": True,
+        },
+        {
+            "op": "set_geometry_point",
+            "selector": {"name": "Sketch"},
+            "geometry_index": 0,
+            "point_role": "end",
+            "value": [25, 0, 0],
+            "solve": True,
+        },
+        {
+            "op": "add_endpoint_coincidence",
+            "selector": {"name": "Sketch"},
+            "first": {"geometry_index": 0, "point_role": "start"},
+            "second": {"geometry_index": 1, "point_role": "end"},
         },
         {
             "op": "add_constraint",
             "selector": {"name": "Sketch"},
-            "constraint": {"type": "Horizontal", "geometry_index": 0},
+            "constraint": {"type": "DistanceX", "first": 0, "first_pos": 1, "second": 0, "second_pos": 2, "value": 20},
+        },
+        {
+            "op": "set_constraint_state",
+            "selector": {"name": "Sketch"},
+            "constraint_index": 0,
+            "new_name": "Width",
+            "active": True,
+            "driving": False,
+            "virtual_space": False,
         },
         {
             "op": "remove_constraint",
             "selector": {"name": "Sketch"},
             "constraint_index": 0,
+        },
+        {
+            "op": "validate_sketch",
+            "selector": {"name": "Sketch"},
+            "solve": True,
         },
         {
             "op": "create_assembly",
@@ -960,39 +1016,170 @@ def test_freecad_document_patch_accepts_typed_feature_tree_ops(tmp_path, monkeyp
     body = resp.json()
     assert body["ok"] is True
     assert patch_calls == [patches]
-    assert [item["op"] for item in body["patch_results"]] == [
-        "create_feature",
-        "set_placement",
-        "set_expression",
-        "set_body_tip",
-        "create_sketch",
-        "attach_sketch",
-        "add_external_geometry",
-        "solver_status",
-        "add_geometry",
-        "add_constraint",
-        "remove_constraint",
-        "create_assembly",
-        "add_part_to_assembly",
-        "set_assembly_part_placement",
-        "ground_assembly_part",
-        "create_joint",
-        "update_joint",
-        "solve_assembly",
-        "remove_part_from_assembly",
-        "create_techdraw_page",
-        "add_techdraw_view",
-        "add_techdraw_projection_group",
-        "add_techdraw_section_view",
-        "add_techdraw_detail_view",
-        "add_techdraw_centerline",
-        "add_techdraw_cosmetic_vertex",
-        "add_techdraw_cosmetic_line",
-        "export_techdraw_pdf",
-        "add_techdraw_dimension",
-        "delete_feature",
-    ]
+    assert [item["op"] for item in body["patch_results"]] == [patch["op"] for patch in patches]
     assert body["version"]["patch"]["patches"] == patches
+
+
+def test_freecad_document_patch_dry_run_does_not_save_version(tmp_path, monkeypatch):
+    patch_calls = []
+    inspect_calls = []
+    dry_summary = dict(FREECAD_DOC_SUMMARY)
+    dry_summary["geometry"] = dict(FREECAD_DOC_SUMMARY["geometry"])
+    dry_summary["geometry"]["volume"] = 512.0
+    dry_summary["objects"] = [
+        *FREECAD_DOC_SUMMARY["objects"],
+        {
+            "name": "Sketch",
+            "label": "Sketch",
+            "type_id": "Sketcher::SketchObject",
+            "sketch": {
+                "geometry_count": 1,
+                "constraint_count": 1,
+                "degrees_of_freedom": 2,
+                "edit_mode": {
+                    "state": "conflicting",
+                    "conflicting_constraints": [0],
+                    "redundant_constraints": [],
+                    "malformed_constraints": [],
+                    "diagnostics": [
+                        {
+                            "severity": "error",
+                            "code": "conflicting_constraints",
+                            "message": "constraint conflict",
+                        }
+                    ],
+                },
+            },
+        },
+    ]
+
+    def fake_import_sandboxed(import_format, data_b64, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.2.3",
+                "preview_png_b64": "T0xEUE5H",
+                "exports": {"step": "T0xEU1RFUA==", "stl": "T0xEU1RM", "fcstd": "T0xERkNTdGQ="},
+            },
+        )
+
+    def fake_patch_sandboxed(patches, fcstd_b64, **kwargs):
+        patch_calls.append({"patches": patches, "fcstd_b64": fcstd_b64, "dry_run": kwargs.get("dry_run")})
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "dry_run": True,
+                "freecad_version": "1.2.7",
+                "exports": {},
+                "document_summary": dry_summary,
+                "patch_results": [
+                    {
+                        "index": 0,
+                        "op": "set_geometry_point",
+                        "valid": False,
+                        "solver": {"error": None, "degrees_of_freedom": 2},
+                    },
+                    {
+                        "index": 1,
+                        "op": "validate_sketch",
+                        "valid": False,
+                        "diagnostics": {"conflicting_constraints": [0]},
+                        "sketch_summary": dry_summary["objects"][1]["sketch"],
+                    },
+                ],
+            },
+        )
+
+    def fake_inspect_sandboxed(fcstd_b64, **kwargs):
+        inspect_calls.append(fcstd_b64)
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.2.3",
+                "document_summary": FREECAD_DOC_SUMMARY,
+            },
+        )
+
+    monkeypatch.setattr("app.main.run_freecad_import_sandboxed", fake_import_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_patch_sandboxed", fake_patch_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_inspect_sandboxed", fake_inspect_sandboxed)
+    client = _client_with_store(tmp_path)
+    imported = client.post(
+        "/api/freecad/import_model",
+        json={"format": "fcstd", "data_b64": "T0xERkNTdGQ=", "filename": "old.FCStd"},
+    ).json()
+    session_id = imported["session_id"]
+    source_version_id = imported["version"]["id"]
+
+    resp = client.post(
+        "/api/freecad/document/patch",
+        json={
+            "session_id": session_id,
+            "version_id": source_version_id,
+            "dry_run": True,
+            "patches": [
+                {
+                    "op": "set_geometry_point",
+                    "selector": {"name": "Sketch"},
+                    "geometry_index": 0,
+                    "point_role": "end",
+                    "value": [25, 0, 0],
+                    "solve": True,
+                },
+                {
+                    "op": "validate_sketch",
+                    "selector": {"name": "Sketch"},
+                    "solve": True,
+                },
+            ],
+            "user_instruction": "preview sketch drag",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["dry_run"] is True
+    assert body["would_create_version"] is False
+    assert body["version"] is None
+    assert body["exports"] == {}
+    assert body["source_version_id"] == source_version_id
+    assert body["document_summary"]["geometry"]["volume"] == 512.0
+    assert body["document_state_diff"]["geometry_delta"]["volume"] == {
+        "from": 480.0,
+        "to": 512.0,
+        "delta": 32.0,
+    }
+    assert [item["op"] for item in body["patch_results"]] == ["set_geometry_point", "validate_sketch"]
+    assert patch_calls == [
+        {
+            "patches": [
+                {
+                    "op": "set_geometry_point",
+                    "selector": {"name": "Sketch"},
+                    "geometry_index": 0,
+                    "point_role": "end",
+                    "value": [25, 0, 0],
+                    "solve": True,
+                },
+                {
+                    "op": "validate_sketch",
+                    "selector": {"name": "Sketch"},
+                    "solve": True,
+                },
+            ],
+            "fcstd_b64": "T0xERkNTdGQ=",
+            "dry_run": True,
+        }
+    ]
+    assert inspect_calls == ["T0xERkNTdGQ="]
+
+    loaded = client.get(f"/api/sessions/{session_id}").json()
+    assert loaded["session"]["active_version_id"] == source_version_id
+    assert [version["id"] for version in loaded["versions"]] == [source_version_id]
 
 
 def test_session_api_returns_404_for_missing_session(tmp_path):

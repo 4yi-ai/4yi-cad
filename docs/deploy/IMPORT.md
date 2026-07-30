@@ -15,8 +15,13 @@ the edited wizard proposal should match.
    - `platform_runtime.gateway`: `apiBaseEnv:[OPENAI_BASE_URL]`, `apiKeyEnv:[OPENAI_API_KEY]`
    - `TEXT_MODEL` slot: real tool-calling model id as `defaultModel` + `allowedModels`
      (no vision requirement)
+   - `CAD_FREECAD_UPLOAD_MAX_BYTES=104857600` for the Private Beta default
+     100 MB FCStd/STEP/IGES/BREP upload cap
    - **no** native LLM key env proposed as a required secret
    - `memory_request_mb` = measured worst-case peak RSS, schedulable on one node
+   - stateful behavior is explicit: SQLite session metadata and filesystem CAD
+     artifacts default to pod-local `/tmp`; configure durable storage before
+     making Public Beta/GA durability claims.
 3. **Release** — CodeBuild → ECR (sets `last_image_uri`). Confirm the image builds
    from the root `Dockerfile`.
 4. **Publish** — needs a smoke pass + **tenant-isolation certification**. The
@@ -30,6 +35,7 @@ the edited wizard proposal should match.
 ## Pre-publish checklist
 
 - [ ] `/healthz` returns 200 fast, independent of any render (liveness safe)
+- [ ] `/api/freecad/upload_policy` reports the intended upload cap and formats
 - [ ] `/api/freecad/smoke` returns `ok:true` in the built container (single-container
       FreeCADCmd path is installed and can export STEP/STL)
 - [ ] gateway calls hit `${OPENAI_BASE_URL}/chat/completions` (not `/responses`, not `api.openai.com`)

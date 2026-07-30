@@ -35,7 +35,9 @@
     "auth_policy": "platform_sso",
     "_auth_note": "platform_sso => only the installing org's SSO users reach the app. Never 'public'.",
 
-    "env_json": {},
+    "env_json": {
+      "CAD_FREECAD_UPLOAD_MAX_BYTES": "104857600"
+    },
     "secret_env_json": {},
     "_secrets_note": "No consumer secrets. The app reads ONLY the platform-injected gateway env; it reads no native LLM keys, so none should be classified as required secrets."
   },
@@ -56,12 +58,15 @@
           "memoryMb": 4096,
           "replicas": { "min": 1, "max": 1 }
         },
-        "env": {},
+        "env": {
+          "CAD_FREECAD_UPLOAD_MAX_BYTES": "104857600"
+        },
         "secrets": []
       }
     ],
     "_manifest_note": [
       "Single public service (single-container MVP: FastAPI serves the SPA + /api + the sandboxed CadQuery worker in one image).",
+      "The app stores session metadata in SQLite and CAD artifacts on the filesystem. Defaults are pod-local /tmp paths for Private Beta; configure PVC/object storage before Public Beta/GA durability claims.",
       "CONFIRM at deploy: /tmp must be a WRITABLE tmpfs/emptyDir mount because the sandbox worker writes there and the pod should run read-only rootfs + non-root (tenant-isolation)."
     ]
   },
@@ -86,7 +91,7 @@
 
   "deploymentFit": {
     "single_public_service": true,
-    "stateful": false,
-    "notes": "Stateless server (client-as-source-of-truth); exports stream inline as base64; no DB/EBS in MVP."
+    "stateful": true,
+    "notes": "Stateful-lite Private Beta: server stores SQLite session/version metadata and filesystem artifacts under CAD_SESSION_DB_PATH/CAD_ARTIFACT_ROOT, defaulting to pod-local /tmp. Durable PVC/object storage is required before Public Beta or GA."
   }
 }
