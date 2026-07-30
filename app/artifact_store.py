@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.storage_paths import writable_platform_data_dir
+
 DEFAULT_ARTIFACT_ROOT = "/tmp/4yi-cad/artifacts"
 
 
@@ -33,7 +35,7 @@ def default_artifact_root() -> str:
     explicit = os.environ.get("CAD_ARTIFACT_ROOT", "").strip()
     if explicit:
         return explicit
-    data_dir = os.environ.get("CAD_DATA_DIR", "").strip()
+    data_dir = writable_platform_data_dir()
     if data_dir:
         return str(Path(data_dir) / "artifacts")
     return DEFAULT_ARTIFACT_ROOT

@@ -46,9 +46,9 @@ therefore still keeps a local session cache, and the server mirrors lightweight
 session/version facts into SQLite for reload/recovery. `CAD_SESSION_DB_PATH`
 controls the SQLite file location and `CAD_ARTIFACT_ROOT` controls server-side
 artifact storage. When the platform injects `CAD_DATA_DIR`, the app defaults to
-`${CAD_DATA_DIR}/sessions.sqlite3` and `${CAD_DATA_DIR}/artifacts`; otherwise it
-falls back to `/tmp/4yi-cad/...`, which is a convenience cache, not durable
-production storage.
+`${CAD_DATA_DIR}/sessions.sqlite3` and `${CAD_DATA_DIR}/artifacts` if that
+directory is writable by the app user; otherwise it falls back to
+`/tmp/4yi-cad/...`, which is a convenience cache, not durable production storage.
 
 Do not store secrets or cross-session artifacts in SQLite until the CAD worker is
 isolated from the web process; model-generated Python currently runs in the same
@@ -108,8 +108,8 @@ this repo URL + branch). Proposal must have: one public service, `runtime_port`
 `apiKeyEnv: [OPENAI_API_KEY]`, `TEXT_MODEL` slot with `defaultModel` +
 `allowedModels`). Set `CAD_FREECAD_UPLOAD_MAX_BYTES=104857600` for the Private
 Beta 100 MB upload cap. Size memory to measured peak RSS, schedulable on one
-node, and confirm the platform injects `CAD_DATA_DIR` backed by durable storage
-before claiming Public Beta/GA persistence.
+node, and confirm the platform injects a writable `CAD_DATA_DIR` backed by
+durable storage before claiming Public Beta/GA persistence.
 
 > **Pre-public-release license gate:** FreeCAD ships GPL components and any ported
 > Text23D code must be license-compatible — resolve before making the repo public.

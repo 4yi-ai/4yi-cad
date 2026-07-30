@@ -153,6 +153,23 @@ def test_production_smoke_reports_storage_and_worker_boundary(tmp_path):
     assert body["freecad_worker"]["security_controls"]["egress_blocked"] is False
 
 
+def test_production_smoke_falls_back_when_platform_data_dir_is_unwritable(tmp_path, monkeypatch):
+    blocked_parent = tmp_path / "blocked"
+    blocked_parent.write_text("not a directory")
+    monkeypatch.delenv("CAD_SESSION_DB_PATH", raising=False)
+    monkeypatch.delenv("CAD_ARTIFACT_ROOT", raising=False)
+    monkeypatch.setenv("CAD_DATA_DIR", str(blocked_parent / "data"))
+
+    resp = _client().get("/api/production/smoke")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["durable_storage_configured"] is False
+    assert body["storage"]["session_db"]["path"] == "/tmp/4yi-cad/sessions.sqlite3"
+    assert body["storage"]["artifact_root"]["path"] == "/tmp/4yi-cad/artifacts"
+
+
 def test_freecad_upload_policy_defaults_to_100mb(tmp_path, monkeypatch):
     monkeypatch.delenv("CAD_FREECAD_UPLOAD_MAX_BYTES", raising=False)
     monkeypatch.delenv("FOURYI_CAD_UPLOAD_MAX_BYTES", raising=False)

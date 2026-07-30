@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.storage_paths import writable_platform_data_dir
+
 DEFAULT_DB_PATH = "/tmp/4yi-cad/sessions.sqlite3"
 
 
@@ -22,7 +24,7 @@ def default_db_path() -> str:
     explicit = os.environ.get("CAD_SESSION_DB_PATH", "").strip()
     if explicit:
         return explicit
-    data_dir = os.environ.get("CAD_DATA_DIR", "").strip()
+    data_dir = writable_platform_data_dir()
     if data_dir:
         return str(Path(data_dir) / "sessions.sqlite3")
     return DEFAULT_DB_PATH

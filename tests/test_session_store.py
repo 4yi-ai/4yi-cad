@@ -21,6 +21,17 @@ def test_explicit_storage_paths_override_platform_data_dir(tmp_path, monkeypatch
     assert default_artifact_root() == str(tmp_path / "custom" / "artifacts")
 
 
+def test_platform_data_dir_falls_back_when_not_writable(tmp_path, monkeypatch):
+    blocked_parent = tmp_path / "blocked"
+    blocked_parent.write_text("not a directory")
+    monkeypatch.delenv("CAD_SESSION_DB_PATH", raising=False)
+    monkeypatch.delenv("CAD_ARTIFACT_ROOT", raising=False)
+    monkeypatch.setenv("CAD_DATA_DIR", str(blocked_parent / "data"))
+
+    assert default_db_path() == "/tmp/4yi-cad/sessions.sqlite3"
+    assert default_artifact_root() == "/tmp/4yi-cad/artifacts"
+
+
 def test_sqlite_session_store_persists_versions(tmp_path):
     store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
     state = default_design_state()

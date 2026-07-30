@@ -22,7 +22,8 @@ the edited wizard proposal should match.
    - stateful behavior is explicit: SQLite session metadata and filesystem CAD
      artifacts use `${CAD_DATA_DIR}` when the platform injects it; otherwise they
      fall back to pod-local `/tmp`. Confirm the live install is PVC/object-storage
-     backed before making Public Beta/GA durability claims.
+     backed and that `CAD_DATA_DIR` is writable by the app user before making
+     Public Beta/GA durability claims.
 3. **Release** — CodeBuild → ECR (sets `last_image_uri`). Confirm the image builds
    from the root `Dockerfile`.
 4. **Publish** — needs a smoke pass + **tenant-isolation certification**. The
