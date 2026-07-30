@@ -240,13 +240,16 @@ def test_generated_hole_edit_prefers_local_parameter_patch():
     assert "if (useAgent) {" in html
 
 
-def test_generated_scene_description_routes_to_agent():
+def test_generated_unmapped_command_falls_back_to_agent():
     html = _html()
 
-    assert "hasSceneGenerationIntent" in html
-    assert r"(?:x|×|\*)" in html
-    assert "花园|园区|场地|地块" in html
-    assert "房子|楼房|楼层|楼|别墅|泳池|游泳池" in html
+    assert "shouldUseAgentForUnmappedCommand" in html
+    assert 'state.previewMode === "generated"' in html
+    assert (
+        "const useAgent = !freeCadPatch && !generatedPatch && !patch && "
+        "shouldUseAgentForUnmappedCommand(text, rewriteScript);"
+    ) in html
+    assert "hasSceneGenerationIntent" not in html
 
 
 def test_p1_workbench_does_not_expose_topology_or_arbitrary_feature_history_controls():
