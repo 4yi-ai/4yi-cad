@@ -27,6 +27,7 @@ def test_p1_workbench_exposes_core_surfaces():
         "4yi-cad.server-session-id.v1",
         "persistWorkbenchSession",
         "restoreWorkbenchSession",
+        "sanitizeChatHistory",
         "recordServerVersion",
         "restoreServerSession",
         "artifactRefs",
@@ -229,6 +230,15 @@ def test_p1_workbench_restores_browser_session_before_fetching_initial_state():
         "if (await restoreServerSession())"
     )
     assert html.index("if (await restoreServerSession())") < html.index("/api/design/initial")
+
+
+def test_chat_history_is_sanitized_before_restore_and_generate():
+    html = _html()
+
+    assert "function sanitizeChatHistory(history)" in html
+    assert 'item.role === "user" || item.role === "assistant"' in html
+    assert "state.chatHistory = sanitizeChatHistory(saved.chatHistory);" in html
+    assert "history: mode === \"rewrite\" ? [] : sanitizeChatHistory(state.chatHistory)" in html
 
 
 def test_generated_hole_edit_prefers_local_parameter_patch():
