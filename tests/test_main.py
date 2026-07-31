@@ -249,6 +249,17 @@ def test_session_api_creates_reads_and_appends_versions(tmp_path):
     assert body["active_version"]["geometry_summary"]["bbox_mm"] == [60, 40, 14]
     assert body["versions"][0]["intent"] == "create"
 
+    listed = client.get("/api/sessions?limit=10")
+    assert listed.status_code == 200
+    sessions = listed.json()["sessions"]
+    assert len(sessions) == 1
+    assert sessions[0]["session"]["id"] == session_id
+    assert sessions[0]["version_count"] == 1
+    assert sessions[0]["active_version"]["id"] == version["id"]
+    assert sessions[0]["active_version"]["metadata"]["preview_mode"] == "design_state"
+    assert "script" not in sessions[0]["active_version"]
+    assert "design_state" not in sessions[0]["active_version"]
+
 
 def test_session_api_persists_artifacts_outside_sqlite(tmp_path):
     client = _client_with_store(tmp_path)

@@ -364,8 +364,11 @@ cad-worker/freecad-worker        ── big CPU/mem + EBS
 25. Agent/render activity feedback baseline: frontend shows live status chip,
     viewport activity overlay, and chat activity card while SSE generation is
     submitting, thinking, rendering, retrying, and receiving artifacts.
-26. Parametric panel polish **or** interactive WS viewport.
-27. Optional: multimodal image input; template library.
+26. Cross-session history baseline: backend lists recent saved workbench sessions;
+    frontend drawer restores a selected session's active version while keeping
+    current-session version history separate.
+27. Parametric panel polish **or** interactive WS viewport.
+28. Optional: multimodal image input; template library.
 
 Each task: red→green TDD (unit tests with fakes; heavy FreeCAD/preview via container
 smoke). Adversarial review + verification-before-completion per task.

@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -754,6 +754,15 @@ def create_app(
         except Exception as exc:  # noqa: BLE001 - storage setup can be env/volume dependent
             raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
         return {"session": session.__dict__}
+
+    @app.get("/api/sessions")
+    async def list_sessions(limit: int = Query(default=20, ge=1, le=100)):
+        store = _get_session_store(app)
+        try:
+            sessions = store.list_sessions(limit=limit)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        return {"sessions": sessions}
 
     @app.get("/api/sessions/{session_id}")
     async def get_session(session_id: str):

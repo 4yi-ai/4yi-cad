@@ -220,6 +220,12 @@ def test_p1_workbench_exposes_core_surfaces():
         "request_script_rewrite",
         "startNewWorkbenchSession",
         "resetClientWorkbenchSession",
+        "sessionHistoryButton",
+        "sessionHistoryDrawer",
+        "openSessionHistory",
+        "loadSessionHistory",
+        "restoreSessionFromHistory",
+        "renderSessionHistoryDrawer",
         "/api/sessions",
         "/rollback",
         "commitParameter",
@@ -378,6 +384,25 @@ def test_new_session_button_resets_current_workbench_session():
     assert "state.chatHistory = [];" in html
     assert 'state.chatMessages = [{ role: "assistant", key: "chat.newSessionStarted" }];' in html
     assert "window.startNewWorkbenchSession = startNewWorkbenchSession;" in html
+
+
+def test_session_history_drawer_lists_and_restores_server_sessions():
+    html = _html()
+
+    assert 'id="sessionHistoryButton"' in html
+    assert 'id="sessionHistoryDrawer"' in html
+    assert "function renderSessionHistoryDrawer()" in html
+    assert "function openSessionHistory()" in html
+    assert "function loadSessionHistory()" in html
+    assert "function restoreSessionFromHistory(sessionId)" in html
+    assert 'fetchJson("/api/sessions?limit=30")' in html
+    assert "state.sessionHistoryItems" in html
+    assert "sessionSummaryPreviewUrl" in html
+    assert "localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, sessionId);" in html
+    assert "await applyStoredServerVersion(active, saved.versions || []);" in html
+    assert 'key: "chat.sessionRestored"' in html
+    assert "window.openSessionHistory = openSessionHistory;" in html
+    assert "window.restoreSessionFromHistory = restoreSessionFromHistory;" in html
 
 
 def test_p1_workbench_does_not_expose_topology_or_arbitrary_feature_history_controls():

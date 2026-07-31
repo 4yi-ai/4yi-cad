@@ -61,6 +61,9 @@ class SessionStore:
     def create_session(self, *, title: str | None = None) -> StoredSession:
         raise NotImplementedError
 
+    def list_sessions(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         raise NotImplementedError
 
@@ -124,6 +127,55 @@ class SqliteSessionStore(SessionStore):
                 ),
             )
         return session
+
+    def list_sessions(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(int(limit or 20), 100))
+        with self._connect() as con:
+            session_rows = con.execute(
+                """
+                select id, title, active_version_id, created_at, updated_at
+                from design_sessions
+                order by updated_at desc, created_at desc
+                limit ?
+                """,
+                (bounded_limit,),
+            ).fetchall()
+            summaries: list[dict[str, Any]] = []
+            for session_row in session_rows:
+                session = _session_from_row(session_row)
+                version_count = int(
+                    con.execute(
+                        "select count(*) from design_versions where session_id = ?",
+                        (session.id,),
+                    ).fetchone()[0]
+                )
+                active_version = None
+                if session.active_version_id:
+                    version_row = con.execute(
+                        """
+                        select
+                            id,
+                            session_id,
+                            version_number,
+                            parent_version_id,
+                            intent,
+                            user_instruction,
+                            design_state_json,
+                            script,
+                            geometry_summary_json,
+                            patch_json,
+                            metadata_json,
+                            status,
+                            error,
+                            created_at
+                        from design_versions
+                        where session_id = ? and id = ?
+                        """,
+                        (session.id, session.active_version_id),
+                    ).fetchone()
+                    active_version = _version_from_row(version_row) if version_row else None
+                summaries.append(_session_summary(session, active_version, version_count))
+        return summaries
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         with self._connect() as con:
@@ -415,6 +467,18 @@ def _session_to_dict(session: StoredSession) -> dict[str, Any]:
         "active_version_id": session.active_version_id,
         "created_at": session.created_at,
         "updated_at": session.updated_at,
+    }
+
+
+def _session_summary(
+    session: StoredSession,
+    active_version: StoredVersion | None,
+    version_count: int,
+) -> dict[str, Any]:
+    return {
+        "session": _session_to_dict(session),
+        "active_version": _version_summary(active_version) if active_version else None,
+        "version_count": version_count,
     }
 
 

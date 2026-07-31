@@ -151,6 +151,130 @@
   .top-action-button svg { width: 15px; height: 15px; stroke-width: 2; }
   .hidden-file-input { display: none; }
 
+  .session-history-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(15, 23, 42, .18);
+    display: flex;
+    justify-content: flex-end;
+  }
+  .session-history-panel {
+    width: min(460px, 100vw);
+    height: 100%;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 36px rgba(15, 23, 42, .16);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .session-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .session-history-header strong {
+    display: block;
+    font-size: 15px;
+  }
+  .session-history-header span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .session-history-body {
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+  }
+  .session-row {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    padding: 10px;
+    text-align: left;
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .session-row:hover { border-color: #b8d6ff; background: #eef6ff; }
+  .session-row.active {
+    border-color: #b8d6ff;
+    background: var(--primary-soft);
+  }
+  .session-thumb {
+    width: 76px;
+    aspect-ratio: 16 / 10;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    color: var(--muted);
+  }
+  .session-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .session-thumb svg {
+    width: 22px;
+    height: 22px;
+  }
+  .session-main {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .session-main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .session-main p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .session-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .session-pill {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255,255,255,.82);
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  .session-empty {
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    padding: 16px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
   .workspace {
     min-height: 0;
     display: grid;
@@ -1056,6 +1180,7 @@
       <div class="status-chip" id="status">loading design state</div>
       <input class="hidden-file-input" id="freeCadImportInput" type="file" accept=".FCStd,.fcstd,.step,.stp,.iges,.igs,.brep" onchange="importFreeCadModelFile(this.files && this.files[0]); this.value = '';" />
       <button class="top-action-button" id="newSessionButton" type="button" onclick="startNewWorkbenchSession()" title="Start a new workbench session"><span data-icon="redo"></span><span id="newSessionButtonText">New Session</span></button>
+      <button class="top-action-button" id="sessionHistoryButton" type="button" onclick="openSessionHistory()" title="Open previous workbench sessions"><span data-icon="undo"></span><span id="sessionHistoryButtonText">Sessions</span></button>
       <button class="top-action-button" id="importButton" type="button" onclick="openFreeCadImportPicker()" title="Import FCStd, STEP, IGES, or BREP"><span data-icon="download"></span><span id="importButtonText">Import</span></button>
       <button class="lang-button" id="localeToggle" type="button" onclick="toggleLocale()">中文</button>
     </div>
@@ -1102,6 +1227,7 @@
       <div class="bottom-content" id="bottomContent"></div>
     </section>
   </main>
+  <div id="sessionHistoryDrawer"></div>
 </div>
 
 <script>
@@ -1121,10 +1247,23 @@ const I18N = {
     apply: "Apply",
     newSession: "New Session",
     newSessionTitle: "Start a new workbench session",
+    sessionHistory: "Sessions",
+    sessionHistoryTitle: "Previous sessions",
+    sessionHistorySubtitle: "Restore a saved workbench session.",
+    sessionHistoryButtonTitle: "Open previous workbench sessions",
+    sessionHistoryLoading: "Loading sessions",
+    sessionHistoryEmpty: "No saved sessions yet.",
+    sessionHistoryFailed: "Session history failed: {message}",
+    sessionRestored: "Restored session: {title}",
+    currentSession: "current",
+    versionCount: "{count} versions",
+    lastUpdated: "Updated {time}",
+    untitledSession: "Untitled session",
     importModel: "Import",
     importModelTitle: "Import FCStd, STEP, IGES, or BREP",
     langToggle: "中文",
     none: "none",
+    close: "Close",
     off: "off",
     unitMm: "mm",
     featureFallback: "Feature",
@@ -1427,6 +1566,7 @@ const I18N = {
       scriptRewriteOk: "Updated the current CAD script.",
       rollbackOk: "Restored server version v{version}.",
       rollbackFailed: "Rollback failed: {message}",
+      sessionRestored: "Restored session: {title}.",
       commandNotUnderstood: "I could not map that to an existing CAD parameter or typed edit.",
       generationFailed: "Generation failed: {message}",
       generationOk: "Generated a CAD script and available preview/artifacts.",
@@ -1498,6 +1638,7 @@ const I18N = {
       serverArtifactsRestored: "Restored server artifacts",
       rolledBack: "Rolled back to server version v{version}",
       rollbackFailed: "Rollback failed: {message}",
+      sessionRestored: "Restored session: {title}",
       scriptParameterUpdated: "Updated script parameter: {name} = {value} {unit}",
       scriptPatchFailed: "Script parameter update failed: {message}",
       freecadDocumentPatchUpdated: "Updated FreeCAD document: {name} = {value} {unit}",
@@ -1550,10 +1691,23 @@ const I18N = {
     apply: "应用",
     newSession: "新建会话",
     newSessionTitle: "新建工作台会话",
+    sessionHistory: "历史会话",
+    sessionHistoryTitle: "历史会话",
+    sessionHistorySubtitle: "恢复已保存的工作台会话。",
+    sessionHistoryButtonTitle: "打开历史工作台会话",
+    sessionHistoryLoading: "正在加载会话",
+    sessionHistoryEmpty: "还没有保存的会话。",
+    sessionHistoryFailed: "历史会话加载失败：{message}",
+    sessionRestored: "已恢复会话：{title}",
+    currentSession: "当前",
+    versionCount: "{count} 个版本",
+    lastUpdated: "更新于 {time}",
+    untitledSession: "未命名会话",
     importModel: "导入",
     importModelTitle: "导入 FCStd、STEP、IGES 或 BREP",
     langToggle: "EN",
     none: "无",
+    close: "关闭",
     off: "关闭",
     unitMm: "mm",
     featureFallback: "特征",
@@ -1856,6 +2010,7 @@ const I18N = {
       scriptRewriteOk: "已更新当前 CAD 脚本。",
       rollbackOk: "已恢复服务器版本 v{version}。",
       rollbackFailed: "回滚失败：{message}",
+      sessionRestored: "已恢复会话：{title}。",
       commandNotUnderstood: "还不能把这句话映射到现有 CAD 参数或类型化编辑。",
       generationFailed: "生成失败：{message}",
       generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
@@ -1927,6 +2082,7 @@ const I18N = {
       serverArtifactsRestored: "已恢复服务器产物",
       rolledBack: "已回滚到服务器版本 v{version}",
       rollbackFailed: "回滚失败：{message}",
+      sessionRestored: "已恢复会话：{title}",
       scriptParameterUpdated: "已更新脚本参数：{name} = {value} {unit}",
       scriptPatchFailed: "脚本参数更新失败：{message}",
       freecadDocumentPatchUpdated: "已更新 FreeCAD 文档：{name} = {value} {unit}",
@@ -2068,6 +2224,10 @@ const state = {
   serverSessionId: localStorage.getItem(SERVER_SESSION_ID_STORAGE_KEY) || "",
   activeServerVersionId: "",
   lastServerVersionSignature: "",
+  sessionHistoryOpen: false,
+  sessionHistoryLoading: false,
+  sessionHistoryItems: [],
+  sessionHistoryError: "",
   chatHistory: [],
   chatMessages: [
     { role: "assistant", key: "chat.initial" },
@@ -2206,6 +2366,7 @@ const iconSvg = {
   edit: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M12 20h9'/><path d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z'/></svg>",
   download: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M12 3v12'/><path d='m7 10 5 5 5-5'/><path d='M5 21h14'/></svg>",
   code: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='m8 9-4 3 4 3'/><path d='m16 9 4 3-4 3'/><path d='m14 4-4 16'/></svg>",
+  x: "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>",
 };
 
 function icon(name) {
@@ -4221,6 +4382,153 @@ function historyItemsFromServerVersions(versions = []) {
   }));
 }
 
+function sessionSummaryVersion(item) {
+  return item?.active_version || null;
+}
+
+function sessionSummaryTitle(item) {
+  const session = item?.session || {};
+  const version = sessionSummaryVersion(item);
+  const metadata = version?.metadata || {};
+  const title = String(session.title || "").trim();
+  const genericTitle = !title || title === "4yi-cad session" || title === "Untitled CAD session";
+  return metadata.generated_prompt || (!genericTitle ? title : "") || version?.user_instruction || title || t("untitledSession");
+}
+
+function sessionSummaryDetail(item) {
+  const version = sessionSummaryVersion(item);
+  const metadata = version?.metadata || {};
+  return version?.user_instruction || metadata.generated_prompt || version?.intent || t("notAvailable");
+}
+
+function sessionSummaryTime(item) {
+  const raw = item?.session?.updated_at || sessionSummaryVersion(item)?.created_at || "";
+  if (!raw) return t("notAvailable");
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleString(currentLocale === "zh" ? "zh-CN" : "en", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function sessionSummaryPreviewUrl(item) {
+  const refs = artifactRefsFromMetadata(sessionSummaryVersion(item)?.metadata);
+  return refs.preview?.url || "";
+}
+
+function sessionSummaryEngine(item) {
+  return engineLabel(sessionSummaryVersion(item)?.metadata?.engine);
+}
+
+function renderSessionHistoryDrawer() {
+  const root = $("sessionHistoryDrawer");
+  if (!root) return;
+  if (!state.sessionHistoryOpen) {
+    root.innerHTML = "";
+    return;
+  }
+  const body = state.sessionHistoryLoading
+    ? `<div class="session-empty">${escapeHtml(t("sessionHistoryLoading"))}</div>`
+    : state.sessionHistoryError
+    ? `<div class="session-empty">${escapeHtml(t("sessionHistoryFailed", { message: state.sessionHistoryError }))}</div>`
+    : state.sessionHistoryItems.length
+    ? state.sessionHistoryItems.map(renderSessionHistoryRow).join("")
+    : `<div class="session-empty">${escapeHtml(t("sessionHistoryEmpty"))}</div>`;
+  root.innerHTML = `<div class="session-history-backdrop" onclick="closeSessionHistory()">
+    <aside class="session-history-panel" onclick="event.stopPropagation()" aria-label="${escapeHtml(t("sessionHistoryTitle"))}">
+      <header class="session-history-header">
+        <div>
+          <strong>${escapeHtml(t("sessionHistoryTitle"))}</strong>
+          <span>${escapeHtml(t("sessionHistorySubtitle"))}</span>
+        </div>
+        <button class="icon-button" type="button" onclick="closeSessionHistory()" title="${escapeHtml(t("close"))}">${icon("x")}</button>
+      </header>
+      <div class="session-history-body">${body}</div>
+    </aside>
+  </div>`;
+}
+
+function renderSessionHistoryRow(item) {
+  const session = item?.session || {};
+  const title = sessionSummaryTitle(item);
+  const detail = sessionSummaryDetail(item);
+  const previewUrl = sessionSummaryPreviewUrl(item);
+  const versionCount = Number(item?.version_count || 0);
+  const isCurrent = Boolean(session.id && session.id === state.serverSessionId);
+  return `<button class="session-row ${isCurrent ? "active" : ""}" type="button" onclick="restoreSessionFromHistory(${escapeHtml(jsString(session.id || ""))})" ${!session.id ? "disabled" : ""}>
+    <span class="session-thumb">${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="" loading="lazy" />` : icon("box")}</span>
+    <span class="session-main">
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(detail)}</p>
+      <span class="session-meta">
+        <span class="session-pill">${escapeHtml(sessionSummaryEngine(item))}</span>
+        <span class="session-pill">${escapeHtml(t("versionCount", { count: versionCount }))}</span>
+        ${isCurrent ? `<span class="session-pill">${escapeHtml(t("currentSession"))}</span>` : ""}
+        <span>${escapeHtml(t("lastUpdated", { time: sessionSummaryTime(item) }))}</span>
+      </span>
+    </span>
+  </button>`;
+}
+
+async function openSessionHistory() {
+  state.sessionHistoryOpen = true;
+  renderSessionHistoryDrawer();
+  await loadSessionHistory();
+}
+
+function closeSessionHistory() {
+  state.sessionHistoryOpen = false;
+  renderSessionHistoryDrawer();
+}
+
+async function loadSessionHistory() {
+  state.sessionHistoryLoading = true;
+  state.sessionHistoryError = "";
+  renderSessionHistoryDrawer();
+  try {
+    const result = await fetchJson("/api/sessions?limit=30");
+    state.sessionHistoryItems = Array.isArray(result.sessions) ? result.sessions : [];
+  } catch (error) {
+    state.sessionHistoryItems = [];
+    state.sessionHistoryError = error.message || t("log.unknownError");
+    log(t("sessionHistoryFailed", { message: state.sessionHistoryError }));
+  } finally {
+    state.sessionHistoryLoading = false;
+    renderSessionHistoryDrawer();
+  }
+}
+
+async function restoreSessionFromHistory(sessionId) {
+  if (!sessionId) return;
+  $("applyButton").disabled = true;
+  clearGenerationActivity();
+  setStatus("loadingVersion");
+  try {
+    const saved = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const active = saved.active_version;
+    if (!active?.design_state || !active.script) throw new Error(t("sessionHistoryEmpty"));
+    state.serverSessionId = sessionId;
+    localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, sessionId);
+    const restored = await applyStoredServerVersion(active, saved.versions || []);
+    if (!restored) throw new Error(t("sessionHistoryEmpty"));
+    const title = saved.session?.title || sessionSummaryTitle({ session: saved.session, active_version: active });
+    state.sessionHistoryOpen = false;
+    state.chatMessages.unshift({ role: "assistant", key: "chat.sessionRestored", vars: { title } });
+    log(t("log.sessionRestored", { title }));
+    setStatus("restored");
+  } catch (error) {
+    state.sessionHistoryError = error.message || t("log.unknownError");
+    setStatus("failed");
+    log(t("sessionHistoryFailed", { message: state.sessionHistoryError }));
+  } finally {
+    $("applyButton").disabled = false;
+    renderAll();
+  }
+}
+
 function syncSavedServerVersion(version, fallbackLabel, fallbackDetail) {
   if (!version?.id) return;
   state.activeServerVersionId = version.id;
@@ -4292,6 +4600,10 @@ function resetClientWorkbenchSession() {
   state.bottomTab = "chat";
   state.viewport = { scale: 1, tx: 0, ty: 0, dragging: false, x: 0, y: 0 };
   state.lastServerVersionSignature = "";
+  state.sessionHistoryOpen = false;
+  state.sessionHistoryLoading = false;
+  state.sessionHistoryItems = [];
+  state.sessionHistoryError = "";
   state.chatHistory = [];
   state.chatMessages = [{ role: "assistant", key: "chat.newSessionStarted" }];
 }
@@ -5479,6 +5791,8 @@ function renderStaticText() {
   $("applyButton").textContent = t("apply");
   $("newSessionButtonText").textContent = t("newSession");
   $("newSessionButton").title = t("newSessionTitle");
+  $("sessionHistoryButtonText").textContent = t("sessionHistory");
+  $("sessionHistoryButton").title = t("sessionHistoryButtonTitle");
   $("importButtonText").textContent = t("importModel");
   $("importButton").title = t("importModelTitle");
   $("localeToggle").textContent = t("langToggle");
@@ -7857,6 +8171,7 @@ function renderAll() {
   renderViewport();
   renderProperties();
   renderBottom();
+  renderSessionHistoryDrawer();
   withIcons();
   persistWorkbenchSession();
 }
@@ -10374,6 +10689,9 @@ window.setBottomTab = setBottomTab;
 window.commitParameter = commitParameter;
 window.commitGeneratedParameter = commitGeneratedParameter;
 window.startNewWorkbenchSession = startNewWorkbenchSession;
+window.openSessionHistory = openSessionHistory;
+window.closeSessionHistory = closeSessionHistory;
+window.restoreSessionFromHistory = restoreSessionFromHistory;
 window.openFreeCadImportPicker = openFreeCadImportPicker;
 window.importFreeCadModelFile = importFreeCadModelFile;
 window.renameFeature = renameFeature;

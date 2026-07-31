@@ -68,3 +68,12 @@ def test_sqlite_session_store_persists_versions(tmp_path):
     assert loaded["active_version"]["patch"]["name"] == "hole_d"
     assert loaded["versions"][0]["version_number"] == 1
     assert loaded["versions"][1]["version_number"] == 2
+
+    sessions = store.list_sessions(limit=10)
+    assert len(sessions) == 1
+    assert sessions[0]["session"]["id"] == session.id
+    assert sessions[0]["version_count"] == 2
+    assert sessions[0]["active_version"]["id"] == second.id
+    assert sessions[0]["active_version"]["user_instruction"] == "hole_d = 6"
+    assert "script" not in sessions[0]["active_version"]
+    assert "design_state" not in sessions[0]["active_version"]
