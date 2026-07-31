@@ -67,7 +67,9 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "rather than collapsing everything into one block" in SYSTEM_PROMPT
     assert "Private beta complexity budget" in SYSTEM_PROMPT
     assert "20-40 major exportable objects" in SYSTEM_PROMPT
-    assert "Avoid per-window or per-floor geometry arrays" in SYSTEM_PROMPT
+    assert "Massing-level does not mean blank boxes" in SYSTEM_PROMPT
+    assert "horizontal floor/story bands grouped every 2-4" in SYSTEM_PROMPT
+    assert "Avoid individual windows" in SYSTEM_PROMPT
     assert "ViewObject.ShapeColor" in SYSTEM_PROMPT
     assert "translucent blue" in SYSTEM_PROMPT
     assert "multi-object site/building layouts" in freecad_description

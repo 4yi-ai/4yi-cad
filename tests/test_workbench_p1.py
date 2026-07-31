@@ -364,6 +364,10 @@ def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
     assert "opacity: hasSemanticVisuals ? 0.18 : 0.86" in html
     assert "function selectedFreeCadFocusInfo(viewerScene = null)" in html
     assert "function applyGeneratedViewerCamera(runtime, focusInfo = null)" in html
+    assert "function addFreeCadBuildingDetailOverlays(THREE, group)" in html
+    assert "function freeCadBuildingFloorCount(info)" in html
+    assert "addFreeCadBuildingDetailOverlays(THREE, group);" in html
+    assert "mode !== \"vertex\" && !objectSelected" in html
     assert "camera.up.copy(generatedCameraUpVector(THREE, state.viewMode));" in html
     assert 'state.generatedViewerFitMode = "selection";' in html
     assert 'state.generatedViewerFitMode = "all";' in html

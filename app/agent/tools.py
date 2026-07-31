@@ -105,12 +105,15 @@ Hard rules:
   as simple named massing objects rather than collapsing everything into one block.
 - Private beta complexity budget: site/community/building-layout outputs are
   massing-level scenes with no more than 20-40 major exportable objects. Aggregate
-  repeated towers, floors, windows, facade panels, trees, cars, and furniture into
-  simple named masses or zones.
-- Avoid per-window or per-floor geometry arrays, dense meshes, heavy booleans,
-  global fillets/chamfers, and ornamental detail unless the user asks for one
-  specific small part. Prioritize valid export, named editable objects, and a
-  responsive viewer over visual detail.
+  repeated towers, windows, trees, cars, and furniture into simple named masses or
+  zones.
+- Massing-level does not mean blank boxes. For buildings, include a small number
+  of low-cost visual articulation elements when they fit the budget: roof caps,
+  podiums, lobby volumes, and horizontal floor/story bands grouped every 2-4
+  floors for tall towers. Avoid individual windows, dense facade panel arrays,
+  dense meshes, heavy booleans, global fillets/chamfers, and ornamental detail
+  unless the user asks for one specific small part. Prioritize valid export,
+  named editable objects, and a responsive viewer over decorative complexity.
 
 Quick reference:
 - Primitives: cq.Workplane("XY").box(l,w,h) | .circle(r).extrude(h) | .sphere(r)

@@ -3024,6 +3024,80 @@ function freeCadViewerObjectStyle(obj) {
   };
 }
 
+function generatedBuildingFloorHeightHint(info) {
+  const height = Math.abs(Number(info?.size?.[2]) || 0);
+  if (!height) return null;
+  const explicit = Number(generatedParameterValueMatching([
+    /floor.*h/,
+    /floor_height/,
+    /story.*h/,
+    /storey.*h/,
+    /tower_floor_h/,
+    /wall.*h/,
+    /(^|_)wh($|_)/,
+    /层高/,
+  ]));
+  if (Number.isFinite(explicit) && explicit > 0 && explicit < height * 0.75) return explicit;
+  return height > 200 ? 3000 : 3;
+}
+
+function freeCadBuildingFloorCount(info) {
+  const height = Math.abs(Number(info?.size?.[2]) || 0);
+  if (height < 6) return 0;
+  const floorHeight = generatedBuildingFloorHeightHint(info);
+  if (!floorHeight) return 0;
+  return Math.max(2, Math.min(24, Math.round(height / floorHeight)));
+}
+
+function addFreeCadBuildingDetailOverlays(THREE, group) {
+  const selectedName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  for (const obj of freeCadSelectableShapeObjects()) {
+    const objectStyle = freeCadViewerObjectStyle(obj);
+    if (objectStyle.role !== "building") continue;
+    const objectName = freeCadObjectKey(obj);
+    const info = freeCadBboxInfo(obj?.shape?.bbox);
+    const floorCount = freeCadBuildingFloorCount(info);
+    if (!objectName || !info || floorCount < 2) continue;
+    const [minX, minY, minZ] = info.min;
+    const [maxX, maxY, maxZ] = info.max;
+    const pad = Math.max(freeCadPickPadding() * 0.012, Math.max(...info.size.map(Math.abs)) * 0.0015);
+    const x0 = minX - pad;
+    const x1 = maxX + pad;
+    const y0 = minY - pad;
+    const y1 = maxY + pad;
+    const positions = [];
+    const pushSegment = (a, b) => positions.push(...a, ...b);
+    for (let i = 1; i < floorCount; i += 1) {
+      const z = minZ + ((maxZ - minZ) * i) / floorCount;
+      pushSegment([x0, y0, z], [x1, y0, z]);
+      pushSegment([x1, y0, z], [x1, y1, z]);
+      pushSegment([x1, y1, z], [x0, y1, z]);
+      pushSegment([x0, y1, z], [x0, y0, z]);
+    }
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    pushSegment([midX, y0, minZ], [midX, y0, maxZ]);
+    pushSegment([midX, y1, minZ], [midX, y1, maxZ]);
+    pushSegment([x0, midY, minZ], [x0, midY, maxZ]);
+    pushSegment([x1, midY, minZ], [x1, midY, maxZ]);
+    if (!positions.length) continue;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    const selected = selectedName && normalizeFreeCadToken(objectName) === selectedName;
+    const line = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({
+        color: selected ? 0x0b6fe8 : objectStyle.edgeColor,
+        transparent: true,
+        opacity: selected ? 0.68 : 0.42,
+        depthWrite: false,
+      })
+    );
+    line.renderOrder = selected ? 16 : 12;
+    group.add(line);
+  }
+}
+
 function freeCadSubelementMatchesSelection(objectName, reference, kind, stableId = "") {
   const selected = state.selectedFreeCadSubelement;
   return Boolean(selected)
@@ -3249,7 +3323,7 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
       const material = new THREE.LineBasicMaterial({
         color: selected ? 0xf59e0b : objectStyle.edgeColor,
         transparent: true,
-        opacity: selected ? 0.98 : mode === "edge" || objectSelected ? Math.max(0.66, objectStyle.edgeOpacity) : objectStyle.edgeOpacity,
+        opacity: selected ? 0.98 : mode === "edge" ? Math.max(0.66, objectStyle.edgeOpacity) : objectSelected ? 0.48 : Math.min(0.24, objectStyle.edgeOpacity),
       });
       const line = new THREE.Line(geometry, material);
       line.userData.freeCadSelection = {
@@ -3289,11 +3363,12 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
       if (!objectName || !reference || !point) continue;
       const stableId = vertex.stable_id || vertex.stableId || "";
       const selected = freeCadSubelementMatchesSelection(objectName, reference, "Vertex", stableId);
+      if (!selected && mode !== "vertex" && !objectSelected) continue;
       const geometry = new THREE.SphereGeometry(selected ? radius * 1.35 : radius, 10, 6);
       const material = new THREE.MeshBasicMaterial({
         color: selected ? 0x22c55e : objectStyle.pointColor,
         transparent: true,
-        opacity: selected ? 0.96 : mode === "vertex" || objectSelected ? 0.72 : 0.28,
+        opacity: selected ? 0.96 : mode === "vertex" ? 0.72 : 0.26,
         depthWrite: false,
       });
       const sphere = new THREE.Mesh(geometry, material);
@@ -4338,6 +4413,7 @@ async function mountGeneratedCadViewer() {
         includeEdgeProxies: !edgeTargets.length,
         includeVertexProxies: !vertexTargets.length,
       });
+      addFreeCadBuildingDetailOverlays(THREE, group);
       targets = [...faceTargets, ...edgeTargets, ...vertexTargets, ...jointTargets, ...sketchTargets, ...proxyTargets];
     } else {
       const semanticTargets = addFreeCadSemanticObjectVisuals(THREE, group);
@@ -4371,6 +4447,7 @@ async function mountGeneratedCadViewer() {
         ...addViewerSceneSketchEditOverlay(THREE, group),
         ...addFreeCadSelectionBoxes(THREE, group),
       ];
+      addFreeCadBuildingDetailOverlays(THREE, group);
     }
     let pointerDown = null;
     let sketchDrag = null;
