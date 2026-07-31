@@ -75,10 +75,31 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "multi-object site/building layouts" in freecad_description
 
 
+def test_system_prompt_supports_freecad_mechanical_assemblies():
+    freecad_description = RUN_FREECAD_TOOL["function"]["description"]
+
+    assert "mechanical assemblies" in freecad_description
+    assert "landing gear" in freecad_description
+    assert "Use run_freecad for mechanical assemblies" in SYSTEM_PROMPT
+    assert "wheel-and-strut assemblies" in SYSTEM_PROMPT
+    assert "create an editable concept assembly" in SYSTEM_PROMPT
+    assert "12-60 named exportable objects" in SYSTEM_PROMPT
+    assert "Avoid thread geometry" in SYSTEM_PROMPT
+    assert "wheel_d" in SYSTEM_PROMPT
+    assert "hydraulic bodies white" in SYSTEM_PROMPT
+
+
 def test_site_community_prompts_infer_freecad_engine_hint():
     assert infer_engine_hint("make a 3-floor villa on a 100x100m site") == "freecad"
     assert infer_engine_hint("设计一个带水景和楼栋的小区总图") == "freecad"
     assert infer_engine_hint("make a cube") is None
+
+
+def test_mechanical_assembly_prompts_infer_freecad_engine_hint():
+    assert infer_engine_hint("design an aircraft landing gear with a hydraulic actuator") == "freecad"
+    assert infer_engine_hint("make a wheel assembly with suspension linkage") == "freecad"
+    assert infer_engine_hint("设计一个带液压杆、连杆和轮胎的起落架装配体") == "freecad"
+    assert infer_engine_hint("make a simple bearing spacer") is None
 
 
 async def test_happy_path_first_attempt_succeeds():
@@ -159,6 +180,39 @@ async def test_site_prompt_forces_freecad_tool_choice():
     events = await _collect(
         run_generation(
             "make a 3-floor villa on a 100x100m site",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+        )
+    )
+
+    assert gw.calls[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "run_freecad"},
+    }
+    assert cadquery_calls == []
+    assert freecad_calls == [script]
+    assert events[1]["engine"] == "freecad"
+    assert events[-1]["ok"] is True
+
+
+async def test_mechanical_assembly_prompt_forces_freecad_tool_choice():
+    script = "import FreeCAD\nresult = object()\n"
+    gw = FakeGateway(_tool_call(script, name="run_freecad"))
+    cadquery_calls = []
+    freecad_calls = []
+
+    async def execute(script):
+        cadquery_calls.append(script)
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+
+    events = await _collect(
+        run_generation(
+            "design a detailed aircraft landing gear with wheel, strut, hydraulic cylinder, and linkage",
             gateway=gw,
             execute=execute,
             execute_freecad=execute_freecad,

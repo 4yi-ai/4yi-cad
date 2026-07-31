@@ -49,6 +49,14 @@ _FREECAD_HINT_RE = re.compile(
     r"master\s+plan|building\s+layout|architectural\s+massing|massing)\b|"
     r"小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|道路|景观"
 )
+_MECHANICAL_ASSEMBLY_HINT_RE = re.compile(
+    r"\b(mechanical\s+assembly|landing\s+gear|nose\s+gear|main\s+gear|"
+    r"wheel\s+assembly|suspension\s+assembly|hydraulic\s+(?:cylinder|actuator|strut)|"
+    r"shock\s+absorber|oleo\s+strut|piston\s+rod|linkage|clevis|trunnion|"
+    r"hinge\s+bracket|pivot\s+pin)\b|"
+    r"机械装配|装配体|起落架|液压(?:杆|缸|作动筒)|避震|减震|连杆机构|"
+    r"铰链|销轴|耳片|支柱总成|轮胎.*(?:支柱|连杆|液压)|(?:支柱|连杆|液压).*轮胎"
+)
 
 
 def _first_run_call(completion):
@@ -103,7 +111,7 @@ def sanitize_chat_history(history: list[dict] | None) -> list[dict[str, str]]:
 
 def infer_engine_hint(prompt: str) -> str | None:
     normalized = (prompt or "").lower()
-    return "freecad" if _FREECAD_HINT_RE.search(normalized) else None
+    return "freecad" if _FREECAD_HINT_RE.search(normalized) or _MECHANICAL_ASSEMBLY_HINT_RE.search(normalized) else None
 
 
 async def run_generation(

@@ -10167,18 +10167,19 @@ function isCreateOrScenePrompt(text) {
   const normalized = text.toLowerCase();
   const editVerb = /改成|改为|设为|设置为|变成|调整|修改|更新|增大|减小|加大|缩小|change|set|adjust|update|resize|increase|decrease/;
   const sceneNoun = /小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|景观|\b(site|community|campus|neighbou?rhood|master\s+plan|building\s+layout|massing|bim|villa|residential)\b/;
+  const mechanicalAssemblyNoun = /机械装配|装配体|起落架|液压杆|液压缸|作动筒|避震|减震|连杆机构|铰链|销轴|耳片|支柱总成|\b(mechanical\s+assembly|landing\s+gear|nose\s+gear|main\s+gear|wheel\s+assembly|suspension\s+assembly|hydraulic\s+(?:cylinder|actuator|strut)|shock\s+absorber|oleo\s+strut|piston\s+rod|linkage|clevis|trunnion|hinge\s+bracket|pivot\s+pin)\b/;
   if (/生成|创建|新建|建模|制作|做一个|画一个/.test(normalized)) return true;
   if (/\b(create|generate|model)\b/.test(normalized)) return true;
   if (/\bmake\s+(?:me\s+)?(?:a|an|new)\b/.test(normalized)) return true;
   if (/\bdesign\s+(?:a|an|new)\b/.test(normalized)) return true;
-  return sceneNoun.test(normalized) && !editVerb.test(normalized);
+  return (sceneNoun.test(normalized) || mechanicalAssemblyNoun.test(normalized)) && !editVerb.test(normalized);
 }
 
 function shouldRouteToAgent(text) {
   const normalized = text.toLowerCase();
   if (shouldRequestScriptRewrite(text)) return true;
   if (isCreateOrScenePrompt(text)) return true;
-  if (/\b(freecad|fcstd|techdraw)\b/.test(normalized)) return true;
+  if (/\b(freecad|fcstd|techdraw|landing\s+gear|mechanical\s+assembly|hydraulic\s+cylinder|suspension\s+assembly)\b|起落架|机械装配|液压缸|连杆机构/.test(normalized)) return true;
   if (/\b(step|stl|iges|brep|obj|gltf)\b|导出|输出|导入/.test(normalized)) return true;
   if (/\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?\s*(?:x|×)\s*\d+(?:\.\d+)?/.test(normalized)) return true;
   return false;

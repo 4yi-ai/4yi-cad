@@ -299,6 +299,9 @@ def test_generated_parameter_patch_requires_explicit_edit_intent():
     assert "if (!shouldParseGeneratedParameterPatch(text, params)) return null;" in html
     assert "层数|楼层|层|数量" in html
     assert "isCreateOrScenePrompt" in html
+    assert "mechanicalAssemblyNoun" in html
+    assert "landing\\s+gear" in html
+    assert "起落架|机械装配|液压缸|连杆机构" in html
     assert "create|generate|model" not in parser_body
     assert "decrease|make" not in parser_body
 

@@ -40,10 +40,11 @@ RUN_FREECAD_TOOL = {
             "Generate or modify a CAD model by writing a headless FreeCAD Python script. "
             "Use this when the request explicitly needs FreeCAD, FreeCAD documents, "
             "STEP import/export behavior, TechDraw-style workflows, multi-object "
-            "site/building layouts, or FreeCAD APIs. The script must create a "
-            "FreeCAD document/object or assign the final object, shape, document, "
-            "or list of exportable objects to `result`. It runs headless in a "
-            "sandbox with no network access."
+            "site/building layouts, mechanical assemblies, linkages, landing gear, "
+            "suspension systems, hydraulic actuators, or FreeCAD APIs. The script "
+            "must create a FreeCAD document/object or assign the final object, "
+            "shape, document, or list of exportable objects to `result`. It runs "
+            "headless in a sandbox with no network access."
         ),
         "parameters": {
             "type": "object",
@@ -77,6 +78,9 @@ Engine choice:
 - Use run_freecad for multi-object site/community/building layouts, architectural
   massing, BIM-like scenes, or requests that should round-trip as named FreeCAD
   document objects.
+- Use run_freecad for mechanical assemblies with multiple named parts, linkages,
+  landing gear, suspension systems, hydraulic cylinders/actuators, hinge brackets,
+  pins, bearings, or wheel-and-strut assemblies.
 
 Hard rules:
 - All dimensions are in millimetres. If the user gives metres/meters, convert to
@@ -114,6 +118,24 @@ Hard rules:
   dense meshes, heavy booleans, global fillets/chamfers, and ornamental detail
   unless the user asks for one specific small part. Prioritize valid export,
   named editable objects, and a responsive viewer over decorative complexity.
+- For mechanical assembly prompts, create an editable concept assembly rather
+  than one fused solid. Use named FreeCAD objects for major components such as
+  tire, rim, axle, main strut, piston rod, actuator body, clevis/yoke brackets,
+  hinge pins, link arms, mounting plate, lugs, collars, and visible fastener
+  groups. Use cylinders, boxes, cones, torus/revolved profiles, and simple
+  cutouts; apply small fillets/chamfers only to a few hero parts when safe.
+- Mechanical assembly complexity budget: 12-60 named exportable objects, with
+  repeated bolts, washers, ribs, and small fittings grouped or represented by
+  simple repeated primitives. Avoid thread geometry, every individual fastener in
+  a large pattern, detailed bearing internals, dense organic tire tread, physics
+  simulation, and real kinematic solving unless the user supplies dimensions and
+  explicitly asks for that level. Preserve recognizable structure and editability.
+- Mechanical scripts should define named top-level parameters such as wheel_d,
+  tire_w, strut_angle_deg, strut_len, actuator_len, rod_d, pin_d, bracket_t, and
+  mount_plate_t when relevant. Use a restrained mechanical palette: rubber dark
+  charcoal, machined metal light grey, rods darker steel, hydraulic bodies white
+  or satin metal, highlighted actuators red/amber, transparent reference plates
+  cyan when requested.
 
 Quick reference:
 - Primitives: cq.Workplane("XY").box(l,w,h) | .circle(r).extrude(h) | .sphere(r)
