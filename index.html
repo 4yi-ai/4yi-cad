@@ -2213,6 +2213,7 @@ const state = {
   sketchSnapSize: 1,
   assemblyConnectorAnchor: null,
   viewMode: "iso",
+  generatedViewerFitMode: "all",
   selectionMode: "feature",
   measureMode: "distance",
   showBBox: true,
@@ -2446,6 +2447,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     sketchSnapSize: state.sketchSnapSize,
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
     viewMode: state.viewMode,
+    generatedViewerFitMode: state.generatedViewerFitMode,
     selectionMode: state.selectionMode,
     measureMode: state.measureMode,
     showBBox: state.showBBox,
@@ -2518,6 +2520,7 @@ function restoreWorkbenchSession() {
     state.sketchSnapSize = Number.isFinite(Number(saved.sketchSnapSize)) && Number(saved.sketchSnapSize) > 0 ? Number(saved.sketchSnapSize) : 1;
     state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
+    state.generatedViewerFitMode = saved.generatedViewerFitMode === "selection" ? "selection" : "all";
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
       ? saved.selectionMode
       : "feature";
@@ -2734,6 +2737,7 @@ function generatedCadViewerKey() {
     state.artifacts.viewer_scene ? `scene:${state.artifacts.viewer_scene.length}` : `scene-ref:${viewerSceneRef?.url || ""}`,
     state.artifacts.stl ? `inline:${state.artifacts.stl.length}` : `ref:${stlRef?.url || ""}`,
     state.viewMode,
+    state.generatedViewerFitMode,
     freeCadViewerSelectionMode(),
     state.showBBox ? "bbox" : "no-bbox",
     state.exploded ? "exploded" : "normal",
@@ -2780,9 +2784,9 @@ async function generatedViewerSceneData() {
 async function loadThreeModules() {
   if (!threeModulePromise) {
     threeModulePromise = Promise.all([
-      import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"),
-      import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js"),
-      import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"),
+      import("/static/vendor/three/three.module.js"),
+      import("/static/vendor/three/STLLoader.js"),
+      import("/static/vendor/three/OrbitControls.js"),
     ]).then(([THREE, stlModule, controlsModule]) => ({
       THREE,
       STLLoader: stlModule.STLLoader,
@@ -2831,6 +2835,11 @@ function generatedCameraVector(THREE, mode, radius) {
   return new THREE.Vector3(radius * 0.72, -radius, radius * 0.66);
 }
 
+function generatedCameraUpVector(THREE, mode) {
+  if (mode === "top") return new THREE.Vector3(0, 1, 0);
+  return new THREE.Vector3(0, 0, 1);
+}
+
 function freeCadTriplet(value) {
   if (!Array.isArray(value) || value.length < 3) return null;
   const numbers = value.slice(0, 3).map(Number);
@@ -2876,6 +2885,60 @@ function freeCadExpandedPickInfo(info, kind, padding = freeCadPickPadding()) {
   };
 }
 
+function generatedViewerModelPointToWorld(THREE, point, sceneCenter, modelScale) {
+  const triplet = freeCadTriplet(point) || [0, 0, 0];
+  return new THREE.Vector3(
+    (triplet[0] - sceneCenter.x) * modelScale,
+    (triplet[1] - sceneCenter.y) * modelScale,
+    (triplet[2] - sceneCenter.z) * modelScale
+  );
+}
+
+function freeCadObjectFocusInfo(name = state.selectedFreeCadObjectName) {
+  const obj = freeCadObjectByName(name);
+  return freeCadBboxInfo(obj?.shape?.bbox);
+}
+
+function selectedFreeCadFocusInfo(viewerScene = null) {
+  if (state.generatedViewerFitMode !== "selection") return null;
+  const objectName = state.selectedFreeCadObjectName;
+  if (!objectName) return null;
+  const obj = freeCadObjectByName(objectName);
+  const sceneObject = viewerSceneObjectByName(viewerScene, objectName);
+  const selectedSubelement = selectedFreeCadSubelementRef();
+  if (selectedSubelement) {
+    const subelement = obj ? freeCadSubelementByRef(obj, selectedSubelement.reference, selectedSubelement.stableId) : null;
+    const subelementInfo = freeCadBboxInfo(subelement?.bbox, subelement?.center);
+    if (subelementInfo) return subelementInfo;
+    const scenePoint = viewerSceneSubelementPoint(sceneObject, selectedSubelement.reference);
+    const scenePointInfo = freeCadBboxInfo(null, scenePoint);
+    if (scenePointInfo) return scenePointInfo;
+  }
+  return freeCadObjectFocusInfo(objectName) || freeCadBboxInfo(sceneObject?.bbox);
+}
+
+function applyGeneratedViewerCamera(runtime, focusInfo = null) {
+  if (!runtime?.camera || !runtime?.controls || !runtime?.THREE || !runtime?.sceneBbox) return;
+  const { THREE, camera, controls, sceneBbox, sceneCenter, modelScale } = runtime;
+  const focus = focusInfo || sceneBbox;
+  const target = generatedViewerModelPointToWorld(THREE, focus.center || sceneBbox.center, sceneCenter, modelScale);
+  const size = freeCadTriplet(focus.size) || freeCadTriplet(sceneBbox.size) || [1, 1, 1];
+  const scaledMaxDim = Math.max(...size.map((value) => Math.abs(Number(value) || 0) * modelScale), 0.5);
+  const fovRad = THREE.MathUtils.degToRad(camera.fov || 38);
+  const distance = Math.max(2.6, (scaledMaxDim / (2 * Math.tan(fovRad / 2))) * 1.65);
+  const direction = generatedCameraVector(THREE, state.viewMode, 1).normalize();
+  camera.up.copy(generatedCameraUpVector(THREE, state.viewMode));
+  controls.target.copy(target);
+  camera.position.copy(target.clone().add(direction.multiplyScalar(distance)));
+  camera.near = Math.max(0.01, distance / 1000);
+  camera.far = Math.max(1000, distance * 24);
+  camera.lookAt(target);
+  camera.updateProjectionMatrix();
+  controls.minDistance = Math.max(0.12, distance / 80);
+  controls.maxDistance = Math.max(20, distance * 10);
+  controls.update();
+}
+
 function freeCadSelectionColor(kind) {
   return {
     Object: 0x64748b,
@@ -2911,9 +2974,32 @@ function freeCadStyleColorValue(style, hexKey, rgbKey, fallback) {
   return colorNumberFromRgb(style?.[rgbKey], fallback);
 }
 
+function freeCadSemanticRoleFromText(text) {
+  const token = String(text || "").toLowerCase();
+  if (/人工湖|水景|水系|湖|河|池|lake|pond|water|river|pool/.test(token)) return "water";
+  if (/儿童|游乐|playground|play|kids|child/.test(token)) return "play";
+  if (/绿化|绿地|草坪|景观|花园|公园|green|garden|park|landscape|lawn/.test(token)) return "green";
+  if (/道路|主干道|环路|步道|路_|_路|road|street|drive|path|walkway|loop/.test(token)) return "road";
+  if (/会所|公建|配套|amenity|club|clubhouse|facility|podium/.test(token)) return "amenity";
+  if (/住宅|高层|楼|别墅|建筑|塔楼|building|tower|villa|house|residential/.test(token)) return "building";
+  if (/地块|场地|底板|基地|plot|site|base|slab/.test(token)) return "plot";
+  return "generic";
+}
+
+function freeCadInferredSemanticRole(obj) {
+  const explicit = obj?.style?.semantic_role || obj?.style?.semanticRole;
+  if (explicit) return String(explicit).toLowerCase();
+  return freeCadSemanticRoleFromText([
+    obj?.name,
+    obj?.label,
+    obj?.type_id,
+    obj?.kind,
+  ].filter(Boolean).join(" "));
+}
+
 function freeCadViewerObjectStyle(obj) {
   const rawStyle = obj?.style && typeof obj.style === "object" ? obj.style : {};
-  const role = String(rawStyle.semantic_role || rawStyle.semanticRole || "generic").toLowerCase();
+  const role = freeCadInferredSemanticRole(obj);
   const defaults = {
     water: [0x38bdf8, 0x0369a1, 0x0ea5e9, 0.54, 0.52],
     green: [0x86c47a, 0x3f7f4f, 0x16a34a, 0.70, 0.40],
@@ -2986,6 +3072,67 @@ function addFreeCadBoxTarget(THREE, group, options) {
     group.add(edges);
   }
   return box;
+}
+
+function addFreeCadSemanticObjectVisuals(THREE, group) {
+  const targets = [];
+  const selectedName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const opacityByRole = {
+    water: 0.58,
+    green: 0.48,
+    play: 0.58,
+    road: 0.42,
+    amenity: 0.62,
+    building: 0.74,
+    plot: 0.34,
+    generic: 0.0,
+  };
+  for (const obj of freeCadSelectableShapeObjects()) {
+    const objectName = freeCadObjectKey(obj);
+    const info = freeCadBboxInfo(obj?.shape?.bbox);
+    if (!objectName || !info) continue;
+    const objectStyle = freeCadViewerObjectStyle(obj);
+    const selected = selectedName && normalizeFreeCadToken(objectName) === selectedName;
+    if (!selected && objectStyle.role === "generic") continue;
+    const minSize = Math.max(0.01, freeCadPickPadding() * 0.08);
+    const size = info.size.map((value) => Math.max(Math.abs(Number(value) || 0), minSize));
+    const geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
+    const opacity = selected
+      ? Math.max(0.78, Math.min(0.96, objectStyle.opacity))
+      : opacityByRole[objectStyle.role] ?? 0.46;
+    const material = new THREE.MeshStandardMaterial({
+      color: selected ? 0x60a5fa : objectStyle.color,
+      roughness: 0.62,
+      metalness: 0.02,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(info.center[0], info.center[1], info.center[2]);
+    mesh.userData.freeCadSelection = {
+      type: "object",
+      objectName,
+      kind: "Object",
+      priority: selected ? -1 : 8,
+    };
+    mesh.renderOrder = selected ? 6 : 1;
+    group.add(mesh);
+    targets.push(mesh);
+
+    const edgeGeometry = new THREE.EdgesGeometry(geometry, 24);
+    const edgeMaterial = new THREE.LineBasicMaterial({
+      color: selected ? 0x0b6fe8 : objectStyle.edgeColor,
+      transparent: true,
+      opacity: selected ? 0.96 : Math.max(0.32, objectStyle.edgeOpacity),
+    });
+    const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+    edges.position.copy(mesh.position);
+    edges.renderOrder = selected ? 7 : 2;
+    group.add(edges);
+  }
+  return targets;
 }
 
 function viewerSceneHasFaceMeshes(scene) {
@@ -4133,14 +4280,12 @@ async function mountGeneratedCadViewer() {
     const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 1000);
     resizeGeneratedViewer(renderer, camera, container);
     camera.up.set(0, 0, 1);
-    const radius = state.exploded ? 8.4 : 7.2;
-    camera.position.copy(generatedCameraVector(THREE, state.viewMode, radius));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 0, 0);
-    controls.update();
+    controls.enableRotate = true;
+    controls.enablePan = true;
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a94a6, 2.2));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -4195,6 +4340,8 @@ async function mountGeneratedCadViewer() {
       });
       targets = [...faceTargets, ...edgeTargets, ...vertexTargets, ...jointTargets, ...sketchTargets, ...proxyTargets];
     } else {
+      const semanticTargets = addFreeCadSemanticObjectVisuals(THREE, group);
+      const hasSemanticVisuals = semanticTargets.length > 0;
       if (!stlGeometry && stlBuffer) {
         stlGeometry = new STLLoader().parse(stlBuffer);
         stlGeometry.computeVertexNormals();
@@ -4205,16 +4352,25 @@ async function mountGeneratedCadViewer() {
           roughness: 0.58,
           metalness: 0.04,
           side: THREE.DoubleSide,
+          transparent: hasSemanticVisuals,
+          opacity: hasSemanticVisuals ? 0.18 : 0.86,
+          depthWrite: !hasSemanticVisuals,
         });
         const mesh = new THREE.Mesh(stlGeometry, material);
+        mesh.renderOrder = hasSemanticVisuals ? 0 : 1;
         group.add(mesh);
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(stlGeometry, 32),
-          new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.42 })
+          new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: hasSemanticVisuals ? 0.18 : 0.42 })
         );
+        edges.renderOrder = hasSemanticVisuals ? 1 : 2;
         group.add(edges);
       }
-      targets = [...addViewerSceneSketchEditOverlay(THREE, group), ...addFreeCadSelectionBoxes(THREE, group)];
+      targets = [
+        ...semanticTargets,
+        ...addViewerSceneSketchEditOverlay(THREE, group),
+        ...addFreeCadSelectionBoxes(THREE, group),
+      ];
     }
     let pointerDown = null;
     let sketchDrag = null;
@@ -4338,9 +4494,26 @@ async function mountGeneratedCadViewer() {
     renderer.domElement.addEventListener("click", (event) => event.stopPropagation());
     renderer.domElement.addEventListener("wheel", (event) => event.stopPropagation(), { passive: false });
 
-    const resizeObserver = new ResizeObserver(() => resizeGeneratedViewer(renderer, camera, container));
+    const resizeObserver = new ResizeObserver(() => {
+      resizeGeneratedViewer(renderer, camera, container);
+      applyGeneratedViewerCamera(generatedViewerRuntime, selectedFreeCadFocusInfo(viewerScene));
+    });
     resizeObserver.observe(container);
-    generatedViewerRuntime = { key, container, scene, renderer, controls, resizeObserver, animationId: 0 };
+    generatedViewerRuntime = {
+      key,
+      container,
+      scene,
+      renderer,
+      camera,
+      controls,
+      resizeObserver,
+      animationId: 0,
+      THREE,
+      sceneBbox,
+      sceneCenter: center,
+      modelScale,
+    };
+    applyGeneratedViewerCamera(generatedViewerRuntime, selectedFreeCadFocusInfo(viewerScene));
     const animate = () => {
       if (!generatedViewerRuntime || generatedViewerRuntime.key !== key) return;
       generatedViewerRuntime.animationId = requestAnimationFrame(animate);
@@ -4591,6 +4764,7 @@ function resetClientWorkbenchSession() {
   state.sketchSnapSize = 1;
   state.assemblyConnectorAnchor = null;
   state.viewMode = "iso";
+  state.generatedViewerFitMode = "all";
   state.selectionMode = "feature";
   state.measureMode = "distance";
   state.showBBox = true;
@@ -4701,6 +4875,7 @@ async function applyStoredServerVersion(version, versions = null) {
   state.sketchSnapEnabled = true;
   state.sketchSnapSize = 1;
   state.assemblyConnectorAnchor = null;
+  state.generatedViewerFitMode = "all";
   state.selectedFeatureId = state.designState.selected_feature_id || "base_plate";
   state.bottomTab = "history";
   state.chatMessages = [{ role: "assistant", key: "chat.initial" }];
@@ -8194,6 +8369,8 @@ function selectGeometry(featureId) {
 function setView(value) {
   state.viewport = { ...state.viewport, scale: 1, tx: 0, ty: 0 };
   if (value === "fit") {
+    state.generatedViewerFitMode = "all";
+    applyGeneratedViewerCamera(generatedViewerRuntime, null);
     renderAll();
     return;
   } else {
@@ -8690,6 +8867,7 @@ function showParametricDesign() {
 
 function showGeneratedModel() {
   state.previewMode = "generated";
+  state.generatedViewerFitMode = "all";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -8714,6 +8892,7 @@ function showGeneratedParameters() {
 
 function focusGeneratedParameter(name) {
   state.previewMode = "generated";
+  state.generatedViewerFitMode = "all";
   state.selectedGeneratedParameterName = name;
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -8737,6 +8916,7 @@ function selectFreeCadObject(name) {
   const obj = freeCadObjectByName(name);
   if (!obj) return;
   state.previewMode = "generated";
+  state.generatedViewerFitMode = "selection";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = null;
@@ -8757,6 +8937,7 @@ function selectFreeCadSubelement(objectName, reference, kind, stableId = "", met
   if (!obj || !reference) return;
   const item = freeCadSubelementByRef(obj, reference, stableId);
   state.previewMode = "generated";
+  state.generatedViewerFitMode = "selection";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectionMode = selectionModeForFreeCadSubelementKind(kind);
@@ -8792,6 +8973,7 @@ function selectFreeCadSketchElement(sketchName, kind, index, pointRole = "", opt
   if (!obj || !freeCadObjectIsSketch(obj)) return false;
   const numericIndex = Number(index);
   state.previewMode = "generated";
+  state.generatedViewerFitMode = "selection";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = freeCadObjectKey(obj);
   state.selectedFreeCadSubelement = null;
@@ -10382,6 +10564,7 @@ async function generateFromPrompt(prompt, options = {}) {
   state.generatedPrompt = displayPrompt;
   state.generatedParameters = [];
   state.documentSummary = null;
+  state.generatedViewerFitMode = "all";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -10483,6 +10666,7 @@ function handleAgentEvent(ev, context = {}) {
     state.freecadVersion = ev.freecad_version || "";
     state.generatedParameters = Array.isArray(ev.parameters) ? ev.parameters : [];
     state.documentSummary = null;
+    state.generatedViewerFitMode = "all";
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
     state.selectedFreeCadAssemblyJoint = null;

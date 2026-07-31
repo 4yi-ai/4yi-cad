@@ -339,7 +339,10 @@ def test_viewer_scene_styles_drive_frontend_materials():
 
     assert "function freeCadViewerObjectStyle(obj)" in html
     assert "function freeCadStyleColorValue(style, hexKey, rgbKey, fallback)" in html
+    assert "function freeCadSemanticRoleFromText(text)" in html
+    assert "function freeCadInferredSemanticRole(obj)" in html
     assert "semantic_role" in html
+    assert "人工湖|水景|水系|湖|河|池|lake|pond|water|river|pool" in html
     assert "edge_color" in html
     assert "point_color" in html
     assert "const objectStyle = freeCadViewerObjectStyle(obj);" in html
@@ -347,6 +350,23 @@ def test_viewer_scene_styles_drive_frontend_materials():
     assert "color: selected ? 0xf59e0b : objectStyle.edgeColor" in html
     assert "color: selected ? 0x22c55e : objectStyle.pointColor" in html
     assert "Math.max(objectStyle.opacity, 0.88)" in html
+
+
+def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
+    html = _html()
+
+    assert 'import("/static/vendor/three/three.module.js")' in html
+    assert 'import("/static/vendor/three/STLLoader.js")' in html
+    assert 'import("/static/vendor/three/OrbitControls.js")' in html
+    assert "generatedViewerFitMode" in html
+    assert "function addFreeCadSemanticObjectVisuals(THREE, group)" in html
+    assert "const semanticTargets = addFreeCadSemanticObjectVisuals(THREE, group);" in html
+    assert "opacity: hasSemanticVisuals ? 0.18 : 0.86" in html
+    assert "function selectedFreeCadFocusInfo(viewerScene = null)" in html
+    assert "function applyGeneratedViewerCamera(runtime, focusInfo = null)" in html
+    assert "camera.up.copy(generatedCameraUpVector(THREE, state.viewMode));" in html
+    assert 'state.generatedViewerFitMode = "selection";' in html
+    assert 'state.generatedViewerFitMode = "all";' in html
 
 
 def test_agent_generation_exposes_working_activity_feedback():

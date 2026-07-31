@@ -1512,3 +1512,10 @@ def test_root_serves_the_spa():
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "<!doctype html>" in resp.text.lower()
+
+
+def test_static_route_serves_local_three_viewer_assets():
+    resp = _client().get("/static/vendor/three/three.module.js")
+
+    assert resp.status_code == 200
+    assert "class Vector3" in resp.text

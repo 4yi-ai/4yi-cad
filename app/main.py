@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent.loop import ExecResult, run_generation
@@ -55,6 +56,7 @@ from app.session_store import SessionStore, SqliteSessionStore
 # scanner classify this one container as a fullstack service, not an undeployed
 # standalone frontend.
 _INDEX_HTML = Path(__file__).resolve().parents[1] / "index.html"
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 FREECAD_IMPORT_FORMATS = ("fcstd", "step", "stp", "iges", "igs", "brep")
 
@@ -707,6 +709,8 @@ def create_app(
     app.state.freecad_execute = freecad_execute
     app.state.session_store = session_store
     app.state.artifact_store = artifact_store
+    if _STATIC_DIR.is_dir():
+        app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     @app.get("/healthz")
     async def healthz():
