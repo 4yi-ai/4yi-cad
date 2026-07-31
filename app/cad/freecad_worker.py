@@ -1579,6 +1579,7 @@ def object_summary(obj):
     item = object_ref(obj)
     item.update({
         "placement": placement_summary(obj),
+        "style": viewer_object_style(obj),
         "in_list": [object_ref(parent) for parent in list(getattr(obj, "InList", []))[:40]],
         "out_list": [object_ref(child) for child in list(getattr(obj, "OutList", []))[:40]],
         "properties": property_summary(obj),
@@ -3772,10 +3773,444 @@ def feature_kind_from_summary(item):
     return "document_object"
 
 
+SITE_LAYOUT_ROLE_PATTERNS = (
+    ("plot_boundary", (r"\b(plot|parcel|site|ground|base|terrain)\b", r"地块", r"场地", r"基地", r"用地", r"红线")),
+    ("setback_control", (r"\b(setback|offset\s*line|control\s*line)\b", r"退界", r"控制线")),
+    ("north_axis", (r"\b(north|compass|axis)\b", r"北向", r"指北针", r"坐标轴")),
+    ("elevation_benchmark", (r"\b(benchmark|datum|level|elevation|grade)\b", r"标高", r"基准", r"竖向")),
+    ("vertical_design", (r"\b(slope|ramp|grade|elevation|level|terrace|basement\s*ramp)\b", r"坡", r"标高", r"竖向", r"台地", r"坡道")),
+    ("boundary_wall", (r"\b(wall|fence|boundary|enclosure)\b", r"围墙", r"围合", r"边界墙")),
+    ("entrance_system", (r"\b(gate|entrance|entry|portal|guard|security|dropoff|drop-off)\b", r"入口", r"大门", r"门卫", r"岗亭", r"落客")),
+    ("traffic_network", (r"\b(road|drive|lane|street|loop|turnaround|dropoff|drop-off|path|walk|bridge)\b", r"道路", r"车道", r"环路", r"消防环路", r"步道", r"桥", r"落客")),
+    ("fire_access", (r"\b(fire|emergency|turning\s*radius|ladder|appliance)\b", r"消防", r"登高", r"扑救", r"转弯半径")),
+    ("parking_underground", (r"\b(parking|garage|basement|underground|ramp|bike)\b", r"停车", r"车库", r"地库", r"地下", r"坡道", r"非机动车")),
+    ("residential_building", (r"\b(tower|building|residential|apartment|villa|house)\b", r"住宅", r"楼栋", r"高层", r"塔楼", r"别墅")),
+    ("building_articulation", (r"\b(podium|lobby|roof|floor\s*band|story\s*band|cap)\b", r"裙楼", r"大堂", r"屋顶", r"层带", r"机房")),
+    ("public_amenity", (r"\b(club|clubhouse|amenity|hall|retail|service|property)\b", r"会所", r"配套", r"物业", r"服务", r"商业")),
+    ("landscape_open_space", (r"\b(water|lake|pond|pool|green|garden|lawn|park|playground|children|sport|fitness)\b", r"湖", r"水", r"绿", r"草坪", r"花园", r"景观", r"儿童", r"游乐", r"健身")),
+    ("planning_metrics", (r"\b(metrics|far|floor\s*area\s*ratio|coverage|density|green\s*ratio|gfa|planning)\b", r"指标", r"容积率", r"建筑密度", r"绿地率", r"计容", r"总建面")),
+)
+
+SITE_LAYOUT_SEMANTIC_ROLE_MAP = {
+    "plot": "plot_boundary",
+    "road": "traffic_network",
+    "water": "landscape_open_space",
+    "green": "landscape_open_space",
+    "play": "landscape_open_space",
+    "amenity": "public_amenity",
+    "building": "residential_building",
+}
+
+SITE_LAYOUT_REQUIREMENTS = (
+    {
+        "key": "plot_control",
+        "label": "用地红线/场地边界",
+        "roles": ("plot_boundary",),
+        "min_count": 1,
+        "severity": "error",
+        "message": "Site plan needs an explicit plot/redline/base boundary.",
+    },
+    {
+        "key": "planning_controls",
+        "label": "退界/北向/标高基准",
+        "roles": ("setback_control", "north_axis", "elevation_benchmark"),
+        "min_count": 2,
+        "severity": "warning",
+        "message": "Planning control layer should include setback, north axis, and datum/elevation references.",
+    },
+    {
+        "key": "enclosure_system",
+        "label": "围墙/围合系统",
+        "roles": ("boundary_wall",),
+        "min_count": 3,
+        "severity": "warning",
+        "message": "High-end community master plans need a mostly closed enclosure wall system.",
+    },
+    {
+        "key": "entrance_system",
+        "label": "主入口/人车入口",
+        "roles": ("entrance_system",),
+        "min_count": 1,
+        "severity": "error",
+        "message": "Site plan needs explicit vehicle/pedestrian entrance components.",
+    },
+    {
+        "key": "road_network",
+        "label": "道路/步行网络",
+        "roles": ("traffic_network",),
+        "min_count": 2,
+        "severity": "error",
+        "message": "Road and pedestrian circulation should connect entrance, buildings, amenities, and landscape.",
+    },
+    {
+        "key": "fire_access",
+        "label": "消防车道/登高面",
+        "roles": ("fire_access",),
+        "min_count": 1,
+        "severity": "warning",
+        "message": "Missing explicit fire lane, ladder access, turning radius, or firefighting frontage.",
+    },
+    {
+        "key": "parking_underground",
+        "label": "停车/地库坡道",
+        "roles": ("parking_underground",),
+        "min_count": 1,
+        "severity": "warning",
+        "message": "Missing parking, underground garage outline, bike parking, or basement ramp.",
+    },
+    {
+        "key": "building_massing",
+        "label": "住宅楼栋体量",
+        "roles": ("residential_building",),
+        "min_count": 2,
+        "severity": "error",
+        "message": "Residential master plan needs multiple explicit residential tower/building masses.",
+    },
+    {
+        "key": "public_amenity",
+        "label": "会所/配套",
+        "roles": ("public_amenity",),
+        "min_count": 1,
+        "severity": "warning",
+        "message": "High-end community plan should include clubhouse/property/service amenities.",
+    },
+    {
+        "key": "landscape_open_space",
+        "label": "景观/水体/活动场地",
+        "roles": ("landscape_open_space",),
+        "min_count": 2,
+        "severity": "warning",
+        "message": "Landscape layer should include green open space plus water/play/activity zones.",
+    },
+    {
+        "key": "planning_metrics",
+        "label": "规划指标",
+        "roles": ("planning_metrics",),
+        "min_count": 1,
+        "severity": "warning",
+        "message": "Missing explicit FAR, building density, green ratio, building count, or height metrics object.",
+    },
+)
+
+
+def site_layout_item_text(item):
+    fields = [
+        item.get("name"),
+        item.get("label"),
+        item.get("type_id"),
+        (item.get("style") or {}).get("semantic_role") if isinstance(item.get("style"), dict) else "",
+    ]
+    for prop in list(item.get("properties") or [])[:80]:
+        fields.append(prop.get("name"))
+        value = prop.get("value")
+        if isinstance(value, (str, int, float, bool)):
+            fields.append(value)
+    return " ".join(safe_text(value, 120) for value in fields if value is not None).lower()
+
+
+def site_layout_roles_for_summary(item):
+    text = site_layout_item_text(item)
+    roles = set()
+    style = item.get("style") if isinstance(item.get("style"), dict) else {}
+    mapped = SITE_LAYOUT_SEMANTIC_ROLE_MAP.get(safe_text(style.get("semantic_role"), 80))
+    if mapped:
+        roles.add(mapped)
+    for role, patterns in SITE_LAYOUT_ROLE_PATTERNS:
+        if any(re.search(pattern, text) for pattern in patterns):
+            roles.add(role)
+    if "building_articulation" in roles and "residential_building" in roles:
+        label_text = " ".join([safe_text(item.get("name"), 120), safe_text(item.get("label"), 120)]).lower()
+        if re.search(r"\b(podium|lobby|roof|floor\s*band|story\s*band|cap)\b|裙楼|大堂|屋顶|层带|机房", label_text):
+            roles.discard("residential_building")
+    return sorted(roles)
+
+
+def bbox_xy_area(bbox):
+    size = bbox.get("size") if isinstance(bbox, dict) else None
+    values = stable_sequence(size)
+    if values is None or len(values) < 2:
+        return 0.0
+    return max(0.0, float(values[0])) * max(0.0, float(values[1]))
+
+
+def site_layout_components(summaries):
+    components = []
+    for item in list(summaries or []):
+        roles = site_layout_roles_for_summary(item)
+        if not roles:
+            continue
+        component = {
+            "object": object_ref_from_summary(item),
+            "roles": roles,
+            "bbox": (item.get("shape") or {}).get("bbox"),
+        }
+        component["area_xy"] = bbox_xy_area(component.get("bbox") or {})
+        components.append(component)
+    return components
+
+
+def object_ref_from_summary(item):
+    return {
+        "name": safe_text(item.get("name"), 120),
+        "label": safe_text(item.get("label"), 160),
+        "type_id": safe_text(item.get("type_id"), 120),
+    }
+
+
+def site_layout_role_counts(components):
+    counts = {}
+    for component in list(components or []):
+        for role in list(component.get("roles") or []):
+            counts[role] = counts.get(role, 0) + 1
+    return counts
+
+
+def site_layout_is_applicable(components, geometry):
+    counts = site_layout_role_counts(components)
+    if counts.get("plot_boundary") and (
+        counts.get("residential_building") or counts.get("traffic_network") or counts.get("landscape_open_space")
+    ):
+        return True
+    site_signal_roles = {
+        "boundary_wall",
+        "entrance_system",
+        "traffic_network",
+        "residential_building",
+        "public_amenity",
+        "landscape_open_space",
+    }
+    signal_count = sum(count for role, count in counts.items() if role in site_signal_roles)
+    return signal_count >= 4 and int((geometry or {}).get("shape_object_count") or 0) >= 6
+
+
+def site_layout_plot_bbox(components, geometry):
+    plot_candidates = [
+        item
+        for item in list(components or [])
+        if "plot_boundary" in set(item.get("roles") or []) and isinstance(item.get("bbox"), dict)
+    ]
+    if plot_candidates:
+        return max(plot_candidates, key=lambda item: item.get("area_xy") or 0.0).get("bbox")
+    return (geometry or {}).get("bbox")
+
+
+def bbox_xy_within(outer, inner, tolerance=1000.0):
+    if not isinstance(outer, dict) or not isinstance(inner, dict):
+        return True
+    outer_min = stable_sequence(outer.get("min"))
+    outer_max = stable_sequence(outer.get("max"))
+    inner_min = stable_sequence(inner.get("min"))
+    inner_max = stable_sequence(inner.get("max"))
+    if not (outer_min and outer_max and inner_min and inner_max):
+        return True
+    return (
+        inner_min[0] >= outer_min[0] - tolerance
+        and inner_max[0] <= outer_max[0] + tolerance
+        and inner_min[1] >= outer_min[1] - tolerance
+        and inner_max[1] <= outer_max[1] + tolerance
+    )
+
+
+def bbox_min_z(bbox):
+    values = stable_sequence((bbox or {}).get("min") if isinstance(bbox, dict) else None)
+    if values is None or len(values) < 3:
+        return None
+    return float(values[2])
+
+
+def bbox_xy_distance(left, right):
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return None
+    left_min = stable_sequence(left.get("min"))
+    left_max = stable_sequence(left.get("max"))
+    right_min = stable_sequence(right.get("min"))
+    right_max = stable_sequence(right.get("max"))
+    if not (left_min and left_max and right_min and right_max):
+        return None
+    dx = max(0.0, max(left_min[0], right_min[0]) - min(left_max[0], right_max[0]))
+    dy = max(0.0, max(left_min[1], right_min[1]) - min(left_max[1], right_max[1]))
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def site_layout_component_names(components, roles):
+    wanted = set(roles)
+    names = []
+    for component in list(components or []):
+        if not wanted.intersection(set(component.get("roles") or [])):
+            continue
+        name = component.get("object", {}).get("label") or component.get("object", {}).get("name")
+        if name:
+            names.append(safe_text(name, 120))
+    return names
+
+
+def site_layout_requirements_report(components):
+    issues = []
+    requirements = []
+    passed_count = 0
+    for requirement in SITE_LAYOUT_REQUIREMENTS:
+        names = site_layout_component_names(components, requirement.get("roles") or [])
+        detected_count = len(names)
+        required_count = int(requirement.get("min_count") or 1)
+        passed = detected_count >= required_count
+        if passed:
+            passed_count += 1
+        status = "pass" if passed else "missing"
+        entry = {
+            "key": requirement["key"],
+            "label": requirement["label"],
+            "status": status,
+            "severity": "ok" if passed else requirement.get("severity", "warning"),
+            "detected_count": detected_count,
+            "required_count": required_count,
+            "objects": names[:12],
+            "roles": list(requirement.get("roles") or []),
+        }
+        requirements.append(entry)
+        if not passed:
+            issues.append({
+                "severity": requirement.get("severity", "warning"),
+                "code": "missing_" + requirement["key"],
+                "message": requirement.get("message"),
+                "status": status,
+            })
+    return requirements, issues, passed_count
+
+
+def site_layout_estimated_metrics(components, plot_bbox):
+    plot_area = bbox_xy_area(plot_bbox or {})
+    role_area = {}
+    for component in list(components or []):
+        area = float(component.get("area_xy") or 0.0)
+        if area <= 0:
+            continue
+        for role in list(component.get("roles") or []):
+            role_area[role] = role_area.get(role, 0.0) + area
+    building_area = role_area.get("residential_building", 0.0) + role_area.get("public_amenity", 0.0)
+    green_area = role_area.get("landscape_open_space", 0.0)
+    return {
+        "plot_area": plot_area if plot_area else None,
+        "building_footprint_area": building_area if building_area else None,
+        "landscape_area": green_area if green_area else None,
+        "estimated_building_density": (building_area / plot_area) if plot_area else None,
+        "estimated_landscape_ratio": (green_area / plot_area) if plot_area else None,
+    }
+
+
+def append_site_layout_spatial_issues(issues, components, plot_bbox):
+    if not isinstance(plot_bbox, dict):
+        return
+    outside = []
+    floating = []
+    for component in list(components or []):
+        roles = set(component.get("roles") or [])
+        bbox = component.get("bbox")
+        name = component.get("object", {}).get("label") or component.get("object", {}).get("name")
+        if bbox and not roles.intersection({"plot_boundary", "boundary_wall", "north_axis", "elevation_benchmark"}):
+            if not bbox_xy_within(plot_bbox, bbox):
+                outside.append(safe_text(name, 120))
+        if roles.intersection({"residential_building", "public_amenity", "traffic_network", "parking_underground", "landscape_open_space"}):
+            min_z = bbox_min_z(bbox)
+            if min_z is not None and min_z > 250.0:
+                floating.append(safe_text(name, 120))
+    if outside:
+        issues.append({
+            "severity": "warning",
+            "code": "outside_plot_boundary",
+            "message": "Some site components extend beyond the detected plot boundary.",
+            "objects": outside[:8],
+        })
+    if floating:
+        issues.append({
+            "severity": "warning",
+            "code": "floating_site_components",
+            "message": "Some site components appear above grade instead of landing on the site datum.",
+            "objects": floating[:8],
+        })
+
+
+def append_site_layout_building_spacing_issues(issues, components, minimum_spacing=12000.0):
+    buildings = [
+        component
+        for component in list(components or [])
+        if "residential_building" in set(component.get("roles") or [])
+        and isinstance(component.get("bbox"), dict)
+    ][:24]
+    close_pairs = []
+    for index, left in enumerate(buildings):
+        for right in buildings[index + 1:]:
+            distance = bbox_xy_distance(left.get("bbox"), right.get("bbox"))
+            if distance is None or distance >= minimum_spacing:
+                continue
+            left_name = left.get("object", {}).get("label") or left.get("object", {}).get("name")
+            right_name = right.get("object", {}).get("label") or right.get("object", {}).get("name")
+            close_pairs.append({
+                "left": safe_text(left_name, 120),
+                "right": safe_text(right_name, 120),
+                "distance": distance,
+            })
+    if close_pairs:
+        issues.append({
+            "severity": "warning",
+            "code": "building_spacing_below_minimum",
+            "message": "Residential building spacing is below the concept-plan threshold.",
+            "minimum_spacing": minimum_spacing,
+            "pairs": close_pairs[:8],
+        })
+
+
+def site_layout_audit(summaries, geometry):
+    components = site_layout_components(summaries)
+    applicable = site_layout_is_applicable(components, geometry)
+    counts = site_layout_role_counts(components)
+    report = {
+        "schema": "freecad.site_layout_audit.v1",
+        "applicable": applicable,
+        "status": "not_applicable",
+        "severity": "ok",
+        "coverage_score": None,
+        "component_count": len(components),
+        "component_counts": counts,
+        "requirements": [],
+        "issues": [],
+        "estimated_metrics": {},
+    }
+    if not applicable:
+        return report
+    requirements, issues, passed_count = site_layout_requirements_report(components)
+    plot_bbox = site_layout_plot_bbox(components, geometry)
+    append_site_layout_spatial_issues(issues, components, plot_bbox)
+    append_site_layout_building_spacing_issues(issues, components)
+    issue_severity = "ok"
+    if any(item.get("severity") == "error" for item in issues):
+        issue_severity = "error"
+    elif any(item.get("severity") == "warning" for item in issues):
+        issue_severity = "warning"
+    total_requirements = len(SITE_LAYOUT_REQUIREMENTS)
+    coverage_score = passed_count / total_requirements if total_requirements else 1.0
+    if issue_severity == "error":
+        status = "fail"
+    elif issue_severity == "warning":
+        status = "needs_review"
+    else:
+        status = "pass"
+    report.update({
+        "status": status,
+        "severity": issue_severity,
+        "coverage_score": coverage_score,
+        "plot_bbox": plot_bbox,
+        "requirements": requirements,
+        "issues": issues,
+        "estimated_metrics": site_layout_estimated_metrics(components, plot_bbox),
+    })
+    return report
+
+
 def document_summary(doc):
     if doc is None:
         document = None
         geometry = {"object_count": 0}
+        site_layout = site_layout_audit([], geometry)
         return {
             "schema": "freecad.document_summary.v6",
             "document": document,
@@ -3785,6 +4220,7 @@ def document_summary(doc):
             "sketches": [],
             "assemblies": [],
             "techdraw": [],
+            "site_layout": site_layout,
             "assembly_capabilities": assembly_runtime_capabilities(),
             "techdraw_capabilities": techdraw_runtime_capabilities(),
             "typed_state": typed_document_state(document, [], geometry, {"roots": [], "nodes": []}, [], [], [], document_topological_lineage(None)),
@@ -3862,6 +4298,7 @@ def document_summary(doc):
         "label": safe_text(getattr(doc, "Label", "")),
         "file_name": safe_text(getattr(doc, "FileName", "")),
     }
+    site_layout = site_layout_audit(summaries, geometry)
     feature_tree = feature_tree_summary(doc, objects)
     fallback_tree = fallback_feature_tree_nodes(doc)
     feature_tree["roots"].extend(fallback_tree["roots"])
@@ -3879,6 +4316,7 @@ def document_summary(doc):
         "sketches": sketches,
         "assemblies": assemblies,
         "techdraw": techdraw,
+        "site_layout": site_layout,
         "assembly_capabilities": assembly_runtime_capabilities(),
         "techdraw_capabilities": techdraw_runtime_capabilities(),
         "topological_lineage": topological_lineage,

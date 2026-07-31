@@ -1309,6 +1309,9 @@ const I18N = {
     artifacts: "Artifacts",
     viewport: "Viewport",
     featureTree: "Feature tree",
+    siteLayoutAudit: "Site layout audit",
+    siteLayoutStatus: "Site layout",
+    siteLayoutCoverage: "Coverage",
     notAvailable: "not available",
     parameters: "Parameters",
     selectedParameter: "Selected parameter",
@@ -1753,6 +1756,9 @@ const I18N = {
     artifacts: "产物",
     viewport: "视图",
     featureTree: "特征树",
+    siteLayoutAudit: "总图审计",
+    siteLayoutStatus: "小区总图",
+    siteLayoutCoverage: "覆盖率",
     notAvailable: "不可用",
     parameters: "参数",
     selectedParameter: "已选参数",
@@ -5889,7 +5895,11 @@ function renderFreeCadDiagnostics(titleKey, diagnostics) {
       ${items.slice(0, 12).map((item) => {
         const code = item.code || item.severity || "diagnostic";
         const message = item.message || item.error || JSON.stringify(item);
-        const detail = [item.joint, item.reference, item.status].filter(Boolean).join(" · ");
+        const objectDetail = Array.isArray(item.objects) ? item.objects.slice(0, 4).join(", ") : "";
+        const pairDetail = Array.isArray(item.pairs)
+          ? item.pairs.slice(0, 2).map((pair) => `${pair.left || "?"}/${pair.right || "?"}`).join(", ")
+          : "";
+        const detail = [item.joint, item.reference, item.status, objectDetail, pairDetail].filter(Boolean).join(" · ");
         return `<div class="diagnostic-row ${freeCadDiagnosticCssClass(item)}">
           <strong>${escapeHtml(code)}</strong>
           <span>${escapeHtml([message, detail].filter(Boolean).join(" · "))}</span>
@@ -5906,6 +5916,25 @@ function freeCadDocumentGeometryText() {
   if (Number.isFinite(Number(geometry.volume))) parts.push(`volume ${formatNumber(geometry.volume)}`);
   if (geometry.valid !== undefined && geometry.valid !== null) parts.push(`valid ${geometry.valid ? "true" : "false"}`);
   return parts.join(" · ");
+}
+
+function freeCadSiteLayoutStatusText() {
+  const audit = state.documentSummary?.site_layout;
+  if (!audit || audit.applicable === false) return "";
+  const status = audit.status || audit.severity || "needs_review";
+  const coverage = Number(audit.coverage_score);
+  const parts = [status];
+  if (Number.isFinite(coverage)) parts.push(`${Math.round(coverage * 100)}%`);
+  return parts.join(" · ");
+}
+
+function freeCadSiteLayoutCoverageText() {
+  const audit = state.documentSummary?.site_layout;
+  if (!audit || audit.applicable === false) return "";
+  const requirements = Array.isArray(audit.requirements) ? audit.requirements : [];
+  if (!requirements.length) return "";
+  const passed = requirements.filter((item) => item.status === "pass").length;
+  return `${passed}/${requirements.length}`;
 }
 
 function freeCadObjectGeometryText(obj) {
@@ -6531,6 +6560,8 @@ function renderFreeCadDocumentSummarySection() {
   const tipText = freeCadBodyTipText();
   const assemblyText = freeCadAssemblyText();
   const techDrawText = freeCadTechDrawText();
+  const siteLayoutStatus = freeCadSiteLayoutStatusText();
+  const siteLayoutCoverage = freeCadSiteLayoutCoverageText();
   return `<section class="section">
     <h3>${icon("layers")} ${escapeHtml(t("featureTree"))}</h3>
     <div class="kv-list">
@@ -6542,7 +6573,10 @@ function renderFreeCadDocumentSummarySection() {
       ${tipText ? `<div class="kv"><span>Body tips</span><strong>${escapeHtml(tipText)}</strong></div>` : ""}
       ${assemblyText ? `<div class="kv"><span>Assemblies</span><strong>${escapeHtml(assemblyText)}</strong></div>` : ""}
       ${techDrawText ? `<div class="kv"><span>TechDraw</span><strong>${escapeHtml(techDrawText)}</strong></div>` : ""}
+      ${siteLayoutStatus ? `<div class="kv"><span>${escapeHtml(t("siteLayoutStatus"))}</span><strong>${escapeHtml(siteLayoutStatus)}</strong></div>` : ""}
+      ${siteLayoutCoverage ? `<div class="kv"><span>${escapeHtml(t("siteLayoutCoverage"))}</span><strong>${escapeHtml(siteLayoutCoverage)}</strong></div>` : ""}
     </div>
+    ${renderFreeCadDiagnostics("siteLayoutAudit", state.documentSummary.site_layout)}
   </section>`;
 }
 

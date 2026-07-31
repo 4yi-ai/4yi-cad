@@ -154,6 +154,28 @@ def test_worker_exports_viewer_scene_style_metadata():
         assert marker in source
 
 
+def test_worker_defines_site_layout_missing_first_audit():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        "freecad.site_layout_audit.v1",
+        "SITE_LAYOUT_REQUIREMENTS",
+        "site_layout_audit",
+        "site_layout_requirements_report",
+        "site_layout_estimated_metrics",
+        "plot_control",
+        "planning_controls",
+        "fire_access",
+        "parking_underground",
+        "planning_metrics",
+        "outside_plot_boundary",
+        "floating_site_components",
+        "building_spacing_below_minimum",
+        '"site_layout": site_layout',
+    ):
+        assert marker in source
+
+
 def test_worker_defines_assembly_lcs_and_runtime_capability_diagnostics():
     source = WORKER_SOURCE.read_text(encoding="utf-8")
 
@@ -1041,6 +1063,19 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     assert styles["GreenPark"]["semantic_role"] == "green"
     assert len({styles[name]["color"] for name in ("Plot", "BuildingA", "WaterGarden", "Playground", "GreenPark")}) >= 4
     assert 0 < styles["WaterGarden"]["opacity"] < styles["BuildingA"]["opacity"] <= 1
+
+    inspected = run_freecad_document_inspect(result["exports"]["fcstd"], timeout=90)
+    assert inspected["ok"] is True
+    audit = inspected["document_summary"]["site_layout"]
+    assert audit["schema"] == "freecad.site_layout_audit.v1"
+    assert audit["applicable"] is True
+    assert audit["status"] in {"needs_review", "fail"}
+    assert audit["component_counts"]["plot_boundary"] >= 1
+    assert audit["component_counts"]["residential_building"] >= 3
+    issue_codes = {item["code"] for item in audit["issues"]}
+    assert "missing_fire_access" in issue_codes
+    assert "missing_parking_underground" in issue_codes
+    assert "missing_planning_metrics" in issue_codes
 
 
 @pytest.mark.skipif(

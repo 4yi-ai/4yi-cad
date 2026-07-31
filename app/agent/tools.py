@@ -104,6 +104,15 @@ Hard rules:
   recognizable objects.
 - Define dimensions as named variables at the top so the part is parametric.
 - No file I/O, no network, no printing - just build `result`.
+- For site/community prompts, produce a site_layout.v1-style master-plan model.
+  Before adding decorative massing, cover the professional planning layers:
+  plot/redline boundary, setback/control references, north/datum/elevation
+  references, entrance and guard/drop-off system, vehicle/pedestrian circulation,
+  explicit fire lane or ladder-access/turning-radius marker, parking or basement
+  ramp, residential tower/building masses, clubhouse/amenity, water/green/play
+  landscape zones, and a PlanningMetrics object with FAR/density/green-ratio
+  estimates when enough dimensions are known. Use named objects whose names/labels
+  include these roles so downstream site-layout audits can validate them.
 - For site/community prompts, model the overall plot plus distinct buildings,
   roads/paths, water/green areas, clubhouse/play areas, and other requested zones
   as simple named massing objects rather than collapsing everything into one block.
@@ -118,6 +127,10 @@ Hard rules:
   dense meshes, heavy booleans, global fillets/chamfers, and ornamental detail
   unless the user asks for one specific small part. Prioritize valid export,
   named editable objects, and a responsive viewer over decorative complexity.
+- For high-end residential site plans, keep all ordinary components inside the
+  plot boundary, land buildings/roads/landscape on the site datum, maintain a
+  concept minimum tower spacing around 12000 mm unless the user says otherwise,
+  and avoid floating, intersecting, or randomly scattered components.
 - For mechanical assembly prompts, create an editable concept assembly rather
   than one fused solid. Use named FreeCAD objects for major components such as
   tire, rim, axle, main strut, piston rod, actuator body, clevis/yoke brackets,

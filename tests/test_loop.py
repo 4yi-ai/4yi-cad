@@ -70,6 +70,11 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "Massing-level does not mean blank boxes" in SYSTEM_PROMPT
     assert "horizontal floor/story bands grouped every 2-4" in SYSTEM_PROMPT
     assert "Avoid individual windows" in SYSTEM_PROMPT
+    assert "site_layout.v1-style master-plan model" in SYSTEM_PROMPT
+    assert "PlanningMetrics object" in SYSTEM_PROMPT
+    assert "fire lane" in SYSTEM_PROMPT
+    assert "parking or basement" in SYSTEM_PROMPT
+    assert "12000 mm" in SYSTEM_PROMPT
     assert "ViewObject.ShapeColor" in SYSTEM_PROMPT
     assert "translucent blue" in SYSTEM_PROMPT
     assert "multi-object site/building layouts" in freecad_description
