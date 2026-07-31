@@ -92,6 +92,8 @@ TECHDRAW_FALLBACK_VIEWS_PROPERTY = "FourYiTechDrawFallbackViews"
 TECHDRAW_FALLBACK_STATE_OBJECT = "FourYiTechDrawState"
 TECHDRAW_FALLBACK_PAGES_PROPERTY = "FourYiTechDrawFallbackPages"
 SKETCH_EXTERNAL_GEOMETRY_META_PROPERTY = "FourYiSketchExternalGeometryMeta"
+ASSEMBLY_SOLVER_LINEAR_TOLERANCE = 1e-3
+ASSEMBLY_SOLVER_ANGLE_TOLERANCE_DEGREES = 0.5
 TOPOLOGICAL_REPAIR_REPORT_PROPERTY = "FourYiTopologyRepairReport"
 FEATURE_FALLBACK_STATE_OBJECT = "FourYiFeatureState"
 FEATURE_FALLBACK_FEATURES_PROPERTY = "FourYiFallbackFeatures"
@@ -1884,6 +1886,61 @@ def vector_cross_values(left, right):
         return None
 
 
+def vector_values(value):
+    try:
+        result = [float(item) for item in list(value)[:3]]
+    except Exception:
+        return None
+    if len(result) != 3 or not all(math.isfinite(item) for item in result):
+        return None
+    return result
+
+
+def vector_sub_values(left, right):
+    left = vector_values(left)
+    right = vector_values(right)
+    if not left or not right:
+        return None
+    return [left[index] - right[index] for index in range(3)]
+
+
+def vector_norm_values(value):
+    value = vector_values(value)
+    if not value:
+        return None
+    return math.sqrt(sum(item * item for item in value))
+
+
+def vector_distance_values(left, right):
+    return vector_norm_values(vector_sub_values(left, right))
+
+
+def vector_angle_degrees(left, right, *, unsigned=True):
+    left = normalize_vector_values(left)
+    right = normalize_vector_values(right)
+    if not left or not right:
+        return None
+    dot = vector_dot_values(left, right)
+    if dot is None:
+        return None
+    dot = max(-1.0, min(1.0, float(dot)))
+    if unsigned:
+        dot = abs(dot)
+    return math.degrees(math.acos(dot))
+
+
+def vector_rejection_norm(value, axis):
+    value = vector_values(value)
+    axis = normalize_vector_values(axis)
+    if not value or not axis:
+        return None
+    projection = vector_dot_values(value, axis)
+    if projection is None:
+        return None
+    rejected = [value[index] - projection * axis[index] for index in range(3)]
+    return vector_norm_values(rejected)
+
+
 def connector_helper_axis(primary):
     primary = normalize_vector_values(primary)
     if not primary:
@@ -2111,6 +2168,196 @@ def assembly_joint_summary(joint):
     return item
 
 
+def connector_frame_from_reference_summary(ref):
+    if not isinstance(ref, dict):
+        return {}
+    frame = ref.get("connector_frame")
+    return frame if isinstance(frame, dict) else {}
+
+
+def connector_origin_from_reference_summary(ref):
+    frame = connector_frame_from_reference_summary(ref)
+    lcs = frame.get("lcs") if isinstance(frame.get("lcs"), dict) else {}
+    return vector_values(lcs.get("origin") or frame.get("origin"))
+
+
+def connector_axis_from_reference_summary(ref):
+    frame = connector_frame_from_reference_summary(ref)
+    axis = frame.get("primary_axis")
+    lcs = frame.get("lcs") if isinstance(frame.get("lcs"), dict) else {}
+    if not axis and isinstance(lcs, dict):
+        primary_role = safe_text(lcs.get("primary_role"), 20)
+        if primary_role == "x":
+            axis = lcs.get("x_axis")
+        elif primary_role == "z":
+            axis = lcs.get("z_axis")
+        else:
+            axis = lcs.get("z_axis") or lcs.get("x_axis")
+    return normalize_vector_values(axis)
+
+
+def scalar_float_value(value):
+    if value is None:
+        return None
+    if hasattr(value, "Value"):
+        try:
+            value = value.Value
+        except Exception:
+            return None
+    try:
+        result = float(value)
+    except Exception:
+        return None
+    return result if math.isfinite(result) else None
+
+
+def assembly_joint_geometry_result(joint, *, linear_tolerance=ASSEMBLY_SOLVER_LINEAR_TOLERANCE, angle_tolerance=ASSEMBLY_SOLVER_ANGLE_TOLERANCE_DEGREES):
+    joint_type = safe_text(joint.get("joint_type"), 80)
+    normalized_type = joint_type.lower()
+    result = {
+        "joint": safe_text(joint.get("name"), 120),
+        "joint_type": joint_type,
+        "state": "verified",
+        "linear_tolerance": linear_tolerance,
+        "angle_tolerance_degrees": angle_tolerance,
+        "residuals": [],
+        "unavailable_checks": [],
+    }
+
+    ref1 = joint.get("reference1") if isinstance(joint.get("reference1"), dict) else {}
+    ref2 = joint.get("reference2") if isinstance(joint.get("reference2"), dict) else {}
+    origin1 = connector_origin_from_reference_summary(ref1)
+    origin2 = connector_origin_from_reference_summary(ref2)
+    axis1 = connector_axis_from_reference_summary(ref1)
+    axis2 = connector_axis_from_reference_summary(ref2)
+
+    def mark_unavailable(metric, reason):
+        result["unavailable_checks"].append({
+            "metric": metric,
+            "reason": reason,
+        })
+
+    def add_linear(metric, value):
+        if value is None:
+            mark_unavailable(metric, "connector geometry is unavailable")
+            return
+        residual = abs(float(value))
+        result["residuals"].append({
+            "metric": metric,
+            "value": residual,
+            "threshold": linear_tolerance,
+            "unit": "mm",
+            "ok": residual <= linear_tolerance,
+        })
+
+    def add_angle(metric, value):
+        if value is None:
+            mark_unavailable(metric, "connector axis geometry is unavailable")
+            return
+        residual = abs(float(value))
+        result["residuals"].append({
+            "metric": metric,
+            "value": residual,
+            "threshold": angle_tolerance,
+            "unit": "deg",
+            "ok": residual <= angle_tolerance,
+        })
+
+    def origin_distance():
+        return vector_distance_values(origin1, origin2)
+
+    def axis_angle_residual(expected=0.0):
+        actual = vector_angle_degrees(axis1, axis2, unsigned=False)
+        expected = scalar_float_value(expected)
+        if actual is None or expected is None:
+            return None
+        expected = abs(expected) % 360.0
+        if expected > 180.0:
+            expected = 360.0 - expected
+        candidates = [actual, abs(180.0 - actual)]
+        return min(abs(candidate - expected) for candidate in candidates)
+
+    if normalized_type in {"fixed", "revolute"}:
+        add_linear("connector_origin_distance", origin_distance())
+        add_angle("connector_axis_angle", axis_angle_residual(0.0))
+    elif normalized_type in {"cylindrical", "slider"}:
+        delta = vector_sub_values(origin2, origin1)
+        add_linear("connector_axis_offset", vector_rejection_norm(delta, axis1))
+        add_angle("connector_axis_angle", axis_angle_residual(0.0))
+    elif normalized_type == "distance":
+        expected = scalar_float_value(joint.get("distance"))
+        actual = origin_distance()
+        if expected is None:
+            mark_unavailable("connector_distance", "distance joint has no scalar target")
+        elif actual is None:
+            mark_unavailable("connector_distance", "connector origins are unavailable")
+        else:
+            add_linear("connector_distance", actual - expected)
+    elif normalized_type == "angle":
+        expected = scalar_float_value(joint.get("angle"))
+        if expected is None:
+            mark_unavailable("connector_axis_angle", "angle joint has no scalar target")
+        else:
+            add_angle("connector_axis_angle", axis_angle_residual(expected))
+    else:
+        add_linear("connector_origin_distance", origin_distance())
+        mark_unavailable("joint_type", "joint type has no geometry verifier")
+
+    if any(not item.get("ok") for item in result["residuals"]):
+        result["state"] = "failed"
+    elif result["unavailable_checks"] or not result["residuals"]:
+        result["state"] = "needs_review"
+    return result
+
+
+def assembly_solver_geometry_verification(joints):
+    joint_results = [
+        assembly_joint_geometry_result(joint)
+        for joint in list(joints or [])
+        if isinstance(joint, dict) and joint.get("kind") == "joint"
+    ]
+    failed = [item for item in joint_results if item.get("state") == "failed"]
+    needs_review = [item for item in joint_results if item.get("state") == "needs_review"]
+    residuals = [
+        residual
+        for item in joint_results
+        for residual in list(item.get("residuals") or [])
+    ]
+    linear_values = [
+        float(item.get("value"))
+        for item in residuals
+        if item.get("unit") == "mm" and scalar_float_value(item.get("value")) is not None
+    ]
+    angle_values = [
+        float(item.get("value"))
+        for item in residuals
+        if item.get("unit") == "deg" and scalar_float_value(item.get("value")) is not None
+    ]
+    if failed:
+        state = "failed"
+    elif needs_review:
+        state = "needs_review"
+    elif joint_results:
+        state = "verified"
+    else:
+        state = "not_applicable"
+    return {
+        "schema": "freecad.assembly_solver_geometry_verification.v1",
+        "state": state,
+        "joint_result_count": len(joint_results),
+        "residual_count": len(residuals),
+        "failed_count": len(failed),
+        "needs_review_count": len(needs_review),
+        "failed_mates": [safe_text(item.get("joint"), 120) for item in failed],
+        "needs_review_mates": [safe_text(item.get("joint"), 120) for item in needs_review],
+        "max_linear_residual": max(linear_values) if linear_values else None,
+        "max_angle_residual_degrees": max(angle_values) if angle_values else None,
+        "linear_tolerance": ASSEMBLY_SOLVER_LINEAR_TOLERANCE,
+        "angle_tolerance_degrees": ASSEMBLY_SOLVER_ANGLE_TOLERANCE_DEGREES,
+        "joint_results": joint_results,
+    }
+
+
 def assembly_joint_group_summary(group):
     return {
         "group": object_ref(group),
@@ -2146,6 +2393,23 @@ def assembly_solver_diagnostics(parts, joints, detail=None, *, fallback=False):
             "joint": skipped.get("joint"),
             "message": safe_text(skipped.get("reason") or "Native solver skipped a joint", 300),
         })
+    verification = detail.get("geometry_verification")
+    if isinstance(verification, dict):
+        state = safe_text(verification.get("state"), 80)
+        if state == "failed":
+            issues.append({
+                "severity": "error",
+                "code": "assembly_geometry_residual_failed",
+                "failed_mates": list(verification.get("failed_mates") or []),
+                "message": "Native solver result failed connector geometry residual verification",
+            })
+        elif state == "needs_review":
+            issues.append({
+                "severity": "warning",
+                "code": "assembly_geometry_residual_needs_review",
+                "needs_review_mates": list(verification.get("needs_review_mates") or []),
+                "message": "Native solver result has connector geometry that could not be fully verified",
+            })
     if len(parts or []) < 2 and any(joint.get("kind") == "joint" for joint in list(joints or [])):
         issues.append({
             "severity": "error",
@@ -2963,6 +3227,29 @@ def topological_ref_native_lookup(migration_map):
     return lookup
 
 
+def topological_ref_object_lookup(migration_map):
+    buckets = {}
+    for item in list((migration_map or {}).values()):
+        before_obj = item.get("before_object") if isinstance(item.get("before_object"), dict) else {}
+        after_obj = item.get("after_object") if isinstance(item.get("after_object"), dict) else {}
+        after_name = safe_text(after_obj.get("name"), 120)
+        after_label = safe_text(after_obj.get("label"), 120)
+        if not (after_name or after_label):
+            continue
+        after_key = (after_name, after_label)
+        for key in [
+            safe_text(before_obj.get("name"), 120),
+            safe_text(before_obj.get("label"), 120),
+        ]:
+            if key:
+                buckets.setdefault(key, {})[after_key] = after_obj
+    return {
+        key: list(values.values())[0]
+        for key, values in buckets.items()
+        if len(values) == 1
+    }
+
+
 def doc_object_by_ref(doc, ref):
     if doc is None or not isinstance(ref, dict):
         return None
@@ -2995,9 +3282,36 @@ def native_ref_key_candidates(obj, reference):
     return keys
 
 
+def native_object_key_candidates(obj):
+    if not obj:
+        return []
+    keys = []
+    try:
+        name = safe_text(getattr(obj, "Name", ""), 120)
+        if name:
+            keys.append(name)
+    except Exception:
+        pass
+    try:
+        label = safe_text(getattr(obj, "Label", ""), 120)
+        if label:
+            keys.append(label)
+    except Exception:
+        pass
+    return keys
+
+
 def native_ref_migration_for(obj, reference, lookup):
     for key in native_ref_key_candidates(obj, reference):
         migration = lookup.get(key)
+        if migration:
+            return migration
+    return None
+
+
+def native_object_migration_for(obj, object_lookup):
+    for key in native_object_key_candidates(obj):
+        migration = object_lookup.get(key)
         if migration:
             return migration
     return None
@@ -3008,6 +3322,8 @@ def migrate_native_ref_tuple(doc, value, lookup):
         return value, 0
     obj, refs = value
     if not hasattr(obj, "Name"):
+        return value, 0
+    if not isinstance(refs, (str, list, tuple)):
         return value, 0
     is_single_ref = isinstance(refs, str)
     ref_values = [refs] if is_single_ref else list(refs or [])
@@ -3055,15 +3371,83 @@ def migrate_native_ref_property_value(doc, value, lookup):
     return value, 0
 
 
+def migrate_native_object_link_property_value(doc, value, object_lookup):
+    if hasattr(value, "Name"):
+        migration = native_object_migration_for(value, object_lookup)
+        if not migration:
+            return value, 0
+        return doc_object_by_ref(doc, migration) or value, 1
+    if isinstance(value, list):
+        result = []
+        total = 0
+        for item in value:
+            migrated_item, migrated_count = migrate_native_object_link_property_value(doc, item, object_lookup)
+            result.append(migrated_item)
+            total += migrated_count
+        return result, total
+    if isinstance(value, tuple):
+        result = []
+        total = 0
+        for item in value:
+            migrated_item, migrated_count = migrate_native_object_link_property_value(doc, item, object_lookup)
+            result.append(migrated_item)
+            total += migrated_count
+        return tuple(result), total
+    return value, 0
+
+
+def native_property_sequence_length(value):
+    if isinstance(value, (list, tuple)):
+        return len(value)
+    return None
+
+
+def apply_native_ref_property_update(doc, obj, prop, old_value, new_value, migrated_count, lookup):
+    entry = {
+        "object": object_ref(obj),
+        "property": prop,
+        "migrated_ref_count": migrated_count,
+        "status": "updated",
+    }
+    try:
+        setattr(obj, prop, new_value)
+    except Exception as exc:
+        entry["status"] = "failed"
+        entry["error"] = safe_text(exc, 220)
+        return entry
+
+    try:
+        applied_value = getattr(obj, prop)
+        _remaining_value, remaining_count = migrate_native_ref_property_value(doc, applied_value, lookup)
+    except Exception as exc:
+        remaining_count = 0
+        entry["verification_error"] = safe_text(exc, 220)
+
+    if prop == "ExternalGeometry":
+        before_len = native_property_sequence_length(old_value)
+        after_len = native_property_sequence_length(applied_value if "applied_value" in locals() else new_value)
+        entry["external_geometry_order_preserved"] = before_len == after_len
+        entry["external_geometry_migration_strategy"] = "direct_set_preserve_order"
+        if before_len != after_len:
+            entry["status"] = "updated_needs_review"
+            entry["reason"] = "ExternalGeometry list length changed during native migration"
+    if remaining_count:
+        entry["status"] = "updated_needs_review"
+        entry["remaining_migratable_ref_count"] = remaining_count
+    return entry
+
+
 def apply_native_topological_ref_migration(doc, migration_map):
     lookup = topological_ref_native_lookup(migration_map)
+    object_lookup = topological_ref_object_lookup(migration_map)
     report = {
         "schema": "freecad.native_topological_ref_repair.v1",
         "updated_native_ref_count": 0,
         "updated_native_property_count": 0,
+        "needs_review_count": 0,
         "updated_native_properties": [],
     }
-    if doc is None or not lookup:
+    if doc is None or not (lookup or object_lookup):
         return report
     native_ref_properties = [
         "AttachmentSupport",
@@ -3072,6 +3456,8 @@ def apply_native_topological_ref_migration(doc, migration_map):
         "Reference2",
         "References2D",
         "References3D",
+        "Source",
+        "Sources",
         "Support",
     ]
     for obj in list(getattr(doc, "Objects", []) or []):
@@ -3083,27 +3469,18 @@ def apply_native_topological_ref_migration(doc, migration_map):
             except Exception:
                 continue
             new_value, migrated_count = migrate_native_ref_property_value(doc, old_value, lookup)
+            if not migrated_count and prop in {"Source", "Sources"}:
+                new_value, migrated_count = migrate_native_object_link_property_value(doc, old_value, object_lookup)
             if not migrated_count:
                 continue
-            try:
-                setattr(obj, prop, new_value)
-            except Exception as exc:
-                report["updated_native_properties"].append({
-                    "object": object_ref(obj),
-                    "property": prop,
-                    "migrated_ref_count": migrated_count,
-                    "status": "failed",
-                    "error": safe_text(exc, 220),
-                })
+            entry = apply_native_ref_property_update(doc, obj, prop, old_value, new_value, migrated_count, lookup)
+            report["updated_native_properties"].append(entry)
+            if entry.get("status") == "failed":
                 continue
             report["updated_native_ref_count"] += migrated_count
             report["updated_native_property_count"] += 1
-            report["updated_native_properties"].append({
-                "object": object_ref(obj),
-                "property": prop,
-                "migrated_ref_count": migrated_count,
-                "status": "updated",
-            })
+            if entry.get("status") == "updated_needs_review":
+                report["needs_review_count"] += 1
     if report["updated_native_ref_count"]:
         try:
             doc.recompute()
@@ -6721,19 +7098,44 @@ def solve_typed_assembly_with_native(doc, assembly):
             status = native_assembly.solve()
         except TypeError:
             status = native_assembly.solve(False)
+        try:
+            temp_doc.recompute()
+        except Exception:
+            pass
+        post_solve_joints = [
+            assembly_joint_summary(obj)
+            for obj in list(getattr(joint_group, "Group", []) or [])
+            if is_assembly_joint(obj)
+        ]
+        geometry_verification = assembly_solver_geometry_verification(post_solve_joints)
         diagnostics = assembly_solver_diagnostics(
             list(assembly.get("parts") or []),
             list(assembly.get("joints") or []),
-            detail={"skipped_joints": skipped_joints},
+            detail={
+                "skipped_joints": skipped_joints,
+                "solver_status": safe_value(status),
+                "geometry_verification": geometry_verification,
+            },
             fallback=False,
         )
+        verified = (
+            geometry_verification.get("state") in {"verified", "not_applicable"}
+            and not skipped_joints
+            and not any(issue.get("severity") == "error" for issue in diagnostics.get("issues", []))
+        )
         return {
-            "ok": not any(issue.get("severity") == "error" for issue in diagnostics.get("issues", [])),
+            "ok": verified,
             "solver_backend": "native_transient",
+            "verification_state": geometry_verification.get("state"),
+            "geometry_residual_count": geometry_verification.get("residual_count"),
+            "failed_mates": geometry_verification.get("failed_mates"),
+            "needs_review_mates": geometry_verification.get("needs_review_mates"),
             "solver_status": safe_value(status),
             "part_count": len(part_map),
             "joint_count": created_joints,
             "created_joints": created_joint_details,
+            "native_solved_joints": post_solve_joints,
+            "geometry_verification": geometry_verification,
             "skipped_joints": skipped_joints,
             "solver_diagnostics": diagnostics,
         }

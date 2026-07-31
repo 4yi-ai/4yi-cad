@@ -178,6 +178,34 @@ def test_worker_defines_assembly_lcs_and_runtime_capability_diagnostics():
         "FourYiConnectorFrame",
         '"skipped_joints"',
         '"created_joints"',
+        "freecad.assembly_solver_geometry_verification.v1",
+        "assembly_joint_geometry_result",
+        "assembly_solver_geometry_verification",
+        '"verification_state"',
+        '"geometry_residual_count"',
+        '"failed_mates"',
+        '"needs_review_mates"',
+        '"native_solved_joints"',
+        '"assembly_geometry_residual_failed"',
+        '"assembly_geometry_residual_needs_review"',
+    ):
+        assert marker in source
+
+
+def test_worker_defines_conservative_native_topology_repair_paths():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    for marker in (
+        "topological_ref_object_lookup",
+        "migrate_native_object_link_property_value",
+        "apply_native_ref_property_update",
+        '"Source"',
+        '"Sources"',
+        '"updated_needs_review"',
+        '"needs_review_count"',
+        '"external_geometry_order_preserved"',
+        '"external_geometry_migration_strategy"',
+        '"direct_set_preserve_order"',
     ):
         assert marker in source
 
