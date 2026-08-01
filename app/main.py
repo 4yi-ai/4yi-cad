@@ -46,6 +46,12 @@ from app.cad.script_params import (
     apply_script_parameter_patches,
     extract_script_parameters,
 )
+from app.cad.site_layout_templates import (
+    site_layout_audit_from_summary,
+    site_layout_failure_message,
+    site_layout_needs_repair,
+    site_layout_repair_script,
+)
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
 from app.freecad_intents import parse_freecad_intent
 from app.freecad_state import storage_status, typed_state_diff
@@ -664,7 +670,56 @@ async def default_freecad_execute(script: str) -> ExecResult:
         cpu_seconds=120,
         address_space_mb=4096,
     )
-    return _freecad_exec_result_from_sandbox(res, "FreeCAD sandbox execution failed")
+    result = _freecad_exec_result_from_sandbox(res, "FreeCAD sandbox execution failed")
+    if not result.ok:
+        return result
+
+    inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+    document_summary = inspection.get("document_summary") if inspection.get("ok") else None
+    audit = site_layout_audit_from_summary(document_summary)
+    if audit:
+        result.diagnostics["site_layout_audit"] = {
+            "status": audit.get("status"),
+            "coverage_score": audit.get("coverage_score"),
+            "issue_count": len(list(audit.get("issues") or [])),
+            "repair_status": "not_needed" if audit.get("status") == "pass" else "pending",
+        }
+    if not site_layout_needs_repair(document_summary):
+        return result
+
+    repair_script = site_layout_repair_script(audit)
+    repair_res = await asyncio.to_thread(
+        run_freecad_document_edit_sandboxed,
+        repair_script,
+        result.exports.get("fcstd"),
+        timeout_s=180,
+        cpu_seconds=120,
+        address_space_mb=4096,
+    )
+    repaired = _freecad_exec_result_from_sandbox(repair_res, "FreeCAD site-layout repair failed")
+    repaired.diagnostics.update(result.diagnostics)
+    if not repaired.ok:
+        repaired.error = repaired.error or site_layout_failure_message(audit)
+        return repaired
+
+    repaired_inspection = await _inspect_fcstd_b64(repaired.exports.get("fcstd"))
+    repaired_summary = (
+        repaired_inspection.get("document_summary") if repaired_inspection.get("ok") else None
+    )
+    repaired_audit = site_layout_audit_from_summary(repaired_summary)
+    if repaired_audit:
+        repaired.diagnostics["site_layout_audit"] = {
+            "status": repaired_audit.get("status"),
+            "coverage_score": repaired_audit.get("coverage_score"),
+            "issue_count": len(list(repaired_audit.get("issues") or [])),
+            "repair_status": "repaired" if repaired_audit.get("status") == "pass" else "failed",
+        }
+    if repaired_audit and repaired_audit.get("status") == "pass":
+        return repaired
+
+    repaired.ok = False
+    repaired.error = site_layout_failure_message(repaired_audit or audit)
+    return repaired
 
 
 async def _sse_with_heartbeat(agen):

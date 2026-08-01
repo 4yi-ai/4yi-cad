@@ -14,7 +14,7 @@ from app.artifact_store import FileArtifactStore
 from app.cad.design_state import default_design_state, render_cadquery_script
 from app.cad.runner import SandboxResult
 from app.gateway import ChatCompletion
-from app.main import create_app
+from app.main import create_app, default_freecad_execute
 from app.session_store import SqliteSessionStore
 
 
@@ -1267,6 +1267,91 @@ def test_freecad_smoke_endpoint_reports_missing_runtime(monkeypatch):
         "ok": False,
         "error": "FreeCADCmd unavailable",
         "timed_out": False,
+    }
+
+
+async def test_default_freecad_execute_repairs_missing_site_layout_roles(monkeypatch):
+    inspect_calls = []
+    edit_calls = []
+
+    failing_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "fail",
+            "coverage_score": 0.55,
+            "issues": [
+                {
+                    "severity": "error",
+                    "code": "missing_enclosure_system",
+                    "message": "Missing enclosure wall system.",
+                },
+                {
+                    "severity": "warning",
+                    "code": "missing_fire_access",
+                    "message": "Missing fire access.",
+                },
+            ],
+        }
+    }
+    repaired_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "pass",
+            "coverage_score": 1.0,
+            "issues": [],
+        }
+    }
+
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "OLD", "step": "OLDSTEP", "stl": "OLDSTL"},
+            },
+        )
+
+    def fake_inspect(fcstd_b64, **kwargs):
+        inspect_calls.append(fcstd_b64)
+        summary = failing_summary if fcstd_b64 == "OLD" else repaired_summary
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "document_summary": summary,
+            },
+        )
+
+    def fake_edit(script, fcstd_b64, **kwargs):
+        edit_calls.append({"script": script, "fcstd_b64": fcstd_b64})
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "REPAIRED", "step": "NEWSTEP", "stl": "NEWSTL"},
+            },
+        )
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_inspect_sandboxed", fake_inspect)
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+
+    result = await default_freecad_execute("import FreeCAD\nresult = []")
+
+    assert result.ok is True
+    assert result.exports["fcstd"] == "REPAIRED"
+    assert inspect_calls == ["OLD", "REPAIRED"]
+    assert edit_calls and edit_calls[0]["fcstd_b64"] == "OLD"
+    assert "Repair_Boundary_Wall" in edit_calls[0]["script"]
+    assert "Repair_Fire_Road" in edit_calls[0]["script"]
+    assert result.diagnostics["site_layout_audit"] == {
+        "status": "pass",
+        "coverage_score": 1.0,
+        "issue_count": 0,
+        "repair_status": "repaired",
     }
 
 

@@ -100,6 +100,32 @@ def test_site_community_prompts_infer_freecad_engine_hint():
     assert infer_engine_hint("make a cube") is None
 
 
+async def test_site_prompt_injects_component_planner_message():
+    script = "import FreeCAD\nresult = object()\n"
+    gw = FakeGateway(_tool_call(script, name="run_freecad"))
+
+    async def execute(script):
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+
+    await _collect(
+        run_generation(
+            "一块100米X100米的地块，设计高档小区，有别墅、高层、会所、人工湖和儿童游乐区",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+        )
+    )
+
+    user_message = gw.calls[0]["messages"][-1]["content"]
+    assert "Site-layout component plan" in user_message
+    assert "add_perimeter_wall" in user_message
+    assert "add_artificial_lake" in user_message
+    assert "document_summary.site_layout.status == \"pass\"" in user_message
+
+
 def test_mechanical_assembly_prompts_infer_freecad_engine_hint():
     assert infer_engine_hint("design an aircraft landing gear with a hydraulic actuator") == "freecad"
     assert infer_engine_hint("make a wheel assembly with suspension linkage") == "freecad"

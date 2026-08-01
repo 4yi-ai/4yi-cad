@@ -15,6 +15,7 @@ from app.cad.freecad_worker import (
     run_freecad_import_model,
     run_freecad_script,
 )
+from app.cad.site_layout_templates import site_layout_repair_script
 
 PY = sys.executable
 WORKER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "cad" / "freecad_worker.py"
@@ -1100,6 +1101,63 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     imported_inspected = run_freecad_document_inspect(imported["exports"]["fcstd"], timeout=90)
     assert imported_inspected["document_summary"]["site_layout"]["status"] == "pass"
     assert imported_inspected["document_summary"]["site_layout"]["issues"] == []
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_site_layout_template_repair_fills_missing_roles():
+    source = run_freecad_script(
+        """
+import FreeCAD
+import Part
+
+doc = FreeCAD.newDocument("RoughSiteLayout")
+
+def add_box(name, label, x, y, z, length, width, height):
+    obj = doc.addObject("Part::Box", name)
+    obj.Label = label
+    obj.Length = length
+    obj.Width = width
+    obj.Height = height
+    obj.Placement.Base = FreeCAD.Vector(x, y, z)
+    return obj
+
+plot = add_box("Plot", "Plot", 0, 0, -80, 100000, 100000, 80)
+road = add_box("RoadLoop", "Road loop", 8000, 8000, 0, 84000, 6000, 120)
+building_a = add_box("BuildingA", "Building A", 18000, 18000, 0, 14000, 18000, 18000)
+building_b = add_box("BuildingB", "Building B", 44000, 18000, 0, 14000, 18000, 15000)
+building_c = add_box("BuildingC", "Building C", 70000, 18000, 0, 14000, 18000, 12000)
+water = add_box("WaterGarden", "Water garden", 18000, 65000, 0, 24000, 15000, 120)
+playground = add_box("Playground", "Playground", 62000, 62000, 0, 18000, 16000, 120)
+green = add_box("GreenPark", "Green park", 47000, 61000, 0, 9000, 25000, 100)
+
+doc.recompute()
+result = [plot, road, building_a, building_b, building_c, water, playground, green]
+""",
+        timeout=90,
+    )
+    assert source["ok"] is True
+    inspected = run_freecad_document_inspect(source["exports"]["fcstd"], timeout=90)
+    audit = inspected["document_summary"]["site_layout"]
+    assert audit["status"] == "fail"
+    assert "missing_enclosure_system" in {item["code"] for item in audit["issues"]}
+
+    repaired = run_freecad_document_script(
+        site_layout_repair_script(audit),
+        source["exports"]["fcstd"],
+        timeout=90,
+    )
+    assert repaired["ok"] is True
+    repaired_inspected = run_freecad_document_inspect(repaired["exports"]["fcstd"], timeout=90)
+    repaired_audit = repaired_inspected["document_summary"]["site_layout"]
+    assert repaired_audit["status"] == "pass"
+    assert repaired_audit["issues"] == []
+    assert repaired_audit["component_counts"]["boundary_wall"] >= 5
+    assert repaired_audit["component_counts"]["fire_access"] >= 1
+    assert repaired_audit["component_counts"]["parking_underground"] >= 1
+    assert repaired_audit["component_counts"]["planning_metrics"] >= 1
 
 
 @pytest.mark.skipif(

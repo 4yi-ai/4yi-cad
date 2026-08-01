@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Awaitable, Callable
 
+from app.agent.site_layout import augment_prompt_with_site_layout_plan, is_site_layout_prompt
 from app.agent.tools import MVP_TOOLS, SYSTEM_PROMPT
 from app.cad.script_params import extract_script_parameters
 
@@ -111,7 +112,13 @@ def sanitize_chat_history(history: list[dict] | None) -> list[dict[str, str]]:
 
 def infer_engine_hint(prompt: str) -> str | None:
     normalized = (prompt or "").lower()
-    return "freecad" if _FREECAD_HINT_RE.search(normalized) or _MECHANICAL_ASSEMBLY_HINT_RE.search(normalized) else None
+    return (
+        "freecad"
+        if is_site_layout_prompt(prompt)
+        or _FREECAD_HINT_RE.search(normalized)
+        or _MECHANICAL_ASSEMBLY_HINT_RE.search(normalized)
+        else None
+    )
 
 
 async def run_generation(
@@ -136,7 +143,7 @@ async def run_generation(
     )
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     messages.extend(sanitize_chat_history(history))
-    messages.append({"role": "user", "content": prompt})
+    messages.append({"role": "user", "content": augment_prompt_with_site_layout_plan(prompt)})
 
     yield {"type": "status", "message": "thinking"}
 
