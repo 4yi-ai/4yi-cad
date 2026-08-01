@@ -98,8 +98,9 @@ The current generated site shown in the UI is still below this baseline:
 7. Tune visual style after the audit passes. **Done.**
    Use restrained CAD materials and a professional plan composition: muted site base,
    dark roads, translucent water, green landscape, warm amenity, light residential massing,
-   and a default top/axon view that reveals the full site.
+   a default top/axon view that reveals the full site, and reusable viewer
+   presentation presets for plan, axon, street-edge, and section review.
 
 The remaining visual work is optional product material rather than a blocker: curated
-screenshots and presentation presets can be added after generated/imported models already
-pass the structural site audit and carry viewer presentation hints.
+screenshots can be added after generated/imported models already pass the structural site
+audit and carry viewer presentation hints/presets.

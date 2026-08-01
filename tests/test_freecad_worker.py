@@ -177,7 +177,9 @@ def test_worker_exports_viewer_scene_style_metadata():
         "freecad.viewer_scene_presentation.v1",
         "viewer_scene_presentation",
         "viewer_scene_role_counts",
-        '"default_view": "top" if site_layout else "iso"',
+        "viewer_scene_presentation_presets",
+        '"default_preset": presets[0]["id"]',
+        '"default_view": presets[0]["view"]',
         '"distance_multiplier": 1.92 if site_layout else 1.65',
     ):
         assert marker in source
@@ -1079,8 +1081,15 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     presentation = scene["presentation"]
     assert presentation["schema"] == "freecad.viewer_scene_presentation.v1"
     assert presentation["site_layout"] is True
+    assert presentation["default_preset"] == "site_plan"
     assert presentation["default_view"] == "top"
     assert presentation["fit"] == "all"
+    assert [preset["id"] for preset in presentation["presets"]] == [
+        "site_plan",
+        "site_axon",
+        "street_edge",
+        "district_section",
+    ]
     assert presentation["camera_hint"]["distance_multiplier"] > 1.65
     assert presentation["role_counts"]["plot"] >= 1
     assert presentation["role_counts"]["building"] >= 1

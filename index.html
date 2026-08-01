@@ -437,6 +437,41 @@
     font-size: 12px;
     pointer-events: none;
   }
+  .generated-preset-strip {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    z-index: 6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-width: calc(100% - 20px);
+    padding: 4px;
+    border: 1px solid rgba(148, 163, 184, .45);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .9);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .12);
+  }
+  .generated-preset-button {
+    min-width: 44px;
+    height: 28px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .generated-preset-button.active {
+    border-color: rgba(11, 111, 232, .28);
+    background: rgba(11, 111, 232, .12);
+    color: var(--primary);
+  }
+  .generated-preset-button:hover {
+    border-color: rgba(11, 111, 232, .22);
+    color: var(--primary);
+  }
   .generation-activity {
     position: absolute;
     right: 12px;
@@ -2262,6 +2297,7 @@ const state = {
   assemblyConnectorAnchor: null,
   viewMode: "iso",
   generatedViewerFitMode: "all",
+  viewerPresentationPresetId: "",
   selectionMode: "feature",
   measureMode: "distance",
   showBBox: true,
@@ -2497,6 +2533,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     assemblyConnectorAnchor: state.assemblyConnectorAnchor,
     viewMode: state.viewMode,
     generatedViewerFitMode: state.generatedViewerFitMode,
+    viewerPresentationPresetId: state.viewerPresentationPresetId,
     selectionMode: state.selectionMode,
     measureMode: state.measureMode,
     showBBox: state.showBBox,
@@ -2571,6 +2608,7 @@ function restoreWorkbenchSession() {
     state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
     state.generatedViewerFitMode = saved.generatedViewerFitMode === "selection" ? "selection" : "all";
+    state.viewerPresentationPresetId = saved.viewerPresentationPresetId || "";
     applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene);
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
       ? saved.selectionMode
@@ -2831,8 +2869,46 @@ function freeCadViewerScenePresentation(scene) {
   return presentation && typeof presentation === "object" ? presentation : {};
 }
 
+function freeCadViewerScenePresets(scene) {
+  const presets = freeCadViewerScenePresentation(scene).presets;
+  return (Array.isArray(presets) ? presets : [])
+    .filter((preset) => preset && ["top", "front", "right", "iso"].includes(preset.view));
+}
+
+function currentFreeCadViewerSceneData() {
+  return parseFreeCadViewerSceneB64(state.artifacts.viewer_scene);
+}
+
+function freeCadPresentationPresetLabel(preset) {
+  if (!preset) return "";
+  if (currentLocale === "zh") return preset.label_zh || preset.label || preset.id || preset.view || "";
+  return preset.label_en || preset.label || preset.id || preset.view || "";
+}
+
+function freeCadPresentationPresetById(scene, id) {
+  const token = String(id || "");
+  return freeCadViewerScenePresets(scene).find((preset) => String(preset.id || "") === token) || null;
+}
+
+function freeCadApplyPresentationPreset(preset) {
+  if (!preset || !["top", "front", "right", "iso"].includes(preset.view)) return false;
+  state.viewerPresentationPresetId = String(preset.id || preset.view || "");
+  state.viewMode = preset.view;
+  if (preset.fit === "all") {
+    state.generatedViewerFitMode = "all";
+  }
+  return true;
+}
+
 function freeCadApplyViewerScenePresentation(scene, { force = false } = {}) {
   const presentation = freeCadViewerScenePresentation(scene);
+  const presets = freeCadViewerScenePresets(scene);
+  const defaultPresetId = presentation.default_preset || presentation.defaultPreset || presets[0]?.id || "";
+  const defaultPreset = freeCadPresentationPresetById(scene, defaultPresetId) || presets[0] || null;
+  if (defaultPreset && (force || !state.viewerPresentationPresetId)) {
+    freeCadApplyPresentationPreset(defaultPreset);
+    return;
+  }
   const defaultView = presentation.default_view || presentation.defaultView;
   if (["top", "front", "right", "iso"].includes(defaultView) && (force || state.viewMode === "iso")) {
     state.viewMode = defaultView;
@@ -4929,6 +5005,7 @@ function resetClientWorkbenchSession() {
   state.assemblyConnectorAnchor = null;
   state.viewMode = "iso";
   state.generatedViewerFitMode = "all";
+  state.viewerPresentationPresetId = "";
   state.selectionMode = "feature";
   state.measureMode = "distance";
   state.showBBox = true;
@@ -6439,6 +6516,7 @@ function renderGeneratedPreview() {
         <div class="generated-png-fallback">
           ${fallbackImage}
         </div>
+        ${renderGeneratedPresentationPresets()}
         ${renderGeneratedPreviewOverlays(selected)}
       </div>
     </div>`;
@@ -6447,6 +6525,21 @@ function renderGeneratedPreview() {
     <strong>${escapeHtml(t("generatedPreviewTitle"))}</strong>
     <span>${escapeHtml(t("generatedPreviewHint"))}</span>
   </div>${renderGenerationActivityOverlay()}</div>`;
+}
+
+function renderGeneratedPresentationPresets() {
+  if (state.generationActivity?.active) return "";
+  const scene = currentFreeCadViewerSceneData();
+  const presets = freeCadViewerScenePresets(scene);
+  if (!presets.length) return "";
+  return `<div class="generated-preset-strip" aria-label="Presentation presets">
+    ${presets.map((preset) => {
+      const id = String(preset.id || preset.view || "");
+      const active = id && id === state.viewerPresentationPresetId;
+      const label = freeCadPresentationPresetLabel(preset);
+      return `<button class="generated-preset-button ${active ? "active" : ""}" type="button" onclick="setPresentationPreset(${escapeHtml(jsString(id))})" title="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+    }).join("")}
+  </div>`;
 }
 
 function renderModelSvg() {
@@ -8652,10 +8745,20 @@ function setView(value) {
     renderAll();
     return;
   } else {
+    state.viewerPresentationPresetId = "";
     state.viewMode = value;
   }
   renderAll();
 }
+
+function setPresentationPreset(id) {
+  const scene = currentFreeCadViewerSceneData();
+  const preset = freeCadPresentationPresetById(scene, id);
+  if (!freeCadApplyPresentationPreset(preset)) return;
+  applyGeneratedViewerCamera(generatedViewerRuntime, null);
+  renderAll();
+}
+
 function toggleBBox() { state.showBBox = !state.showBBox; renderAll(); }
 function toggleDims() { state.showDims = !state.showDims; renderAll(); }
 function toggleExplode() { state.exploded = !state.exploded; renderAll(); }
@@ -10855,6 +10958,7 @@ async function generateFromPrompt(prompt, options = {}) {
   state.documentSummary = null;
   state.freeCadDiagnostics = {};
   state.generatedViewerFitMode = "all";
+  state.viewerPresentationPresetId = "";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -10958,6 +11062,7 @@ function handleAgentEvent(ev, context = {}) {
     state.documentSummary = null;
     state.freeCadDiagnostics = {};
     state.generatedViewerFitMode = "all";
+    state.viewerPresentationPresetId = "";
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
     state.selectedFreeCadAssemblyJoint = null;

@@ -856,20 +856,71 @@ def viewer_scene_is_site_layout(role_counts):
     return sum(1 for role in required_roles if int(role_counts.get(role) or 0) > 0) >= 4
 
 
+def viewer_scene_presentation_presets(site_layout):
+    if site_layout:
+        return [
+            {
+                "id": "site_plan",
+                "label": "Site plan",
+                "label_zh": "总图",
+                "view": "top",
+                "fit": "all",
+                "camera_hint": {"distance_multiplier": 1.92},
+            },
+            {
+                "id": "site_axon",
+                "label": "Axon overview",
+                "label_zh": "轴测",
+                "view": "iso",
+                "fit": "all",
+                "camera_hint": {"distance_multiplier": 1.72},
+            },
+            {
+                "id": "street_edge",
+                "label": "Street edge",
+                "label_zh": "界面",
+                "view": "front",
+                "fit": "all",
+                "camera_hint": {"distance_multiplier": 1.82},
+            },
+            {
+                "id": "district_section",
+                "label": "District section",
+                "label_zh": "剖面",
+                "view": "right",
+                "fit": "all",
+                "camera_hint": {"distance_multiplier": 1.82},
+            },
+        ]
+    return [
+        {
+            "id": "model_axon",
+            "label": "Model axon",
+            "label_zh": "轴测",
+            "view": "iso",
+            "fit": "all",
+            "camera_hint": {"distance_multiplier": 1.65},
+        }
+    ]
+
+
 def viewer_scene_presentation(scene_objects, scene_bbox):
     role_counts = viewer_scene_role_counts(scene_objects)
     site_layout = viewer_scene_is_site_layout(role_counts)
+    presets = viewer_scene_presentation_presets(site_layout)
     center = bbox_center_from_summary(scene_bbox) if scene_bbox else None
     return {
         "schema": "freecad.viewer_scene_presentation.v1",
         "site_layout": site_layout,
-        "default_view": "top" if site_layout else "iso",
+        "default_preset": presets[0]["id"],
+        "default_view": presets[0]["view"],
         "fit": "all",
         "camera_hint": {
             "target": center,
             "distance_multiplier": 1.92 if site_layout else 1.65,
             "elevation": "plan" if site_layout else "axon",
         },
+        "presets": presets,
         "role_counts": role_counts,
     }
 
