@@ -7,10 +7,12 @@ call (<290s). Success emits preview + artifacts; exhausting attempts emits a
 terminal error. Dependency-injected fakes: no cadquery/network.
 """
 
+import base64
+import copy
 import json
 
 from app.agent.tools import RUN_FREECAD_TOOL, SYSTEM_PROMPT
-from app.agent.loop import ExecResult, infer_engine_hint, run_generation
+from app.agent.loop import ExecResult, infer_engine_hint, run_generation, site_layout_quality_error
 from app.gateway import ChatCompletion
 
 
@@ -25,7 +27,7 @@ class FakeGateway:
 
     async def chat_completion(self, messages, *, tools=None, tool_choice=None):
         idx = min(len(self.calls), len(self._completions) - 1)
-        self.calls.append({"messages": messages, "tools": tools, "tool_choice": tool_choice})
+        self.calls.append({"messages": copy.deepcopy(messages), "tools": tools, "tool_choice": tool_choice})
         return self._completions[idx]
 
 
@@ -54,6 +56,25 @@ def _no_tool(content: str) -> ChatCompletion:
     return ChatCompletion(content=content, tool_calls=[])
 
 
+def _viewer_scene_b64(*roles: str, object_count: int = 18) -> str:
+    roles = roles or ("plot", "building")
+    objects = []
+    for index in range(object_count):
+        role = roles[index % len(roles)]
+        objects.append({
+            "name": f"{role}_{index}",
+            "label": f"{role}_{index}",
+            "style": {"semantic_role": role},
+            "faces": [{"reference": "Face1", "vertices": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "triangles": [[0, 1, 2]]}],
+        })
+    payload = {
+        "schema": "freecad.viewer_scene.v1",
+        "objects": objects,
+        "object_count": len(objects),
+    }
+    return base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+
+
 async def _collect(agen):
     return [ev async for ev in agen]
 
@@ -64,19 +85,20 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "FreeCAD users" in SYSTEM_PROMPT
     assert "multi-object site/community/building layouts" in SYSTEM_PROMPT
     assert "convert to\n  millimetres" in SYSTEM_PROMPT
-    assert "rather than collapsing everything into one block" in SYSTEM_PROMPT
+    assert "rather than\n  collapsing everything into one block" in SYSTEM_PROMPT
     assert "Private beta complexity budget" in SYSTEM_PROMPT
-    assert "20-60 exportable objects" in SYSTEM_PROMPT
-    assert "45-60 named components" in SYSTEM_PROMPT
-    assert "Massing-level does not mean blank boxes" in SYSTEM_PROMPT
+    assert "40-90 named objects" in SYSTEM_PROMPT
+    assert "Schematic does not mean blank boxes" in SYSTEM_PROMPT
     assert "horizontal floor/story bands grouped every 2-4" in SYSTEM_PROMPT
-    assert "Avoid individual windows" in SYSTEM_PROMPT
+    assert "App::DocumentObjectGroup" in SYSTEM_PROMPT
+    assert "Do not rely on viewer-only overlays" in SYSTEM_PROMPT
+    assert "individual windows" in SYSTEM_PROMPT
     assert "site_layout.v1-style master-plan model" in SYSTEM_PROMPT
     assert "PlanningMetrics object" in SYSTEM_PROMPT
     assert "fire lane" in SYSTEM_PROMPT
     assert "parking or basement" in SYSTEM_PROMPT
     assert "12000 mm" in SYSTEM_PROMPT
-    assert "620+ faces" in SYSTEM_PROMPT
+    assert "reference-quality bar" in SYSTEM_PROMPT
     assert "ViewObject.ShapeColor" in SYSTEM_PROMPT
     assert "translucent blue" in SYSTEM_PROMPT
     assert "multi-object site/building layouts" in freecad_description
@@ -125,7 +147,7 @@ async def test_site_prompt_injects_component_planner_message():
     assert "Site-layout component plan" in user_message
     assert "add_perimeter_wall" in user_message
     assert "add_artificial_lake" in user_message
-    assert "20-60 named exportable" in user_message
+    assert "40-90\n  named objects" in user_message
     assert "45-60 exportable components" in user_message
     assert "620+ faces and 1200+" in user_message
     assert "only actual villa/tower bodies" in user_message
@@ -228,7 +250,7 @@ async def test_site_prompt_forces_freecad_tool_choice():
 
     async def execute_freecad(script):
         freecad_calls.append(script)
-        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L", "viewer_scene": _viewer_scene_b64()})
 
     events = await _collect(
         run_generation(
@@ -261,7 +283,11 @@ async def test_mechanical_assembly_prompt_forces_freecad_tool_choice():
 
     async def execute_freecad(script):
         freecad_calls.append(script)
-        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            exports={"step": "S", "stl": "L", "viewer_scene": _viewer_scene_b64("plot", "building", "water", "play")},
+        )
 
     events = await _collect(
         run_generation(
@@ -298,7 +324,11 @@ async def test_site_prompt_retries_if_model_uses_wrong_engine():
 
     async def execute_freecad(script):
         freecad_calls.append(script)
-        return ExecResult(ok=True, engine="freecad", exports={"step": "S", "stl": "L"})
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            exports={"step": "S", "stl": "L", "viewer_scene": _viewer_scene_b64("plot", "building", "water", "play")},
+        )
 
     events = await _collect(
         run_generation(
@@ -315,6 +345,64 @@ async def test_site_prompt_retries_if_model_uses_wrong_engine():
     assert len(gw.calls) == 2
     assert any(e["type"] == "retry" and "run_freecad" in e["message"] for e in events)
     assert events[-1]["ok"] is True
+
+
+async def test_site_prompt_retries_when_viewer_scene_quality_is_too_sparse():
+    gw = FakeGateway([
+        _tool_call("sparse", "c1", name="run_freecad"),
+        _tool_call("rich", "c2", name="run_freecad"),
+    ])
+    freecad_calls = []
+
+    async def execute(script):
+        return ExecResult(ok=True, exports={"stl": "wrong"})
+
+    async def execute_freecad(script):
+        freecad_calls.append(script)
+        if script == "sparse":
+            return ExecResult(
+                ok=True,
+                engine="freecad",
+                exports={"step": "S", "stl": "L", "viewer_scene": _viewer_scene_b64("plot", "building", object_count=4)},
+            )
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            exports={
+                "step": "S",
+                "stl": "L",
+                "viewer_scene": _viewer_scene_b64("plot", "building", "water", "play", "amenity", "building_articulation"),
+            },
+        )
+
+    events = await _collect(
+        run_generation(
+            "设计一个100米x100米高档小区，有儿童游乐区，有人工湖，有高档会所，有高层",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+            max_attempts=2,
+        )
+    )
+
+    assert freecad_calls == ["sparse", "rich"]
+    assert any(e["type"] == "retry" and "too sparse" in e["message"] for e in events)
+    assert events[-1]["ok"] is True
+
+
+def test_site_quality_requires_requested_scene_roles():
+    result = ExecResult(
+        ok=True,
+        engine="freecad",
+        exports={"viewer_scene": _viewer_scene_b64("plot", "building", object_count=18)},
+    )
+
+    error = site_layout_quality_error("小区有儿童游乐区、人工湖和高档会所", "freecad", result)
+
+    assert error
+    assert "water" in error
+    assert "play" in error
+    assert "amenity" in error
 
 
 async def test_self_corrects_after_a_failed_attempt():

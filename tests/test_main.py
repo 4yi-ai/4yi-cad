@@ -5,6 +5,7 @@ built and driven without env vars, cadquery, or the network. /healthz must be
 trivial and independent of config (it is the k8s readiness/liveness probe).
 """
 
+import base64
 import json
 
 from fastapi.testclient import TestClient
@@ -55,8 +56,21 @@ async def _fake_freecad_execute(script):
         engine="freecad",
         freecad_version="1.1.3",
         preview_png_b64="RlBORw==",
-        exports={"step": "STEP", "stl": "STL"},
+        exports={"step": "STEP", "stl": "STL", "viewer_scene": _viewer_scene_b64("plot", "building")},
     )
+
+
+def _viewer_scene_b64(*roles: str, object_count: int = 18) -> str:
+    roles = roles or ("plot", "building")
+    objects = [
+        {
+            "name": f"{roles[index % len(roles)]}_{index}",
+            "style": {"semantic_role": roles[index % len(roles)]},
+            "faces": [{"reference": "Face1", "vertices": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "triangles": [[0, 1, 2]]}],
+        }
+        for index in range(object_count)
+    ]
+    return base64.b64encode(json.dumps({"schema": "freecad.viewer_scene.v1", "objects": objects}).encode("utf-8")).decode("ascii")
 
 
 def _client(*, execute=_fake_execute, freecad_execute=_fake_freecad_execute, gateway=None):
@@ -1390,7 +1404,7 @@ def test_generate_can_route_to_freecad_tool():
             engine="freecad",
             freecad_version="1.1.3",
             preview_png_b64="RlBORw==",
-            exports={"step": "STEP", "stl": "STL"},
+            exports={"step": "STEP", "stl": "STL", "viewer_scene": _viewer_scene_b64("plot", "building")},
         )
 
     client = _client(

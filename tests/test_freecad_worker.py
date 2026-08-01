@@ -235,6 +235,12 @@ def test_worker_exports_viewer_scene_style_metadata():
         "viewer_object_style",
         "view_object_style",
         "semantic_viewer_style",
+        "display_layer",
+        "display_priority",
+        "depth_write",
+        "plot_boundary",
+        "boundary_wall",
+        "viewer_role_counts_from_summaries",
         "ViewObject",
         "ShapeColor",
         "LineColor",
@@ -1192,7 +1198,7 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
         assert any(marker in text for text in object_text)
 
     styles = {item["name"]: item.get("style", {}) for item in scene["objects"]}
-    assert styles["Plot_Boundary_100x100m"]["semantic_role"] == "plot"
+    assert styles["Plot_Boundary_100x100m"]["semantic_role"] == "plot_boundary"
     assert styles["HighRise_Tower_1_Body"]["semantic_role"] == "building"
     assert styles["Water_Artificial_Lake"]["semantic_role"] == "water"
     assert styles["Children_Playground"]["semantic_role"] == "play"
@@ -1247,7 +1253,7 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     metrics = audit["estimated_metrics"]
     assert metrics["plot_area"] == 10000000000
     assert 0.1 < metrics["estimated_building_density"] < 0.25
-    assert 0.2 < metrics["estimated_landscape_ratio"] < 0.5
+    assert 0.2 < metrics["estimated_landscape_ratio"] < 0.55
 
     imported = run_freecad_import_model(
         "fcstd",

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.cad.runner import SandboxResult, run_sandboxed
+from app.cad.runner import SandboxResult, _effective_address_space_mb, run_sandboxed
 
 PY = sys.executable
 
@@ -102,6 +102,18 @@ def test_address_space_rlimit_does_not_break_subprocess_setup():
 
     assert res.success is True
     assert res.result == {"ok": True}
+
+
+def test_address_space_rlimit_is_clamped_under_cgroup_limit(monkeypatch):
+    monkeypatch.setattr("app.cad.runner._read_cgroup_memory_limit_mb", lambda: 512)
+
+    assert _effective_address_space_mb(4096, platform="linux") == 416
+
+
+def test_address_space_rlimit_keeps_requested_when_container_has_headroom(monkeypatch):
+    monkeypatch.setattr("app.cad.runner._read_cgroup_memory_limit_mb", lambda: 8192)
+
+    assert _effective_address_space_mb(4096, platform="linux") == 4096
 
 
 def test_worker_nonzero_exit_is_failure_not_hang():

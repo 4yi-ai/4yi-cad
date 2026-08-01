@@ -114,27 +114,34 @@ Hard rules:
   estimates when enough dimensions are known. Use named objects whose names/labels
   include these roles so downstream site-layout audits can validate them.
 - For site/community prompts, model the overall plot plus distinct buildings,
-  roads/paths, water/green areas, clubhouse/play areas, and other requested zones
-  as simple named massing objects rather than collapsing everything into one block.
+  circulation, water/green landscape, clubhouse/play areas, entrances, parking,
+  and other requested zones as named FreeCAD document objects rather than
+  collapsing everything into one block.
+- For site/community/building-layout outputs, use App::DocumentObjectGroup when
+  practical: Site, References, Buildings, Landscape, Circulation, Amenities, and
+  Parking. Reference/planning helpers such as redlines, setbacks, north arrows,
+  benchmarks, and FAR labels must be clearly named as reference objects.
 - Private beta complexity budget: site/community/building-layout outputs are
-  massing-level scenes with no more than 20-60 exportable objects. For high-end
-  residential master plans, target 45-60 named components with grouped compound
-  details rather than a few coarse blocks. Aggregate repeated towers, windows,
-  trees, cars, and furniture into simple named masses or zones.
-- Massing-level does not mean blank boxes. For buildings, include a small number
-  of low-cost visual articulation elements when they fit the budget: roof caps,
-  podiums, lobby volumes, and horizontal floor/story bands grouped every 2-4
-  floors for tall towers. Avoid individual windows, dense facade panel arrays,
-  dense meshes, heavy booleans, global fillets/chamfers, and ornamental detail
-  unless the user asks for one specific small part. Prioritize valid export,
-  named editable objects, and a responsive viewer over decorative complexity.
+  editable schematic/massing-level scenes with roughly 40-90 named objects. For
+  high-end residential master plans, target grouped compound details rather than
+  a few coarse blocks. Aggregate repeated windows, trees, cars, and furniture
+  into grouped masses, but do not reduce requested towers, villas, water, play
+  areas, roads, entrances, or clubhouses to one generic slab.
+- Schematic does not mean blank boxes. For buildings, include real low-cost
+  FreeCAD geometry objects for roof caps, podiums, lobby volumes, facade fins,
+  balcony lines, and horizontal floor/story bands grouped every 2-4 floors for
+  tall towers. Do not rely on viewer-only overlays for facade/floor detail. Avoid
+  individual windows, dense facade panel arrays, dense meshes, heavy booleans,
+  global fillets/chamfers, and ornamental detail unless the user asks for one
+  specific small part. Prioritize valid export, named editable objects, readable
+  layers, and a responsive viewer over decorative complexity.
 - For high-end residential site plans, keep all ordinary components inside the
   plot boundary, land buildings/roads/landscape on the site datum, maintain a
   concept minimum tower spacing around 12000 mm unless the user says otherwise,
   and avoid floating, intersecting, or randomly scattered components. Match the
-  local FreeCAD reference-quality bar: clean OCC checks, about 620+ faces and
-  1200+ edges, plus readable tower facade, villa courtyard, clubhouse frontage,
-  lake promenade, entrance paving, tree, fire-access, and garage/ramp layers.
+  local FreeCAD reference-quality bar when feasible under the budget: clean OCC
+  checks and readable tower facade, villa courtyard, clubhouse frontage, lake
+  promenade, entrance paving, tree, fire-access, and garage/ramp layers.
 - For mechanical assembly prompts, create an editable concept assembly rather
   than one fused solid. Use named FreeCAD objects for major components such as
   tire, rim, axle, main strut, piston rod, actuator body, clevis/yoke brackets,

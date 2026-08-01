@@ -549,7 +549,19 @@ def viewer_hex_color(rgb):
     return "#{:02x}{:02x}{:02x}".format(*channels)
 
 
-def style_from_hex(color, *, edge_color=None, point_color=None, opacity=0.84, role="generic", source="semantic_default"):
+def style_from_hex(
+    color,
+    *,
+    edge_color=None,
+    point_color=None,
+    opacity=0.84,
+    role="generic",
+    source="semantic_default",
+    display_layer="model",
+    display_priority=50,
+    selectable=True,
+    depth_write=True,
+):
     def parse_hex(value):
         match = re.match(r"^#?([0-9a-fA-F]{6})$", safe_text(value))
         if not match:
@@ -572,18 +584,32 @@ def style_from_hex(color, *, edge_color=None, point_color=None, opacity=0.84, ro
         "point_color": point_hex or edge_hex or "#334155",
         "point_color_rgb": point_rgb or edge_rgb or [0.20, 0.25, 0.33],
         "opacity": max(0.05, min(1.0, float(opacity))),
+        "display_layer": display_layer,
+        "display_priority": int(display_priority),
+        "selectable": bool(selectable),
+        "depth_write": bool(depth_write),
     }
     return style
 
 
 SEMANTIC_VIEWER_STYLES = (
-    ("water", (r"\b(water|lake|pond|pool|river|canal)\b", r"湖", r"水", r"池"), "#38bdf8", "#0369a1", "#0ea5e9", 0.54),
-    ("green", (r"\b(green|park|garden|lawn|landscape|grass|plant)\b", r"绿", r"园", r"景观"), "#86c47a", "#3f7f4f", "#16a34a", 0.70),
-    ("play", (r"\b(play|playground|sport|fitness|children|kid)\b", r"儿童", r"游乐", r"运动"), "#f4b860", "#b45309", "#f59e0b", 0.76),
-    ("road", (r"road", r"path", r"drive", r"street", r"lane", r"walk", r"pavement", r"路", r"道路", r"车道", r"步道"), "#56616f", "#263241", "#475569", 0.82),
-    ("amenity", (r"club", r"clubhouse", r"hall", r"amenity", r"retail", r"lobby", r"会所", r"配套", r"商业"), "#d8a35d", "#9a5d1f", "#c97a24", 0.84),
-    ("building", (r"building", r"tower", r"villa", r"apartment", r"residential", r"podium", r"house", r"楼", r"住宅", r"别墅", r"高层"), "#b9c2cc", "#334155", "#475569", 0.90),
-    ("plot", (r"plot", r"site", r"parcel", r"base", r"ground", r"terrain", r"地块", r"场地", r"基地"), "#d7e5cf", "#75856f", "#6b7c62", 0.66),
+    ("setback", (r"setback", r"control\s*line", r"退界", r"控制线"), "#60a5fa", "#2563eb", "#2563eb", 0.24, "reference", 12, False, False),
+    ("north_axis", (r"north\s*axis", r"northarrow", r"orientation", r"北向", r"指北"), "#334155", "#0f172a", "#0f172a", 0.44, "reference", 16, False, False),
+    ("elevation_benchmark", (r"elevation\s*datum", r"benchmark", r"datum", r"标高", r"基准"), "#64748b", "#334155", "#334155", 0.38, "reference", 14, False, False),
+    ("planning_metrics", (r"far", r"planning\s*metrics?", r"coverage", r"指标", r"容积率", r"覆盖率"), "#475569", "#1e293b", "#1e293b", 0.34, "reference", 10, False, False),
+    ("boundary_wall", (r"boundary\s*wall", r"perimeter\s*wall", r"围墙", r"边界墙"), "#64748b", "#334155", "#334155", 0.46, "site_boundary", 24, True, False),
+    ("plot_boundary", (r"redline", r"red\s*line", r"plot\s*boundary", r"parcel\s*boundary", r"boundary", r"红线", r"用地线", r"地界", r"边界"), "#ef4444", "#b91c1c", "#dc2626", 0.28, "reference", 18, False, False),
+    ("building_articulation", (r"facade", r"fin", r"balcony", r"floor\s*band", r"story\s*band", r"roof\s*cap", r"立面", r"阳台", r"百叶", r"楼层线", r"屋顶"), "#9fb2c7", "#334155", "#475569", 0.72, "model", 72, True, False),
+    ("fire_access", (r"fire\s*road", r"fire\s*lane", r"消防", r"消防车道"), "#475569", "#1f2937", "#334155", 0.62, "circulation", 40, True, False),
+    ("parking_underground", (r"parking", r"garage", r"underground", r"车库", r"停车", r"地下"), "#94a3b8", "#475569", "#64748b", 0.42, "subsurface", 28, True, False),
+    ("road", (r"road", r"path", r"drive", r"street", r"lane", r"walk", r"pavement", r"路", r"道路", r"车道", r"步道"), "#56616f", "#263241", "#475569", 0.66, "circulation", 38, True, False),
+    ("entrance_system", (r"entrance", r"gate", r"guard", r"dropoff", r"canopy", r"入口", r"大门", r"门岗", r"落客", r"雨棚"), "#d8a35d", "#9a5d1f", "#c97a24", 0.82, "model", 64, True, True),
+    ("water", (r"water", r"lake", r"pond", r"pool", r"river", r"canal", r"湖", r"水", r"池"), "#38bdf8", "#0369a1", "#0ea5e9", 0.54, "landscape", 48, True, False),
+    ("green", (r"green", r"park", r"garden", r"lawn", r"landscape", r"grass", r"plant", r"绿", r"园", r"景观"), "#86c47a", "#3f7f4f", "#16a34a", 0.62, "landscape", 44, True, False),
+    ("play", (r"play", r"playground", r"sport", r"court", r"children", r"kid", r"儿童", r"游乐", r"运动"), "#f4b860", "#b45309", "#f59e0b", 0.74, "landscape", 52, True, True),
+    ("amenity", (r"club", r"clubhouse", r"hall", r"amenity", r"retail", r"lobby", r"会所", r"配套", r"商业"), "#d8a35d", "#9a5d1f", "#c97a24", 0.84, "model", 66, True, True),
+    ("building", (r"building", r"tower", r"villa", r"apartment", r"residential", r"podium", r"house", r"楼", r"住宅", r"别墅", r"高层"), "#b9c2cc", "#334155", "#475569", 0.88, "model", 70, True, True),
+    ("plot", (r"plot", r"site", r"parcel", r"base", r"ground", r"terrain", r"slab", r"地块", r"场地", r"基地", r"底板"), "#d7e5cf", "#75856f", "#6b7c62", 0.34, "terrain", 20, True, False),
 )
 
 
@@ -593,7 +619,7 @@ def semantic_viewer_style(obj):
         safe_text(getattr(obj, "Label", "")),
         safe_text(getattr(obj, "TypeId", "")),
     ]).lower()
-    for role, patterns, color, edge_color, point_color, opacity in SEMANTIC_VIEWER_STYLES:
+    for role, patterns, color, edge_color, point_color, opacity, layer, priority, selectable, depth_write in SEMANTIC_VIEWER_STYLES:
         if any(re.search(pattern, text) for pattern in patterns):
             return style_from_hex(
                 color,
@@ -602,6 +628,10 @@ def semantic_viewer_style(obj):
                 opacity=opacity,
                 role=role,
                 source="semantic_default",
+                display_layer=layer,
+                display_priority=priority,
+                selectable=selectable,
+                depth_write=depth_write,
             )
     return style_from_hex("#8f9aa6", edge_color="#334155", point_color="#475569", opacity=0.84)
 
@@ -844,6 +874,8 @@ def viewer_scene_role_counts(scene_objects):
         if not role:
             role = "generic"
         counts[role] = counts.get(role, 0) + 1
+        if role == "plot_boundary":
+            counts["plot"] = counts.get("plot", 0) + 1
     return dict(sorted(counts.items()))
 
 
@@ -935,6 +967,7 @@ def viewer_scene_summary(doc, objects):
         scene_objects.append(item)
         triangle_count += int(item.get("triangle_count") or 0)
     scene_bbox = merge_bbox_summaries(item.get("bbox") for item in scene_objects)
+    role_counts = viewer_role_counts_from_summaries(scene_objects)
     return {
         "schema": "freecad.viewer_scene.v1",
         "units": "mm",
@@ -944,6 +977,9 @@ def viewer_scene_summary(doc, objects):
         "object_count": len(scene_objects),
         "triangle_count": triangle_count,
         "presentation": viewer_scene_presentation(scene_objects, scene_bbox),
+        "viewer_roles": role_counts["roles"],
+        "viewer_layers": role_counts["layers"],
+        "selectable_object_count": role_counts["selectable_object_count"],
     }
 
 
@@ -1666,10 +1702,11 @@ def sketch_summary(obj):
 
 def object_summary(obj):
     shape = getattr(obj, "Shape", None)
+    style = viewer_object_style(obj)
     item = object_ref(obj)
     item.update({
         "placement": placement_summary(obj),
-        "style": viewer_object_style(obj),
+        "style": style,
         "in_list": [object_ref(parent) for parent in list(getattr(obj, "InList", []))[:40]],
         "out_list": [object_ref(child) for child in list(getattr(obj, "OutList", []))[:40]],
         "properties": property_summary(obj),
@@ -1920,6 +1957,25 @@ def feature_tree_summary(doc, objects):
     return {
         "roots": roots,
         "nodes": nodes,
+    }
+
+
+def viewer_role_counts_from_summaries(summaries):
+    counts = {}
+    layers = {}
+    selectable = 0
+    for item in list(summaries or []):
+        style = item.get("style") or {}
+        role = safe_text(style.get("semantic_role") or "generic", 80)
+        layer = safe_text(style.get("display_layer") or "model", 80)
+        counts[role] = counts.get(role, 0) + 1
+        layers[layer] = layers.get(layer, 0) + 1
+        if style.get("selectable") is not False:
+            selectable += 1
+    return {
+        "roles": counts,
+        "layers": layers,
+        "selectable_object_count": selectable,
     }
 
 
@@ -3994,7 +4050,7 @@ SITE_LAYOUT_REFERENCE_QUALITY_THRESHOLDS = {
     "min_building_density": 0.10,
     "max_building_density": 0.25,
     "min_landscape_ratio": 0.25,
-    "max_landscape_ratio": 0.50,
+    "max_landscape_ratio": 0.55,
 }
 
 
@@ -4554,12 +4610,16 @@ def document_summary(doc):
                 totals[key] += int(shape[key])
 
     geometry = dict(totals)
+    role_counts = viewer_role_counts_from_summaries(summaries)
     geometry.update({
         "valid": valid if saw_validity else None,
         "bbox": bbox,
         "volume": volume if saw_volume else None,
         "max_tolerance": max_tolerance,
         "failure_class": failure_class,
+        "viewer_roles": role_counts["roles"],
+        "viewer_layers": role_counts["layers"],
+        "selectable_object_count": role_counts["selectable_object_count"],
     })
     document = {
         "name": safe_text(getattr(doc, "Name", "")),
@@ -4580,6 +4640,8 @@ def document_summary(doc):
         "document": document,
         "objects": summaries,
         "geometry": geometry,
+        "viewer_roles": role_counts["roles"],
+        "viewer_layers": role_counts["layers"],
         "feature_tree": feature_tree,
         "sketches": sketches,
         "assemblies": assemblies,

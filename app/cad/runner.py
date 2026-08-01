@@ -28,6 +28,11 @@ from pathlib import Path
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 
 DEFAULT_WORKER_ARGV = [sys.executable, "-m", "app.cad.worker"]
+_CGROUP_MEMORY_LIMIT_FILES = (
+    "/sys/fs/cgroup/memory.max",
+    "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+)
+_MB = 1024 * 1024
 
 
 @dataclass
@@ -57,11 +62,42 @@ def _safe_env(workdir: str) -> dict[str, str]:
     return env
 
 
+def _read_cgroup_memory_limit_mb(paths: tuple[str, ...] = _CGROUP_MEMORY_LIMIT_FILES) -> int | None:
+    for path in paths:
+        try:
+            raw = Path(path).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if not raw or raw == "max":
+            continue
+        try:
+            limit_bytes = int(raw)
+        except ValueError:
+            continue
+        if limit_bytes <= 0 or limit_bytes >= 1 << 60:
+            continue
+        return max(1, limit_bytes // _MB)
+    return None
+
+
+def _effective_address_space_mb(address_space_mb: int | None, *, platform: str | None = None) -> int | None:
+    if address_space_mb is None:
+        return None
+    platform = platform or sys.platform
+    if platform == "darwin":
+        return None
+
+    cgroup_limit_mb = _read_cgroup_memory_limit_mb()
+    if cgroup_limit_mb is None:
+        return address_space_mb
+
+    reserve_mb = 256 if cgroup_limit_mb >= 1024 else 96
+    container_safe_mb = max(128, cgroup_limit_mb - reserve_mb)
+    return min(address_space_mb, container_safe_mb)
+
+
 def _rlimit_preexec(cpu_seconds: int | None, address_space_mb: int | None):
-    # macOS exposes RLIMIT_AS but rejects setting it in this Python subprocess
-    # preexec path. Keep local development usable; Linux containers still apply it.
-    if sys.platform == "darwin":
-        address_space_mb = None
+    address_space_mb = _effective_address_space_mb(address_space_mb)
 
     if cpu_seconds is None and address_space_mb is None:
         return None
@@ -78,7 +114,13 @@ def _rlimit_preexec(cpu_seconds: int | None, address_space_mb: int | None):
     return _apply
 
 
-def _returncode_error(returncode: int) -> str:
+def _returncode_error(
+    returncode: int,
+    *,
+    requested_address_space_mb: int | None = None,
+    effective_address_space_mb: int | None = None,
+    cgroup_memory_limit_mb: int | None = None,
+) -> str:
     if returncode >= 0:
         return f"worker exited with code {returncode}"
     signum = -returncode
@@ -89,9 +131,18 @@ def _returncode_error(returncode: int) -> str:
     if signal_name == "SIGXCPU":
         return f"worker terminated by signal {signum} ({signal_name}); CPU time limit exceeded"
     if signal_name == "SIGKILL":
+        memory_context = ""
+        if cgroup_memory_limit_mb:
+            memory_context = f" (container memory limit {cgroup_memory_limit_mb}Mi"
+            if requested_address_space_mb and effective_address_space_mb:
+                memory_context += (
+                    f", requested worker address space {requested_address_space_mb}Mi,"
+                    f" effective {effective_address_space_mb}Mi"
+                )
+            memory_context += ")"
         return (
             f"worker terminated by signal {signum} ({signal_name}); possible memory/container "
-            "limit exceeded, simplify the geometry or use fewer high-resolution operations"
+            f"limit exceeded{memory_context}, simplify the geometry or use fewer high-resolution operations"
         )
     return f"worker terminated by signal {signum} ({signal_name})"
 
@@ -114,6 +165,8 @@ def run_sandboxed(
     argv = worker_argv or DEFAULT_WORKER_ARGV
     wd = workdir or os.environ.get("TMPDIR", "/tmp")
     payload = json.dumps(request)
+    effective_address_space_mb = _effective_address_space_mb(address_space_mb)
+    cgroup_memory_limit_mb = _read_cgroup_memory_limit_mb()
 
     try:
         proc = subprocess.run(
@@ -124,7 +177,7 @@ def run_sandboxed(
             timeout=timeout_s,
             env=_safe_env(wd),
             cwd=wd,
-            preexec_fn=_rlimit_preexec(cpu_seconds, address_space_mb),
+            preexec_fn=_rlimit_preexec(cpu_seconds, effective_address_space_mb),
         )
     except subprocess.TimeoutExpired as exc:
         return SandboxResult(
@@ -148,7 +201,12 @@ def run_sandboxed(
     if proc.returncode != 0:
         return SandboxResult(
             success=False,
-            error=_returncode_error(proc.returncode),
+            error=_returncode_error(
+                proc.returncode,
+                requested_address_space_mb=address_space_mb,
+                effective_address_space_mb=effective_address_space_mb,
+                cgroup_memory_limit_mb=cgroup_memory_limit_mb,
+            ),
             stdout=proc.stdout,
             stderr=proc.stderr,
         )

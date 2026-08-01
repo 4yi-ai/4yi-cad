@@ -357,15 +357,21 @@ def test_viewer_scene_styles_drive_frontend_materials():
     assert "function freeCadStyleColorValue(style, hexKey, rgbKey, fallback)" in html
     assert "function freeCadSemanticRoleFromText(text)" in html
     assert "function freeCadInferredSemanticRole(obj)" in html
+    assert "function freeCadDisplayLayerForRole(role)" in html
+    assert "function freeCadObjectUsesSceneFocus(obj)" in html
     assert "semantic_role" in html
+    assert "display_layer" in html
+    assert "depthWrite: objectStyle.depthWrite" in html
     assert "人工湖|水景|水系|湖|河|池|lake|pond|water|river|pool" in html
+    assert "setback|control\\s*line|退界|控制线" in html
+    assert "boundary\\s*wall|perimeter\\s*wall|围墙|边界墙" in html
     assert "edge_color" in html
     assert "point_color" in html
     assert "const objectStyle = freeCadViewerObjectStyle(obj);" in html
     assert "color: selected ? 0x2f80ed : objectStyle.color" in html
     assert "color: selected ? 0xf59e0b : objectStyle.edgeColor" in html
     assert "color: selected ? 0x22c55e : objectStyle.pointColor" in html
-    assert "Math.max(objectStyle.opacity, 0.88)" in html
+    assert "freeCadContextRoles().has(objectStyle.role)" in html
 
 
 def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
@@ -392,11 +398,17 @@ def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
     assert "presentation.default_preset || presentation.defaultPreset" in html
     assert "presentation.default_view || presentation.defaultView" in html
     assert "cameraHint.distance_multiplier ?? cameraHint.distanceMultiplier" in html
+    assert "new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000)" in html
+    assert 'if (mode === "front") return new THREE.Vector3(0, -radius, 0);' in html
+    assert 'if (mode === "right") return new THREE.Vector3(radius, 0, 0);' in html
+    assert "projectedSizeForAxes" in html
     assert "function addFreeCadBuildingDetailOverlays(THREE, group)" in html
+    assert "showBBox: false" in html
     assert "function freeCadBuildingFloorCount(info)" in html
     assert "addFreeCadBuildingDetailOverlays(THREE, group);" in html
     assert "mode !== \"vertex\" && !objectSelected" in html
-    assert "camera.up.copy(generatedCameraUpVector(THREE, state.viewMode));" in html
+    assert "const up = generatedCameraUpVector(THREE, state.viewMode);" in html
+    assert "camera.up.copy(up);" in html
     assert 'state.generatedViewerFitMode = "selection";' in html
     assert 'state.generatedViewerFitMode = "all";' in html
 

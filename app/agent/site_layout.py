@@ -30,10 +30,11 @@ SITE_LAYOUT_PLANNER_MESSAGE = """Site-layout component plan for this FreeCAD req
   Plot/Redline, Setback, NorthAxis, ElevationDatum, BoundaryWall, Entrance/Gate,
   Road/Path, Fire, Parking/Garage/Basement/Ramp, Villa/ResidentialTower,
   Clubhouse/Amenity, Water/Lake, Playground/Green, PlanningMetrics/FAR.
-- Keep the final model in the reference complexity band: 20-60 named exportable
-  objects. Use grouped detail objects such as tower floor bands, roof caps, villa
-  roofs, private gardens, lake bridge, and playground equipment instead of a few
-  blank boxes or hundreds of repeated façade pieces.
+- Keep the final model in the editable schematic complexity band: roughly 40-90
+  named objects, with repeated elements grouped for export. Use grouped detail
+  objects such as tower floor bands, roof caps, villa roofs, private gardens,
+  lake bridge, and playground equipment instead of a few blank boxes or hundreds
+  of repeated façade pieces.
 - Match the local FreeCAD high-end community reference quality: clean geometry with
   no OCC check errors, 45-60 exportable components, roughly 620+ faces and 1200+
   edges, and layered detail for tower facades, villa courtyards, clubhouse frontage,
