@@ -18,97 +18,10 @@ from app.cad.freecad_worker import (
 
 PY = sys.executable
 WORKER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "cad" / "freecad_worker.py"
-SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = """
-import FreeCAD
-import Part
-
-doc = FreeCAD.newDocument("SiteCommunitySmoke")
-objects = []
-
-def add_box(name, label, x, y, z, length, width, height, color=None, transparency=0):
-    obj = doc.addObject("Part::Box", name)
-    obj.Label = label
-    obj.Length = length
-    obj.Width = width
-    obj.Height = height
-    obj.Placement.Base = FreeCAD.Vector(x, y, z)
-    if color:
-        try:
-            obj.ViewObject.ShapeColor = color
-            obj.ViewObject.LineColor = tuple(max(0.0, channel * 0.45) for channel in color)
-            obj.ViewObject.Transparency = transparency
-        except Exception:
-            pass
-    objects.append(obj)
-    return obj
-
-plot = add_box("PlotRedlineBoundary", "地块红线 Plot boundary", 0, 0, -120, 100000, 100000, 120, (0.76, 0.86, 0.70), 45)
-
-# Planning control layer.
-setback_south = add_box("SetbackControlLineSouth", "退界控制线南", 8000, 8000, 0, 84000, 250, 80, (0.55, 0.68, 0.78), 35)
-setback_north = add_box("SetbackControlLineNorth", "退界控制线北", 8000, 91750, 0, 84000, 250, 80, (0.55, 0.68, 0.78), 35)
-setback_west = add_box("SetbackControlLineWest", "退界控制线西", 8000, 8000, 0, 250, 84000, 80, (0.55, 0.68, 0.78), 35)
-setback_east = add_box("SetbackControlLineEast", "退界控制线东", 91750, 8000, 0, 250, 84000, 80, (0.55, 0.68, 0.78), 35)
-north_axis = add_box("NorthAxisMarker", "北向坐标轴", 92000, 76000, 0, 900, 14000, 120, (0.18, 0.29, 0.47), 0)
-north_head = add_box("NorthAxisHead", "指北针箭头", 89500, 88500, 0, 5900, 2500, 120, (0.18, 0.29, 0.47), 0)
-elevation_datum = add_box("ElevationDatumBench", "标高基准 0.000", 4500, 87500, 0, 18000, 900, 120, (0.45, 0.49, 0.56), 0)
-
-# Perimeter enclosure with a south gate opening.
-wall_sw = add_box("BoundaryWallSouthWest", "围墙南西段", 0, 0, 0, 42000, 400, 3500, (0.50, 0.55, 0.60), 12)
-wall_se = add_box("BoundaryWallSouthEast", "围墙南东段", 58000, 0, 0, 42000, 400, 3500, (0.50, 0.55, 0.60), 12)
-wall_n = add_box("BoundaryWallNorth", "围墙北", 0, 99600, 0, 100000, 400, 3500, (0.50, 0.55, 0.60), 12)
-wall_w = add_box("BoundaryWallWest", "围墙西", 0, 0, 0, 400, 100000, 3500, (0.50, 0.55, 0.60), 12)
-wall_e = add_box("BoundaryWallEast", "围墙东", 99600, 0, 0, 400, 100000, 3500, (0.50, 0.55, 0.60), 12)
-
-# Entrance and arrival sequence.
-gate_left = add_box("MainEntranceGateLeftColumn", "主入口大门左柱", 43000, 500, 0, 1800, 1600, 6000, (0.86, 0.64, 0.36), 0)
-gate_right = add_box("MainEntranceGateRightColumn", "主入口大门右柱", 55200, 500, 0, 1800, 1600, 6000, (0.86, 0.64, 0.36), 0)
-gate_canopy = add_box("MainEntranceGateCanopy", "主入口门廊", 42600, 500, 4300, 14400, 2200, 900, (0.76, 0.79, 0.82), 6)
-guard = add_box("GateGuardKiosk", "门卫岗亭", 59000, 4200, 0, 4200, 3000, 3600, (0.86, 0.64, 0.36), 0)
-dropoff = add_box("EntranceDropoffPlaza", "入口落客区", 41500, 23500, 0, 17000, 7000, 120, (0.35, 0.38, 0.43), 8)
-
-# Vehicle, pedestrian, and fire circulation.
-main_road = add_box("MainEntranceRoad", "主入口车行道路", 45500, 500, 0, 9000, 26000, 140, (0.30, 0.35, 0.41), 5)
-fire_south = add_box("FireRoadSouth", "消防环路南段", 10000, 22000, 0, 80000, 6000, 140, (0.30, 0.35, 0.41), 5)
-fire_north = add_box("FireRoadNorth", "消防环路北段", 10000, 76000, 0, 80000, 6000, 140, (0.30, 0.35, 0.41), 5)
-fire_west = add_box("FireRoadWest", "消防环路西段", 10000, 22000, 0, 6000, 60000, 140, (0.30, 0.35, 0.41), 5)
-fire_east = add_box("FireRoadEast", "消防环路东段", 84000, 22000, 0, 6000, 60000, 140, (0.30, 0.35, 0.41), 5)
-pedestrian_spine = add_box("PedestrianGardenWalk", "景观步道主轴", 49000, 30500, 0, 2200, 42000, 100, (0.52, 0.58, 0.63), 10)
-fire_ladder = add_box("FireLadderAccessA", "消防登高面A", 17500, 47500, 0, 65000, 8500, 90, (0.42, 0.47, 0.54), 18)
-fire_turn = add_box("FireTurningRadiusMarker", "消防转弯半径", 45500, 25000, 0, 9000, 9000, 90, (0.42, 0.47, 0.54), 25)
-
-# Underground parking and service access.
-garage = add_box("UndergroundGarageOutline", "地下车库轮廓", 17000, 12000, -3200, 66000, 52000, 180, (0.38, 0.44, 0.52), 55)
-ramp = add_box("BasementRamp", "地库坡道", 69000, 5200, 0, 9000, 15500, 320, (0.34, 0.39, 0.46), 8)
-visitor_parking = add_box("VisitorParkingBay", "访客停车", 55500, 8500, 0, 11500, 4800, 110, (0.34, 0.39, 0.46), 12)
-
-# Residential massing. Tower gaps intentionally exceed the concept-plan spacing threshold.
-tower_a = add_box("ResidentialTowerA", "住宅塔楼A", 12000, 33000, 0, 11000, 13000, 54000, (0.73, 0.78, 0.84), 16)
-tower_b = add_box("ResidentialTowerB", "住宅塔楼B", 38000, 33000, 0, 11000, 13000, 60000, (0.73, 0.78, 0.84), 16)
-tower_c = add_box("ResidentialTowerC", "住宅塔楼C", 64000, 33000, 0, 11000, 13000, 54000, (0.73, 0.78, 0.84), 16)
-tower_d = add_box("ResidentialTowerD", "住宅塔楼D", 38000, 70000, 0, 11000, 13000, 48000, (0.73, 0.78, 0.84), 16)
-
-# Amenity and landscape program.
-clubhouse = add_box("ClubhouseAmenity", "会所配套", 62000, 65000, 0, 14000, 12000, 6000, (0.86, 0.62, 0.34), 0)
-central_green = add_box("CentralGreenLawn", "中心绿地草坪", 25500, 54000, 0, 21000, 16000, 90, (0.52, 0.77, 0.46), 18)
-lake = add_box("WaterFeatureLake", "人工湖水景", 56000, 52000, 0, 18000, 12000, 80, (0.22, 0.71, 0.92), 45)
-playground = add_box("ChildrenPlayground", "儿童游乐区", 72000, 28500, 0, 11500, 9000, 120, (0.94, 0.67, 0.30), 8)
-bridge = add_box("LakeBridgeWalk", "湖中步道桥", 59000, 57500, 80, 12000, 1800, 120, (0.48, 0.55, 0.60), 4)
-
-metrics = add_box("PlanningMetricsPanel", "规划指标 FAR 1.80 建筑密度 7.4% 绿地率 6.8%", 2500, 87000, 0, 18000, 9000, 120, (0.95, 0.94, 0.86), 10)
-try:
-    metrics.addProperty("App::PropertyString", "FloorAreaRatio", "Planning", "FAR")
-    metrics.addProperty("App::PropertyString", "BuildingDensity", "Planning", "Building density")
-    metrics.addProperty("App::PropertyString", "GreenRatio", "Planning", "Green ratio")
-    metrics.FloorAreaRatio = "1.80"
-    metrics.BuildingDensity = "0.074"
-    metrics.GreenRatio = "0.068"
-except Exception:
-    pass
-
-doc.recompute()
-result = objects
-"""
+SITE_LAYOUT_REFERENCE_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "freecad" / "high_end_community_100m.py"
+)
+SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = SITE_LAYOUT_REFERENCE_SCRIPT.read_text(encoding="utf-8")
 
 
 def test_run_freecad_script_reports_missing_binary(monkeypatch):
@@ -1129,25 +1042,25 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
         assert any(marker in text for text in object_text)
 
     styles = {item["name"]: item.get("style", {}) for item in scene["objects"]}
-    assert styles["PlotRedlineBoundary"]["semantic_role"] == "plot"
-    assert styles["ResidentialTowerA"]["semantic_role"] == "building"
-    assert styles["WaterFeatureLake"]["semantic_role"] == "water"
-    assert styles["ChildrenPlayground"]["semantic_role"] == "play"
-    assert styles["CentralGreenLawn"]["semantic_role"] == "green"
-    assert styles["ClubhouseAmenity"]["semantic_role"] == "amenity"
-    assert styles["MainEntranceRoad"]["semantic_role"] == "road"
+    assert styles["Plot_Boundary_100x100m"]["semantic_role"] == "plot"
+    assert styles["HighRise_Tower_1_Body"]["semantic_role"] == "building"
+    assert styles["Water_Artificial_Lake"]["semantic_role"] == "water"
+    assert styles["Children_Playground"]["semantic_role"] == "play"
+    assert styles["Central_Green_Lawn"]["semantic_role"] == "green"
+    assert styles["Clubhouse_Amenity_Body"]["semantic_role"] == "amenity"
+    assert styles["Main_Road_N_S"]["semantic_role"] == "road"
     assert len({
         styles[name]["color"]
         for name in (
-            "PlotRedlineBoundary",
-            "ResidentialTowerA",
-            "WaterFeatureLake",
-            "ChildrenPlayground",
-            "CentralGreenLawn",
-            "MainEntranceRoad",
+            "Plot_Boundary_100x100m",
+            "HighRise_Tower_1_Body",
+            "Water_Artificial_Lake",
+            "Children_Playground",
+            "Central_Green_Lawn",
+            "Main_Road_N_S",
         )
     }) >= 5
-    assert 0 < styles["WaterFeatureLake"]["opacity"] < styles["ResidentialTowerA"]["opacity"] <= 1
+    assert 0 < styles["Water_Artificial_Lake"]["opacity"] < styles["HighRise_Tower_1_Body"]["opacity"] <= 1
 
     inspected = run_freecad_document_inspect(result["exports"]["fcstd"], timeout=90)
     assert inspected["ok"] is True
@@ -1160,7 +1073,7 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     assert all(item["status"] == "pass" for item in audit["requirements"])
     counts = audit["component_counts"]
     assert counts["plot_boundary"] >= 1
-    assert counts["setback_control"] >= 4
+    assert counts["setback_control"] >= 1
     assert counts["north_axis"] >= 1
     assert counts["elevation_benchmark"] >= 1
     assert counts["boundary_wall"] >= 5
@@ -1168,14 +1081,25 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     assert counts["traffic_network"] >= 6
     assert counts["fire_access"] >= 1
     assert counts["parking_underground"] >= 1
-    assert counts["residential_building"] >= 4
+    assert counts["residential_building"] >= 6
     assert counts["public_amenity"] >= 1
     assert counts["landscape_open_space"] >= 3
     assert counts["planning_metrics"] >= 1
     metrics = audit["estimated_metrics"]
     assert metrics["plot_area"] == 10000000000
-    assert 0 < metrics["estimated_building_density"] < 0.2
-    assert 0 < metrics["estimated_landscape_ratio"] < 0.2
+    assert 0.1 < metrics["estimated_building_density"] < 0.25
+    assert 0.2 < metrics["estimated_landscape_ratio"] < 0.5
+
+    imported = run_freecad_import_model(
+        "fcstd",
+        result["exports"]["fcstd"],
+        filename="high_end_community_100m.FCStd",
+        timeout=90,
+    )
+    assert imported["ok"] is True
+    imported_inspected = run_freecad_document_inspect(imported["exports"]["fcstd"], timeout=90)
+    assert imported_inspected["document_summary"]["site_layout"]["status"] == "pass"
+    assert imported_inspected["document_summary"]["site_layout"]["issues"] == []
 
 
 @pytest.mark.skipif(
