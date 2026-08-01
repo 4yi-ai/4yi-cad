@@ -702,12 +702,13 @@ async def default_freecad_execute(script: str) -> ExecResult:
     inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
     document_summary = inspection.get("document_summary") if inspection.get("ok") else None
     audit = site_layout_audit_from_summary(document_summary)
+    needs_repair = site_layout_needs_repair(document_summary)
     if audit:
         result.diagnostics["site_layout_audit"] = _site_layout_audit_diagnostics(
             audit,
-            repair_status="not_needed" if audit.get("status") == "pass" else "pending",
+            repair_status="pending" if needs_repair else "not_needed",
         )
-    if not site_layout_needs_repair(document_summary):
+    if not needs_repair:
         return result
 
     repair_script = site_layout_repair_script(audit)
@@ -730,13 +731,14 @@ async def default_freecad_execute(script: str) -> ExecResult:
         repaired_inspection.get("document_summary") if repaired_inspection.get("ok") else None
     )
     repaired_audit = site_layout_audit_from_summary(repaired_summary)
+    repaired_needs_repair = site_layout_needs_repair(repaired_summary)
     if repaired_audit:
         repaired.diagnostics["site_layout_audit"] = _site_layout_audit_diagnostics(
             repaired_audit,
-            repair_status="repaired" if repaired_audit.get("status") == "pass" else "failed",
+            repair_status="repaired" if not repaired_needs_repair else "failed",
             before=audit,
         )
-    if repaired_audit and repaired_audit.get("status") == "pass":
+    if repaired_audit and not repaired_needs_repair:
         return repaired
 
     repaired.ok = False

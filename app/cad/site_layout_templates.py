@@ -19,10 +19,23 @@ REPAIRABLE_REQUIREMENT_CODES = {
 
 QUALITY_REBUILD_ISSUE_CODES = {
     "outside_plot_boundary",
-    "floating_site_components",
     "building_spacing_below_minimum",
     "site_layout_object_budget_above_reference",
-    "site_layout_reference_quality_below_reference",
+}
+
+REFERENCE_QUALITY_REPAIR_CHECK_TARGETS = {
+    "component_depth": "program_detail",
+    "topology_detail_faces": "program_detail",
+    "topology_detail_edges": "program_detail",
+    "traffic_network_depth": "road_network",
+    "landscape_depth": "landscape_open_space",
+    "building_articulation_depth": "program_detail",
+    "amenity_depth": "public_amenity",
+}
+
+REFERENCE_QUALITY_REBUILD_CHECKS = {
+    "clean_geometry",
+    "object_budget",
 }
 
 CORE_REPAIR_TARGETS = tuple(
@@ -70,10 +83,18 @@ def site_layout_plot_frame(audit: dict | None) -> dict[str, float]:
     depth = depth if depth and depth > 1 else 100000.0
     scale_x = width / 100000.0
     scale_y = depth / 100000.0
+    top_z = max_values[2] if max_values else min_values[2]
+    bottom_z = min_values[2]
+    if abs(top_z) <= 1000.0:
+        origin_z = top_z
+    elif abs(bottom_z) <= 1000.0:
+        origin_z = bottom_z
+    else:
+        origin_z = 0.0
     return {
         "origin_x": min_values[0],
         "origin_y": min_values[1],
-        "origin_z": max_values[2] if max_values else 0.0,
+        "origin_z": origin_z,
         "scale_x": scale_x,
         "scale_y": scale_y,
         "scale_z": min(scale_x, scale_y),
@@ -89,7 +110,9 @@ def site_layout_audit_from_summary(document_summary: dict | None) -> dict | None
 
 def site_layout_needs_repair(document_summary: dict | None) -> bool:
     audit = site_layout_audit_from_summary(document_summary)
-    return bool(audit and audit.get("applicable") and audit.get("status") != "pass")
+    if not (audit and audit.get("applicable") and audit.get("status") != "pass"):
+        return False
+    return any(site_layout_issue_requires_repair(issue) for issue in list(audit.get("issues") or []))
 
 
 def site_layout_issue_codes(audit: dict | None) -> list[str]:
@@ -103,6 +126,31 @@ def site_layout_issue_codes(audit: dict | None) -> list[str]:
     return codes
 
 
+def site_layout_reference_quality_failed_keys(issue: dict | None) -> set[str]:
+    if not isinstance(issue, dict):
+        return set()
+    keys = set()
+    for check in list(issue.get("failed_checks") or []):
+        if isinstance(check, dict) and isinstance(check.get("key"), str):
+            keys.add(check["key"])
+    return keys
+
+
+def site_layout_issue_requires_repair(issue: dict | None) -> bool:
+    if not isinstance(issue, dict):
+        return False
+    code = issue.get("code")
+    if code in REPAIRABLE_REQUIREMENT_CODES or code in QUALITY_REBUILD_ISSUE_CODES:
+        return True
+    if code == "site_layout_reference_quality_below_reference":
+        failed_keys = site_layout_reference_quality_failed_keys(issue)
+        return bool(
+            failed_keys.intersection(REFERENCE_QUALITY_REPAIR_CHECK_TARGETS)
+            or failed_keys.intersection(REFERENCE_QUALITY_REBUILD_CHECKS)
+        )
+    return False
+
+
 def repair_targets_from_audit(audit: dict | None) -> dict[str, bool]:
     targets = {key: False for key in REPAIRABLE_REQUIREMENT_CODES.values()}
     if site_layout_needs_rebuild(audit):
@@ -114,11 +162,33 @@ def repair_targets_from_audit(audit: dict | None) -> dict[str, bool]:
         target = REPAIRABLE_REQUIREMENT_CODES.get(code)
         if target:
             targets[target] = True
+    for issue in list((audit or {}).get("issues") or []):
+        if not isinstance(issue, dict) or issue.get("code") != "site_layout_reference_quality_below_reference":
+            continue
+        for key in site_layout_reference_quality_failed_keys(issue):
+            target = REFERENCE_QUALITY_REPAIR_CHECK_TARGETS.get(key)
+            if target:
+                targets[target] = True
     return targets
 
 
 def site_layout_needs_rebuild(audit: dict | None) -> bool:
-    return any(code in QUALITY_REBUILD_ISSUE_CODES for code in site_layout_issue_codes(audit))
+    if isinstance(audit, dict):
+        component_count = _numeric(audit.get("component_count"), 0.0) or 0.0
+        if 0.0 < component_count < 45.0:
+            return True
+    for issue in list((audit or {}).get("issues") or []):
+        if not isinstance(issue, dict):
+            continue
+        code = issue.get("code")
+        if code in QUALITY_REBUILD_ISSUE_CODES:
+            return True
+        if (
+            code == "site_layout_reference_quality_below_reference"
+            and site_layout_reference_quality_failed_keys(issue).intersection(REFERENCE_QUALITY_REBUILD_CHECKS)
+        ):
+            return True
+    return False
 
 
 def site_layout_failure_message(audit: dict | None) -> str:

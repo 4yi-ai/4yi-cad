@@ -16,6 +16,7 @@ from app.cad.freecad_worker import (
     run_freecad_script,
 )
 from app.cad.site_layout_templates import (
+    site_layout_needs_repair,
     site_layout_needs_rebuild,
     site_layout_plot_frame,
     site_layout_repair_script,
@@ -99,6 +100,64 @@ def test_site_layout_repair_template_uses_plot_bbox_frame():
     assert "'origin_x': 1000.0" in script
     assert "'scale_y': 1.2" in script
     assert "template_box" in script
+
+
+def test_site_layout_repair_template_clamps_bad_high_plot_datum():
+    audit = {
+        "plot_bbox": {
+            "min": [0, 0, 5980],
+            "max": [100000, 100000, 6100],
+            "size": [100000, 100000, 120],
+        },
+        "issues": [{"code": "missing_entrance_system"}],
+    }
+
+    assert site_layout_plot_frame(audit)["origin_z"] == 0.0
+
+
+def test_site_layout_warning_only_audit_does_not_require_repair():
+    summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "issues": [
+                {"severity": "warning", "code": "floating_site_components"},
+                {
+                    "severity": "warning",
+                    "code": "site_layout_reference_quality_below_reference",
+                    "failed_checks": [
+                        {"key": "building_density_range", "status": "fail"},
+                    ],
+                },
+            ],
+        }
+    }
+
+    assert site_layout_needs_repair(summary) is False
+    assert site_layout_needs_rebuild(summary["site_layout"]) is False
+
+
+def test_site_layout_structural_reference_quality_still_requires_repair():
+    summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "site_layout_reference_quality_below_reference",
+                    "failed_checks": [
+                        {"key": "building_articulation_depth", "status": "fail"},
+                    ],
+                },
+            ],
+        }
+    }
+
+    assert site_layout_needs_repair(summary) is True
+    assert site_layout_needs_rebuild(summary["site_layout"]) is False
+    assert "'program_detail': True" in site_layout_repair_script(summary["site_layout"])
 
 
 def test_site_layout_template_repair_maps_under_budget_to_program_detail():

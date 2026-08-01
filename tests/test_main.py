@@ -1371,6 +1371,140 @@ async def test_default_freecad_execute_repairs_missing_site_layout_roles(monkeyp
     assert audit_diagnostics["audit"] == repaired_summary["site_layout"]
 
 
+async def test_default_freecad_execute_accepts_site_layout_warning_only_audit(monkeypatch):
+    edit_calls = []
+    warning_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "issues": [
+                {"severity": "warning", "code": "floating_site_components"},
+                {
+                    "severity": "warning",
+                    "code": "site_layout_reference_quality_below_reference",
+                    "failed_checks": [{"key": "building_density_range", "status": "fail"}],
+                },
+            ],
+        }
+    }
+
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "OK", "step": "STEP", "stl": "STL"},
+            },
+        )
+
+    def fake_inspect(fcstd_b64, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "document_summary": warning_summary,
+            },
+        )
+
+    def fake_edit(*args, **kwargs):
+        edit_calls.append(args)
+        return SandboxResult(success=False, error="should not repair warning-only audit")
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_inspect_sandboxed", fake_inspect)
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+
+    result = await default_freecad_execute("import FreeCAD\nresult = []")
+
+    assert result.ok is True
+    assert result.exports["fcstd"] == "OK"
+    assert edit_calls == []
+    audit_diagnostics = result.diagnostics["site_layout_audit"]
+    assert audit_diagnostics["status"] == "needs_review"
+    assert audit_diagnostics["coverage_score"] == 1.0
+    assert audit_diagnostics["issue_count"] == 2
+    assert audit_diagnostics["repair_status"] == "not_needed"
+
+
+async def test_default_freecad_execute_accepts_repaired_site_layout_with_warnings(monkeypatch):
+    failing_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 0.9,
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "missing_enclosure_system",
+                    "message": "Missing enclosure wall system.",
+                },
+            ],
+        }
+    }
+    repaired_warning_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "site_layout_reference_quality_below_reference",
+                    "failed_checks": [{"key": "building_density_range", "status": "fail"}],
+                },
+            ],
+        }
+    }
+
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "OLD", "step": "OLDSTEP", "stl": "OLDSTL"},
+            },
+        )
+
+    def fake_inspect(fcstd_b64, **kwargs):
+        summary = failing_summary if fcstd_b64 == "OLD" else repaired_warning_summary
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "document_summary": summary,
+            },
+        )
+
+    def fake_edit(script, fcstd_b64, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "REPAIRED", "step": "NEWSTEP", "stl": "NEWSTL"},
+            },
+        )
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_inspect_sandboxed", fake_inspect)
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+
+    result = await default_freecad_execute("import FreeCAD\nresult = []")
+
+    assert result.ok is True
+    assert result.exports["fcstd"] == "REPAIRED"
+    audit_diagnostics = result.diagnostics["site_layout_audit"]
+    assert audit_diagnostics["status"] == "needs_review"
+    assert audit_diagnostics["repair_status"] == "repaired"
+    assert audit_diagnostics["before"] == failing_summary["site_layout"]
+    assert audit_diagnostics["after"] == repaired_warning_summary["site_layout"]
+
+
 def test_generate_streams_sse_events():
     resp = _client().post("/api/generate", json={"prompt": "make a 1mm cube"})
     assert resp.status_code == 200

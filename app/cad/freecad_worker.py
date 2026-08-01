@@ -3920,7 +3920,7 @@ def feature_kind_from_summary(item):
 
 
 SITE_LAYOUT_ROLE_PATTERNS = (
-    ("plot_boundary", (r"\b(plot|parcel|site|ground|base|terrain)\b", r"地块", r"场地", r"基地", r"用地", r"红线")),
+    ("plot_boundary", (r"\b(plot|parcel|site|ground|terrain)\b", r"地块", r"场地", r"基地", r"用地", r"红线")),
     ("setback_control", (r"\b(setback|offset\s*line|control\s*line)\b", r"退界", r"控制线")),
     ("north_axis", (r"\b(north|compass|axis)\b", r"北向", r"指北针", r"坐标轴")),
     ("elevation_benchmark", (r"\b(benchmark|datum|level|elevation|grade)\b", r"标高", r"基准", r"竖向")),
@@ -4047,7 +4047,7 @@ SITE_LAYOUT_REFERENCE_QUALITY_THRESHOLDS = {
     "min_landscape_open_space": 10,
     "min_building_articulation": 13,
     "min_public_amenity": 3,
-    "min_building_density": 0.10,
+    "min_building_density": 0.08,
     "max_building_density": 0.25,
     "min_landscape_ratio": 0.25,
     "max_landscape_ratio": 0.55,
@@ -4184,6 +4184,13 @@ def bbox_min_z(bbox):
     return float(values[2])
 
 
+def bbox_max_z(bbox):
+    values = stable_sequence((bbox or {}).get("max") if isinstance(bbox, dict) else None)
+    if values is None or len(values) < 3:
+        return None
+    return float(values[2])
+
+
 def bbox_xy_distance(left, right):
     if not isinstance(left, dict) or not isinstance(right, dict):
         return None
@@ -4277,6 +4284,9 @@ def append_site_layout_spatial_issues(issues, components, plot_bbox):
         return
     outside = []
     floating = []
+    grade_z = bbox_max_z(plot_bbox)
+    if grade_z is None:
+        grade_z = 0.0
     for component in list(components or []):
         roles = set(component.get("roles") or [])
         bbox = component.get("bbox")
@@ -4286,7 +4296,7 @@ def append_site_layout_spatial_issues(issues, components, plot_bbox):
                 outside.append(safe_text(name, 120))
         if roles.intersection({"residential_building", "public_amenity", "traffic_network", "parking_underground", "landscape_open_space"}):
             min_z = bbox_min_z(bbox)
-            if min_z is not None and min_z > 250.0:
+            if min_z is not None and min_z > grade_z + 250.0:
                 floating.append(safe_text(name, 120))
     if outside:
         issues.append({
