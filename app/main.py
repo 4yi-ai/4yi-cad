@@ -637,6 +637,26 @@ def _freecad_response(
     }
 
 
+def _site_layout_audit_diagnostics(
+    audit: dict | None,
+    *,
+    repair_status: str,
+    before: dict | None = None,
+) -> dict:
+    audit = audit if isinstance(audit, dict) else {}
+    diagnostics = {
+        "status": audit.get("status"),
+        "coverage_score": audit.get("coverage_score"),
+        "issue_count": len(list(audit.get("issues") or [])),
+        "repair_status": repair_status,
+        "audit": audit,
+    }
+    if before and before is not audit:
+        diagnostics["before"] = before
+        diagnostics["after"] = audit
+    return diagnostics
+
+
 async def default_execute(script: str) -> ExecResult:
     """Production executor: run the CAD worker in the sandbox, off the event loop."""
     from app.cad.runner import run_sandboxed
@@ -678,12 +698,10 @@ async def default_freecad_execute(script: str) -> ExecResult:
     document_summary = inspection.get("document_summary") if inspection.get("ok") else None
     audit = site_layout_audit_from_summary(document_summary)
     if audit:
-        result.diagnostics["site_layout_audit"] = {
-            "status": audit.get("status"),
-            "coverage_score": audit.get("coverage_score"),
-            "issue_count": len(list(audit.get("issues") or [])),
-            "repair_status": "not_needed" if audit.get("status") == "pass" else "pending",
-        }
+        result.diagnostics["site_layout_audit"] = _site_layout_audit_diagnostics(
+            audit,
+            repair_status="not_needed" if audit.get("status") == "pass" else "pending",
+        )
     if not site_layout_needs_repair(document_summary):
         return result
 
@@ -708,12 +726,11 @@ async def default_freecad_execute(script: str) -> ExecResult:
     )
     repaired_audit = site_layout_audit_from_summary(repaired_summary)
     if repaired_audit:
-        repaired.diagnostics["site_layout_audit"] = {
-            "status": repaired_audit.get("status"),
-            "coverage_score": repaired_audit.get("coverage_score"),
-            "issue_count": len(list(repaired_audit.get("issues") or [])),
-            "repair_status": "repaired" if repaired_audit.get("status") == "pass" else "failed",
-        }
+        repaired.diagnostics["site_layout_audit"] = _site_layout_audit_diagnostics(
+            repaired_audit,
+            repair_status="repaired" if repaired_audit.get("status") == "pass" else "failed",
+            before=audit,
+        )
     if repaired_audit and repaired_audit.get("status") == "pass":
         return repaired
 

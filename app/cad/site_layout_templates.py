@@ -17,6 +17,56 @@ REPAIRABLE_REQUIREMENT_CODES = {
 }
 
 
+def _numeric(value, fallback: float | None = None) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return number if number == number else fallback
+
+
+def _sequence(value) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    numbers = [_numeric(item) for item in value[:3]]
+    if numbers[0] is None or numbers[1] is None:
+        return None
+    if len(numbers) < 3 or numbers[2] is None:
+        numbers = [numbers[0], numbers[1], 0.0]
+    return [float(numbers[0]), float(numbers[1]), float(numbers[2])]
+
+
+def site_layout_plot_frame(audit: dict | None) -> dict[str, float]:
+    """Map the 100m reference repair template into the audited plot bbox."""
+    bbox = audit.get("plot_bbox") if isinstance(audit, dict) else None
+    bbox = bbox if isinstance(bbox, dict) else {}
+    min_values = _sequence(bbox.get("min")) or [0.0, 0.0, 0.0]
+    max_values = _sequence(bbox.get("max"))
+    size_values = _sequence(bbox.get("size"))
+    width = (
+        (max_values[0] - min_values[0])
+        if max_values
+        else (size_values[0] if size_values else 100000.0)
+    )
+    depth = (
+        (max_values[1] - min_values[1])
+        if max_values
+        else (size_values[1] if size_values else 100000.0)
+    )
+    width = width if width and width > 1 else 100000.0
+    depth = depth if depth and depth > 1 else 100000.0
+    scale_x = width / 100000.0
+    scale_y = depth / 100000.0
+    return {
+        "origin_x": min_values[0],
+        "origin_y": min_values[1],
+        "origin_z": max_values[2] if max_values else 0.0,
+        "scale_x": scale_x,
+        "scale_y": scale_y,
+        "scale_z": min(scale_x, scale_y),
+    }
+
+
 def site_layout_audit_from_summary(document_summary: dict | None) -> dict | None:
     if not isinstance(document_summary, dict):
         return None
@@ -71,13 +121,43 @@ def site_layout_failure_message(audit: dict | None) -> str:
 def site_layout_repair_script(audit: dict | None) -> str:
     targets = repair_targets_from_audit(audit)
     target_literal = repr(dict(sorted(targets.items())))
+    frame_literal = repr(dict(sorted(site_layout_plot_frame(audit).items())))
     return f"""
 import FreeCAD
 import Part
 
 doc = FreeCAD.ActiveDocument or FreeCAD.newDocument("SiteLayoutRepair")
 NEEDS = {target_literal}
+FRAME = {frame_literal}
 objects = []
+
+def frame_x(value):
+    return FRAME["origin_x"] + float(value) * FRAME["scale_x"]
+
+def frame_y(value):
+    return FRAME["origin_y"] + float(value) * FRAME["scale_y"]
+
+def frame_z(value):
+    return FRAME["origin_z"] + float(value) * FRAME["scale_z"]
+
+def frame_dx(value):
+    return max(1.0, float(value) * FRAME["scale_x"])
+
+def frame_dy(value):
+    return max(1.0, float(value) * FRAME["scale_y"])
+
+def frame_dz(value):
+    return max(1.0, float(value) * FRAME["scale_z"])
+
+def template_box(x, y, z, length, width, height):
+    return (
+        frame_x(x),
+        frame_y(y),
+        frame_z(z),
+        frame_dx(length),
+        frame_dy(width),
+        frame_dz(height),
+    )
 
 def set_style(obj, color, transparency=0):
     try:
@@ -93,6 +173,7 @@ def has_object(name):
 def add_box(name, label, x, y, z, length, width, height, color, transparency=0):
     if has_object(name):
         return None
+    x, y, z, length, width, height = template_box(x, y, z, length, width, height)
     obj = doc.addObject("Part::Box", name)
     obj.Label = label
     obj.Length = length
@@ -107,7 +188,7 @@ def add_compound(name, label, specs, color, transparency=0):
     if has_object(name):
         return None
     shapes = [Part.makeBox(length, width, height, FreeCAD.Vector(x, y, z))
-              for x, y, z, length, width, height in specs]
+              for x, y, z, length, width, height in [template_box(*spec) for spec in specs]]
     obj = doc.addObject("Part::Feature", name)
     obj.Label = label
     obj.Shape = Part.makeCompound(shapes)
@@ -118,12 +199,12 @@ def add_compound(name, label, specs, color, transparency=0):
 def add_polygon_prism(name, label, points, z, height, color, transparency=0):
     if has_object(name):
         return None
-    vectors = [FreeCAD.Vector(x, y, z) for x, y in points]
+    vectors = [FreeCAD.Vector(frame_x(x), frame_y(y), frame_z(z)) for x, y in points]
     vectors.append(vectors[0])
     face = Part.Face(Part.makePolygon(vectors))
     obj = doc.addObject("Part::Feature", name)
     obj.Label = label
-    obj.Shape = face.extrude(FreeCAD.Vector(0, 0, height))
+    obj.Shape = face.extrude(FreeCAD.Vector(0, 0, frame_dz(height)))
     set_style(obj, color, transparency)
     objects.append(obj)
     return obj

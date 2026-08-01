@@ -15,7 +15,7 @@ from app.cad.freecad_worker import (
     run_freecad_import_model,
     run_freecad_script,
 )
-from app.cad.site_layout_templates import site_layout_repair_script
+from app.cad.site_layout_templates import site_layout_plot_frame, site_layout_repair_script
 
 PY = sys.executable
 WORKER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "cad" / "freecad_worker.py"
@@ -23,6 +23,33 @@ SITE_LAYOUT_REFERENCE_SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts" / "freecad" / "high_end_community_100m.py"
 )
 SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = SITE_LAYOUT_REFERENCE_SCRIPT.read_text(encoding="utf-8")
+
+
+def test_site_layout_repair_template_uses_plot_bbox_frame():
+    audit = {
+        "plot_bbox": {
+            "min": [1000, 2000, -100],
+            "max": [51000, 122000, 0],
+            "size": [50000, 120000, 100],
+        },
+        "issues": [{"code": "missing_entrance_system"}],
+    }
+
+    frame = site_layout_plot_frame(audit)
+    script = site_layout_repair_script(audit)
+
+    assert frame == {
+        "origin_x": 1000.0,
+        "origin_y": 2000.0,
+        "origin_z": 0.0,
+        "scale_x": 0.5,
+        "scale_y": 1.2,
+        "scale_z": 0.5,
+    }
+    assert "FRAME =" in script
+    assert "'origin_x': 1000.0" in script
+    assert "'scale_y': 1.2" in script
+    assert "template_box" in script
 
 
 def test_run_freecad_script_reports_missing_binary(monkeypatch):

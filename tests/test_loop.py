@@ -156,6 +156,22 @@ async def test_happy_path_first_attempt_succeeds():
     assert gw.calls[0]["tool_choice"] == "required"
 
 
+async def test_done_event_includes_execution_diagnostics():
+    gw = FakeGateway(_tool_call("result = box(10,10,10)"))
+
+    async def execute(script):
+        return ExecResult(
+            ok=True,
+            exports={"step": "S"},
+            diagnostics={"site_layout_audit": {"status": "pass"}},
+        )
+
+    events = await _collect(run_generation("make a cube", gateway=gw, execute=execute))
+
+    assert events[-1]["type"] == "done"
+    assert events[-1]["diagnostics"] == {"site_layout_audit": {"status": "pass"}}
+
+
 async def test_freecad_tool_uses_freecad_executor_and_emits_engine_metadata():
     script = "import FreeCAD\nresult = object()\n"
     gw = FakeGateway(_tool_call(script, name="run_freecad"))

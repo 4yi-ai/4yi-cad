@@ -222,6 +222,7 @@ async def run_generation(
                 "ok": True,
                 "engine": engine,
                 "freecad_version": result.freecad_version,
+                "diagnostics": result.diagnostics,
             }
             return
 
@@ -243,4 +244,4 @@ async def run_generation(
         break
 
     yield {"type": "error", "message": last_error}
-    yield {"type": "done", "ok": False}
+    yield {"type": "done", "ok": False, "diagnostics": {}}

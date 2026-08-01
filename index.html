@@ -916,6 +916,35 @@
   .diagnostic-row.warning { border-color: #ffe1a6; background: #fff8e8; color: var(--warning); }
   .diagnostic-row.error { border-color: #f4b8b8; background: #fff0f0; color: var(--danger); }
   .diagnostic-row.info { border-color: #cfe4ff; background: #f5f9ff; color: var(--primary); }
+  .site-layout-requirements {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .site-layout-requirement {
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+    font-size: 12px;
+    background: #fff;
+  }
+  .site-layout-requirement strong,
+  .site-layout-requirement span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .site-layout-requirement strong { font-weight: 650; }
+  .site-layout-requirement span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .site-layout-requirement.pass { border-color: #ccebd8; background: #f4fbf6; }
+  .site-layout-requirement.missing { border-color: #ffe1a6; background: #fff8e8; }
+  .site-layout-requirement.error { border-color: #f4b8b8; background: #fff0f0; }
   .sketch-preview-review {
     border: 1px solid #f4b8b8;
     border-radius: var(--radius);
@@ -1312,6 +1341,11 @@ const I18N = {
     siteLayoutAudit: "Site layout audit",
     siteLayoutStatus: "Site layout",
     siteLayoutCoverage: "Coverage",
+    siteLayoutReferenceDelta: "Reference delta",
+    siteLayoutRequirements: "Required components",
+    siteLayoutRepairStatus: "Repair status",
+    siteLayoutMissing: "Missing",
+    siteLayoutComponentCounts: "Component counts",
     notAvailable: "not available",
     parameters: "Parameters",
     selectedParameter: "Selected parameter",
@@ -1759,6 +1793,11 @@ const I18N = {
     siteLayoutAudit: "总图审计",
     siteLayoutStatus: "小区总图",
     siteLayoutCoverage: "覆盖率",
+    siteLayoutReferenceDelta: "参考差距",
+    siteLayoutRequirements: "必需部件",
+    siteLayoutRepairStatus: "修复状态",
+    siteLayoutMissing: "缺失项",
+    siteLayoutComponentCounts: "部件计数",
     notAvailable: "不可用",
     parameters: "参数",
     selectedParameter: "已选参数",
@@ -2204,6 +2243,7 @@ const state = {
   generatedPrompt: "",
   generatedParameters: [],
   documentSummary: null,
+  freeCadDiagnostics: {},
   selectedGeneratedParameterName: "",
   selectedFreeCadObjectName: "",
   selectedFreeCadSubelement: null,
@@ -2441,6 +2481,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     generatedPrompt: state.generatedPrompt,
     generatedParameters: state.generatedParameters,
     documentSummary: state.documentSummary,
+    freeCadDiagnostics: state.freeCadDiagnostics,
     selectedGeneratedParameterName: state.selectedGeneratedParameterName,
     selectedFreeCadObjectName: state.selectedFreeCadObjectName,
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
@@ -2514,6 +2555,7 @@ function restoreWorkbenchSession() {
     state.generatedPrompt = saved.generatedPrompt || "";
     state.generatedParameters = Array.isArray(saved.generatedParameters) ? saved.generatedParameters : [];
     state.documentSummary = saved.documentSummary && typeof saved.documentSummary === "object" ? saved.documentSummary : null;
+    state.freeCadDiagnostics = saved.freeCadDiagnostics && typeof saved.freeCadDiagnostics === "object" ? saved.freeCadDiagnostics : {};
     state.selectedGeneratedParameterName = saved.selectedGeneratedParameterName || "";
     state.selectedFreeCadObjectName = saved.selectedFreeCadObjectName || "";
     state.selectedFreeCadSubelement = saved.selectedFreeCadSubelement && typeof saved.selectedFreeCadSubelement === "object" ? saved.selectedFreeCadSubelement : null;
@@ -2563,6 +2605,7 @@ function versionMetadata() {
     generated_prompt: state.generatedPrompt,
     generated_parameters: state.generatedParameters || [],
     document_summary: state.documentSummary || null,
+    freecad_diagnostics: state.freeCadDiagnostics || {},
   };
 }
 
@@ -4791,6 +4834,7 @@ function syncSavedServerVersion(version, fallbackLabel, fallbackDetail) {
   const metadata = version.metadata || {};
   state.artifactRefs = artifactRefsFromMetadata(metadata);
   state.documentSummary = metadata.document_summary && typeof metadata.document_summary === "object" ? metadata.document_summary : state.documentSummary;
+  state.freeCadDiagnostics = metadata.freecad_diagnostics && typeof metadata.freecad_diagnostics === "object" ? metadata.freecad_diagnostics : state.freeCadDiagnostics;
   const current = state.history.find((item) => item.serverVersionId === version.id);
   const target = current || state.history[0];
   if (target && !target.serverVersionId) {
@@ -4832,6 +4876,7 @@ function resetClientWorkbenchSession() {
   state.generatedPrompt = "";
   state.generatedParameters = [];
   state.documentSummary = null;
+  state.freeCadDiagnostics = {};
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -4944,6 +4989,7 @@ async function applyStoredServerVersion(version, versions = null) {
   state.generatedPrompt = metadata.generated_prompt || "";
   state.generatedParameters = Array.isArray(metadata.generated_parameters) ? metadata.generated_parameters : [];
   state.documentSummary = metadata.document_summary && typeof metadata.document_summary === "object" ? metadata.document_summary : null;
+  state.freeCadDiagnostics = metadata.freecad_diagnostics && typeof metadata.freecad_diagnostics === "object" ? metadata.freecad_diagnostics : {};
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -5113,6 +5159,7 @@ async function importFreeCadModelFile(file) {
   state.generatedPrompt = file.name;
   state.generatedParameters = [];
   state.documentSummary = null;
+  state.freeCadDiagnostics = {};
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -5157,6 +5204,7 @@ async function importFreeCadModelFile(file) {
     state.generatedPrompt = file.name;
     state.generatedParameters = Array.isArray(imported.parameters) ? imported.parameters : [];
     state.documentSummary = imported.document_summary || metadata.document_summary || null;
+    state.freeCadDiagnostics = imported.diagnostics || metadata.freecad_diagnostics || {};
     state.selectedGeneratedParameterName = "";
     state.previewPng = imported.preview_png_b64 || null;
     state.artifacts = imported.exports || {};
@@ -5908,6 +5956,75 @@ function renderFreeCadDiagnostics(titleKey, diagnostics) {
     </div>`;
 }
 
+function freeCadSiteLayoutDiagnostics() {
+  const diagnostics = state.freeCadDiagnostics?.site_layout_audit;
+  return diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+}
+
+function freeCadSiteLayoutAudit() {
+  const audit = state.documentSummary?.site_layout;
+  if (audit && audit.applicable !== false) return audit;
+  const diagnostics = freeCadSiteLayoutDiagnostics();
+  const diagnosticAudit = diagnostics?.after || diagnostics?.audit || diagnostics?.before;
+  return diagnosticAudit && diagnosticAudit.applicable !== false ? diagnosticAudit : null;
+}
+
+function freeCadSiteLayoutRequirementClass(item) {
+  const status = String(item?.status || "").toLowerCase();
+  const severity = String(item?.severity || "").toLowerCase();
+  if (status === "pass") return "pass";
+  if (severity === "error") return "error";
+  return "missing";
+}
+
+function freeCadSiteLayoutMissingText(audit) {
+  const requirements = Array.isArray(audit?.requirements) ? audit.requirements : [];
+  const missing = requirements
+    .filter((item) => item.status !== "pass")
+    .map((item) => item.label || item.key)
+    .filter(Boolean);
+  if (missing.length) return missing.slice(0, 8).join(" · ");
+  const issues = freeCadDiagnosticItems(audit);
+  return issues.map((item) => item.code || item.message).filter(Boolean).slice(0, 8).join(" · ") || "none";
+}
+
+function freeCadSiteLayoutComponentCountsText(audit) {
+  const counts = audit?.component_counts && typeof audit.component_counts === "object" ? audit.component_counts : {};
+  return Object.entries(counts)
+    .filter(([, value]) => Number(value) > 0)
+    .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+    .slice(0, 10)
+    .map(([key, value]) => `${key}:${value}`)
+    .join(" · ");
+}
+
+function renderFreeCadSiteLayoutDelta() {
+  const audit = freeCadSiteLayoutAudit();
+  if (!audit) return "";
+  const diagnostics = freeCadSiteLayoutDiagnostics();
+  const requirements = Array.isArray(audit.requirements) ? audit.requirements : [];
+  const repairStatus = diagnostics?.repair_status || "";
+  const componentCounts = freeCadSiteLayoutComponentCountsText(audit);
+  return `<p class="section-note" style="margin-top:12px">${escapeHtml(t("siteLayoutReferenceDelta"))}</p>
+    <div class="kv-list">
+      ${repairStatus ? `<div class="kv"><span>${escapeHtml(t("siteLayoutRepairStatus"))}</span><strong>${escapeHtml(repairStatus)}</strong></div>` : ""}
+      <div class="kv"><span>${escapeHtml(t("siteLayoutMissing"))}</span><strong>${escapeHtml(freeCadSiteLayoutMissingText(audit))}</strong></div>
+      ${componentCounts ? `<div class="kv"><span>${escapeHtml(t("siteLayoutComponentCounts"))}</span><strong>${escapeHtml(componentCounts)}</strong></div>` : ""}
+    </div>
+    ${requirements.length ? `<p class="section-note" style="margin-top:12px">${escapeHtml(t("siteLayoutRequirements"))}</p>
+      <div class="site-layout-requirements">
+        ${requirements.map((item) => {
+          const label = item.label || item.key || "requirement";
+          const count = `${Number(item.detected_count) || 0}/${Number(item.required_count) || 1}`;
+          const detail = [item.status || "missing", count].filter(Boolean).join(" · ");
+          return `<div class="site-layout-requirement ${freeCadSiteLayoutRequirementClass(item)}">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(detail)}</span>
+          </div>`;
+        }).join("")}
+      </div>` : ""}`;
+}
+
 function freeCadDocumentGeometryText() {
   const geometry = state.documentSummary?.geometry || {};
   const bbox = geometry.bbox?.size;
@@ -5919,7 +6036,7 @@ function freeCadDocumentGeometryText() {
 }
 
 function freeCadSiteLayoutStatusText() {
-  const audit = state.documentSummary?.site_layout;
+  const audit = freeCadSiteLayoutAudit();
   if (!audit || audit.applicable === false) return "";
   const status = audit.status || audit.severity || "needs_review";
   const coverage = Number(audit.coverage_score);
@@ -5929,7 +6046,7 @@ function freeCadSiteLayoutStatusText() {
 }
 
 function freeCadSiteLayoutCoverageText() {
-  const audit = state.documentSummary?.site_layout;
+  const audit = freeCadSiteLayoutAudit();
   if (!audit || audit.applicable === false) return "";
   const requirements = Array.isArray(audit.requirements) ? audit.requirements : [];
   if (!requirements.length) return "";
@@ -6552,9 +6669,11 @@ function renderProperties() {
 }
 
 function renderFreeCadDocumentSummarySection() {
-  if (state.engine !== "freecad" || !state.documentSummary) return "";
+  if (state.engine !== "freecad") return "";
+  const siteLayoutAudit = freeCadSiteLayoutAudit();
+  if (!state.documentSummary && !siteLayoutAudit) return "";
   const objects = freeCadDocumentObjects();
-  const geometry = state.documentSummary.geometry || {};
+  const geometry = state.documentSummary?.geometry || {};
   const featureNodes = freeCadFeatureTreeNodes();
   const kindText = freeCadFeatureKindText();
   const tipText = freeCadBodyTipText();
@@ -6576,7 +6695,8 @@ function renderFreeCadDocumentSummarySection() {
       ${siteLayoutStatus ? `<div class="kv"><span>${escapeHtml(t("siteLayoutStatus"))}</span><strong>${escapeHtml(siteLayoutStatus)}</strong></div>` : ""}
       ${siteLayoutCoverage ? `<div class="kv"><span>${escapeHtml(t("siteLayoutCoverage"))}</span><strong>${escapeHtml(siteLayoutCoverage)}</strong></div>` : ""}
     </div>
-    ${renderFreeCadDiagnostics("siteLayoutAudit", state.documentSummary.site_layout)}
+    ${renderFreeCadSiteLayoutDelta()}
+    ${renderFreeCadDiagnostics("siteLayoutAudit", siteLayoutAudit)}
   </section>`;
 }
 
@@ -8396,6 +8516,7 @@ function renderBottom() {
       freecad_version: state.freecadVersion || null,
       patch: state.patch || { op: "noop" },
       document_geometry: state.documentSummary?.geometry || null,
+      freecad_diagnostics: state.freeCadDiagnostics || {},
     };
     $("bottomContent").innerHTML = `<div class="script-grid">
       <pre>${escapeHtml(JSON.stringify(scriptMeta, null, 2))}</pre>
@@ -8535,6 +8656,7 @@ async function commitGeneratedParameter(name, rawValue) {
     engine: state.engine,
     freecadVersion: state.freecadVersion,
     generatedParameters: [...(state.generatedParameters || [])],
+    freeCadDiagnostics: { ...(state.freeCadDiagnostics || {}) },
     exportStatus: state.exportStatus,
     patch: state.patch,
   };
@@ -8559,6 +8681,7 @@ async function commitGeneratedParameter(name, rawValue) {
     state.freecadVersion = rendered.freecad_version || "";
     state.generatedParameters = rendered.parameters || [];
     state.documentSummary = rendered.document_summary || null;
+    state.freeCadDiagnostics = rendered.diagnostics || {};
     state.selectedGeneratedParameterName = name;
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
@@ -8582,6 +8705,7 @@ async function commitGeneratedParameter(name, rawValue) {
     state.engine = previous.engine;
     state.freecadVersion = previous.freecadVersion;
     state.generatedParameters = previous.generatedParameters;
+    state.freeCadDiagnostics = previous.freeCadDiagnostics;
     state.exportStatus = previous.exportStatus;
     state.patch = previous.patch;
     setStatus("patchFailed");
@@ -8607,6 +8731,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     freecadVersion: state.freecadVersion,
     generatedParameters: [...(state.generatedParameters || [])],
     documentSummary: state.documentSummary,
+    freeCadDiagnostics: { ...(state.freeCadDiagnostics || {}) },
     exportStatus: state.exportStatus,
     patch: state.patch,
     activeServerVersionId: state.activeServerVersionId,
@@ -8648,6 +8773,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     state.generatedParameters = Array.isArray(patched.parameters) ? patched.parameters : [];
     state.selectedGeneratedParameterName = "";
     state.documentSummary = patched.document_summary || null;
+    state.freeCadDiagnostics = patched.diagnostics || {};
     if (state.selectedFreeCadObjectName && !freeCadObjectByName(state.selectedFreeCadObjectName)) {
       state.selectedFreeCadObjectName = "";
       state.selectedFreeCadSubelement = null;
@@ -8698,6 +8824,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     state.freecadVersion = previous.freecadVersion;
     state.generatedParameters = previous.generatedParameters;
     state.documentSummary = previous.documentSummary;
+    state.freeCadDiagnostics = previous.freeCadDiagnostics;
     state.selectedFreeCadSubelement = previous.selectedFreeCadSubelement;
     state.selectedFreeCadAssemblyJoint = previous.selectedFreeCadAssemblyJoint;
     state.selectedFreeCadSketchElement = previous.selectedFreeCadSketchElement;
@@ -8891,6 +9018,7 @@ async function applyPatches(patches, label, detail) {
   state.freecadVersion = "";
   state.generatedPrompt = "";
   state.documentSummary = null;
+  state.freeCadDiagnostics = {};
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
@@ -10676,6 +10804,7 @@ async function generateFromPrompt(prompt, options = {}) {
   state.generatedPrompt = displayPrompt;
   state.generatedParameters = [];
   state.documentSummary = null;
+  state.freeCadDiagnostics = {};
   state.generatedViewerFitMode = "all";
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
@@ -10778,6 +10907,7 @@ function handleAgentEvent(ev, context = {}) {
     state.freecadVersion = ev.freecad_version || "";
     state.generatedParameters = Array.isArray(ev.parameters) ? ev.parameters : [];
     state.documentSummary = null;
+    state.freeCadDiagnostics = {};
     state.generatedViewerFitMode = "all";
     state.selectedFreeCadObjectName = "";
     state.selectedFreeCadSubelement = null;
@@ -10825,6 +10955,9 @@ function handleAgentEvent(ev, context = {}) {
   if (ev.type === "done") {
     state.engine = normalizeEngine(ev.engine || state.engine);
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
+    if (ev.diagnostics && typeof ev.diagnostics === "object") {
+      state.freeCadDiagnostics = ev.diagnostics;
+    }
     if (ev.ok && hasStepStlArtifacts()) state.exportStatus = "ready";
     finishGenerationActivity(Boolean(ev.ok));
     setStatus(ev.ok ? "done" : "failed");

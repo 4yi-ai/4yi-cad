@@ -1347,12 +1347,14 @@ async def test_default_freecad_execute_repairs_missing_site_layout_roles(monkeyp
     assert edit_calls and edit_calls[0]["fcstd_b64"] == "OLD"
     assert "Repair_Boundary_Wall" in edit_calls[0]["script"]
     assert "Repair_Fire_Road" in edit_calls[0]["script"]
-    assert result.diagnostics["site_layout_audit"] == {
-        "status": "pass",
-        "coverage_score": 1.0,
-        "issue_count": 0,
-        "repair_status": "repaired",
-    }
+    audit_diagnostics = result.diagnostics["site_layout_audit"]
+    assert audit_diagnostics["status"] == "pass"
+    assert audit_diagnostics["coverage_score"] == 1.0
+    assert audit_diagnostics["issue_count"] == 0
+    assert audit_diagnostics["repair_status"] == "repaired"
+    assert audit_diagnostics["before"] == failing_summary["site_layout"]
+    assert audit_diagnostics["after"] == repaired_summary["site_layout"]
+    assert audit_diagnostics["audit"] == repaired_summary["site_layout"]
 
 
 def test_generate_streams_sse_events():
