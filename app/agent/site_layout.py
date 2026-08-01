@@ -30,6 +30,13 @@ SITE_LAYOUT_PLANNER_MESSAGE = """Site-layout component plan for this FreeCAD req
   Plot/Redline, Setback, NorthAxis, ElevationDatum, BoundaryWall, Entrance/Gate,
   Road/Path, Fire, Parking/Garage/Basement/Ramp, Villa/ResidentialTower,
   Clubhouse/Amenity, Water/Lake, Playground/Green, PlanningMetrics/FAR.
+- Keep the final model in the reference complexity band: 20-60 named exportable
+  objects. Use grouped detail objects such as tower floor bands, roof caps, villa
+  roofs, private gardens, lake bridge, and playground equipment instead of a few
+  blank boxes or hundreds of repeated façade pieces.
+- Avoid false-positive naming: roof caps, podiums, lobbies, and floor bands should
+  include articulation terms, but only actual villa/tower bodies should be labeled
+  as residential building masses.
 - The first pass must target document_summary.site_layout.status == "pass";
   do not return a merely decorative or partial model."""
 

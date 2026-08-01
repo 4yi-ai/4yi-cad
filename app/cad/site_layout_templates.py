@@ -14,6 +14,7 @@ REPAIRABLE_REQUIREMENT_CODES = {
     "missing_public_amenity": "public_amenity",
     "missing_landscape_open_space": "landscape_open_space",
     "missing_planning_metrics": "planning_metrics",
+    "site_layout_object_budget_below_reference": "program_detail",
 }
 
 
@@ -123,6 +124,7 @@ def site_layout_repair_script(audit: dict | None) -> str:
     target_literal = repr(dict(sorted(targets.items())))
     frame_literal = repr(dict(sorted(site_layout_plot_frame(audit).items())))
     return f"""
+import math
 import FreeCAD
 import Part
 
@@ -167,10 +169,20 @@ def set_style(obj, color, transparency=0):
     except Exception:
         pass
 
+def set_semantic_role(obj, role):
+    if not role:
+        return
+    try:
+        if not hasattr(obj, "SemanticRole"):
+            obj.addProperty("App::PropertyString", "SemanticRole", "Planning", "Semantic role")
+        obj.SemanticRole = role
+    except Exception:
+        pass
+
 def has_object(name):
     return any(getattr(obj, "Name", "") == name for obj in doc.Objects)
 
-def add_box(name, label, x, y, z, length, width, height, color, transparency=0):
+def add_box(name, label, x, y, z, length, width, height, color, transparency=0, role=""):
     if has_object(name):
         return None
     x, y, z, length, width, height = template_box(x, y, z, length, width, height)
@@ -181,36 +193,110 @@ def add_box(name, label, x, y, z, length, width, height, color, transparency=0):
     obj.Height = height
     obj.Placement.Base = FreeCAD.Vector(x, y, z)
     set_style(obj, color, transparency)
+    set_semantic_role(obj, role)
     objects.append(obj)
     return obj
 
-def add_compound(name, label, specs, color, transparency=0):
+def add_shape(name, label, shape, color, transparency=0, role=""):
+    if has_object(name):
+        return None
+    obj = doc.addObject("Part::Feature", name)
+    obj.Label = label
+    obj.Shape = shape
+    set_style(obj, color, transparency)
+    set_semantic_role(obj, role)
+    objects.append(obj)
+    return obj
+
+def add_compound(name, label, specs, color, transparency=0, role=""):
     if has_object(name):
         return None
     shapes = [Part.makeBox(length, width, height, FreeCAD.Vector(x, y, z))
               for x, y, z, length, width, height in [template_box(*spec) for spec in specs]]
-    obj = doc.addObject("Part::Feature", name)
-    obj.Label = label
-    obj.Shape = Part.makeCompound(shapes)
-    set_style(obj, color, transparency)
-    objects.append(obj)
-    return obj
+    return add_shape(name, label, Part.makeCompound(shapes), color, transparency, role)
 
-def add_polygon_prism(name, label, points, z, height, color, transparency=0):
+def add_polygon_prism(name, label, points, z, height, color, transparency=0, role=""):
     if has_object(name):
         return None
     vectors = [FreeCAD.Vector(frame_x(x), frame_y(y), frame_z(z)) for x, y in points]
     vectors.append(vectors[0])
     face = Part.Face(Part.makePolygon(vectors))
-    obj = doc.addObject("Part::Feature", name)
-    obj.Label = label
-    obj.Shape = face.extrude(FreeCAD.Vector(0, 0, frame_dz(height)))
-    set_style(obj, color, transparency)
-    objects.append(obj)
-    return obj
+    return add_shape(name, label, face.extrude(FreeCAD.Vector(0, 0, frame_dz(height))), color, transparency, role)
+
+def organic_lake_points(cx, cy, rx, ry, count=24):
+    points = []
+    for index in range(count):
+        angle = math.tau * index / count
+        modifier = 1.0 + 0.10 * math.sin(angle * 3.0) + 0.06 * math.cos(angle * 5.0)
+        points.append((cx + math.cos(angle) * rx * modifier, cy + math.sin(angle) * ry * modifier))
+    return points
+
+def gable_roof_shape(x, y, z, length, width, height):
+    x0 = frame_x(x)
+    y0 = frame_y(y)
+    z0 = frame_z(z)
+    dx = frame_dx(length)
+    dy = frame_dy(width)
+    dz = frame_dz(height)
+    vectors = [
+        FreeCAD.Vector(x0, y0, z0),
+        FreeCAD.Vector(x0 + dx, y0, z0),
+        FreeCAD.Vector(x0 + dx / 2, y0, z0 + dz),
+        FreeCAD.Vector(x0, y0, z0),
+    ]
+    return Part.Face(Part.makePolygon(vectors)).extrude(FreeCAD.Vector(0, dy, 0))
 
 def needs(*keys):
     return any(bool(NEEDS.get(key)) for key in keys)
+
+def add_villa_template(index, x, y, prefix="Repair"):
+    add_box("%s_Villa_%d_Body" % (prefix, index), "Villa %d residential body" % index, x, y, 0, 8000, 8200, 4200, (0.76, 0.72, 0.64), 0, "residential building")
+    add_villa_detail(index, x, y, prefix)
+
+def add_villa_detail(index, x, y, prefix="Repair_Detail"):
+    add_shape("%s_Villa_%d_Roof" % (prefix, index), "Villa %d roof cap" % index, gable_roof_shape(x - 700, y - 700, 4200, 9400, 9600, 2300), (0.48, 0.54, 0.60), 0, "building articulation")
+    add_box("%s_Private_Garden_%d" % (prefix, index), "Private garden green landscape %d" % index, x - 1600, y - 1700, 0, 11200, 11600, 70, (0.50, 0.72, 0.45), 35, "landscape open space")
+
+def add_tower_template(index, x, y, height, prefix="Repair"):
+    add_box("%s_HighRise_Tower_%d_Body" % (prefix, index), "HighRise residential tower %d body" % index, x, y, 0, 13000, 15000, height, (0.70, 0.76, 0.83), 10, "residential building")
+    add_tower_detail(index, x, y, height, prefix)
+
+def add_tower_detail(index, x, y, height, prefix="Repair_Detail"):
+    add_box("%s_HighRise_Tower_%d_Lobby_Podium" % (prefix, index), "HighRise tower %d lobby podium" % index, x - 1800, y - 1700, 0, 16600, 18400, 5200, (0.78, 0.68, 0.54), 0, "building articulation")
+    add_compound("%s_HighRise_Tower_%d_Floor_Bands" % (prefix, index), "HighRise tower %d floor bands" % index, [
+        (x - 250, y - 250, z, 13500, 15500, 220)
+        for z in range(12000, int(height), 12000)
+    ], (0.54, 0.60, 0.68), 8, "building articulation")
+    add_box("%s_HighRise_Tower_%d_Roof_Cap" % (prefix, index), "HighRise tower %d roof cap" % index, x + 2400, y + 3000, height, 8200, 9000, 2800, (0.60, 0.65, 0.72), 0, "building articulation")
+
+def add_clubhouse_template(prefix="Repair"):
+    add_box("%s_Clubhouse_Amenity_Body" % prefix, "Clubhouse amenity body", 66500, 44500, 0, 15000, 11000, 6200, (0.84, 0.61, 0.34), 0, "public amenity")
+    add_clubhouse_detail(prefix)
+
+def add_clubhouse_detail(prefix="Repair_Detail"):
+    add_shape("%s_Clubhouse_Roof_Cap" % prefix, "Clubhouse roof cap", gable_roof_shape(65400, 43500, 6200, 17200, 13000, 2800), (0.50, 0.55, 0.62), 0, "building articulation")
+    add_box("%s_Clubhouse_Terrace" % prefix, "Clubhouse terrace amenity", 64000, 40700, 0, 20000, 3200, 160, (0.76, 0.67, 0.52), 5, "public amenity")
+
+def add_landscape_template(prefix="Repair"):
+    add_polygon_prism("%s_Water_Artificial_Lake" % prefix, "Water artificial lake", organic_lake_points(47200, 48500, 16800, 10500), 0, 100, (0.22, 0.70, 0.92), 46, "landscape open space")
+    add_box("%s_Lake_Bridge" % prefix, "Lake bridge path", 41600, 48400, 80, 12500, 1700, 130, (0.48, 0.55, 0.60), 4, "traffic network")
+    add_polygon_prism("%s_Central_Green_Lawn" % prefix, "Central green lawn landscape", [
+        (24500, 43700), (35500, 37000), (56000, 39200),
+        (62000, 51600), (46200, 61200), (27000, 57000),
+    ], 0, 80, (0.50, 0.74, 0.45), 24, "landscape open space")
+    add_box("%s_Children_Playground" % prefix, "Children playground", 73500, 27000, 0, 11000, 8800, 120, (0.94, 0.66, 0.30), 6, "landscape open space")
+    add_compound("%s_Children_Play_Equipment" % prefix, "Children playground equipment", [
+        (75500, 29200, 120, 1800, 900, 900),
+        (79200, 30000, 120, 2200, 1100, 1200),
+    ], (0.88, 0.47, 0.25), 0, "landscape open space")
+
+def add_program_detail():
+    add_tower_detail(1, 18000, 61500, 66000, "Repair_Detail")
+    add_tower_detail(2, 62000, 61500, 72000, "Repair_Detail")
+    for index, x in enumerate((12000, 34000, 56000, 78000), start=1):
+        add_villa_detail(index, x, 33000, "Repair_Detail")
+    add_clubhouse_detail("Repair_Detail")
+    add_landscape_template("Repair_Detail")
 
 def add_plot_controls():
     if needs("plot_control"):
@@ -272,32 +358,24 @@ def add_road_fire_and_parking():
 def add_residential_and_amenity():
     if needs("building_massing"):
         for index, x in enumerate((12000, 34000, 56000, 78000), start=1):
-            add_box("Repair_Villa_%d_Body" % index, "Villa %d residential body" % index, x, 33000, 0, 8000, 8200, 4200, (0.76, 0.72, 0.64), 0)
-        add_box("Repair_HighRise_Tower_1_Body", "HighRise residential tower 1", 18000, 61500, 0, 13000, 15000, 66000, (0.70, 0.76, 0.83), 10)
-        add_box("Repair_HighRise_Tower_2_Body", "HighRise residential tower 2", 62000, 61500, 0, 13000, 15000, 72000, (0.70, 0.76, 0.83), 10)
+            add_villa_template(index, x, 33000)
+        add_tower_template(1, 18000, 61500, 66000)
+        add_tower_template(2, 62000, 61500, 72000)
     if needs("public_amenity"):
-        add_box("Repair_Clubhouse_Amenity_Body", "Clubhouse amenity body", 66500, 44500, 0, 15000, 11000, 6200, (0.84, 0.61, 0.34), 0)
-        add_box("Repair_Clubhouse_Terrace", "Clubhouse terrace", 64000, 40700, 0, 20000, 3200, 160, (0.76, 0.67, 0.52), 5)
+        add_clubhouse_template()
 
 def add_landscape():
     if not needs("landscape_open_space"):
         return
-    add_polygon_prism("Repair_Water_Artificial_Lake", "Water artificial lake", [
-        (30400, 48200), (34500, 40700), (45600, 37500), (59000, 41000),
-        (64000, 50000), (55200, 58700), (42000, 61000), (31800, 55500),
-    ], 0, 100, (0.22, 0.70, 0.92), 46)
-    add_box("Repair_Lake_Bridge", "Lake bridge path", 41600, 48400, 80, 12500, 1700, 130, (0.48, 0.55, 0.60), 4)
-    add_polygon_prism("Repair_Central_Green_Lawn", "Central green lawn", [
-        (24500, 43700), (35500, 37000), (56000, 39200),
-        (62000, 51600), (46200, 61200), (27000, 57000),
-    ], 0, 80, (0.50, 0.74, 0.45), 24)
-    add_box("Repair_Children_Playground", "Children playground", 73500, 27000, 0, 11000, 8800, 120, (0.94, 0.66, 0.30), 6)
+    add_landscape_template()
 
 add_plot_controls()
 add_enclosure_and_entrance()
 add_road_fire_and_parking()
 add_residential_and_amenity()
 add_landscape()
+if needs("program_detail"):
+    add_program_detail()
 
 doc.recompute()
 result = [obj for obj in doc.Objects if hasattr(obj, "Shape")]

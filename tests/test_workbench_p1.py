@@ -87,6 +87,8 @@ def test_p1_workbench_exposes_core_surfaces():
         "freeCadSiteLayoutAudit",
         "renderFreeCadSiteLayoutDelta",
         "freeCadDiagnostics",
+        "semanticRole",
+        "freeCadObjectSemanticRoleText",
         "freeCadSiteLayoutStatusText",
         "freeCadSiteLayoutCoverageText",
         "site_layout",

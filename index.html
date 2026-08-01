@@ -1346,6 +1346,7 @@ const I18N = {
     siteLayoutRepairStatus: "Repair status",
     siteLayoutMissing: "Missing",
     siteLayoutComponentCounts: "Component counts",
+    semanticRole: "Semantic role",
     notAvailable: "not available",
     parameters: "Parameters",
     selectedParameter: "Selected parameter",
@@ -1798,6 +1799,7 @@ const I18N = {
     siteLayoutRepairStatus: "修复状态",
     siteLayoutMissing: "缺失项",
     siteLayoutComponentCounts: "部件计数",
+    semanticRole: "语义角色",
     notAvailable: "不可用",
     parameters: "参数",
     selectedParameter: "已选参数",
@@ -6067,6 +6069,13 @@ function freeCadObjectGeometryText(obj) {
   return parts.join(" · ");
 }
 
+function freeCadObjectSemanticRoleText(obj) {
+  const styleRole = obj?.style?.semantic_role;
+  if (styleRole && styleRole !== "generic") return styleRole;
+  const prop = (Array.isArray(obj?.properties) ? obj.properties : []).find((item) => item.name === "SemanticRole");
+  return prop?.value ? String(prop.value) : "";
+}
+
 function freeCadSubelements(obj) {
   const subelements = obj?.shape?.subelements || {};
   const rows = [];
@@ -6917,6 +6926,7 @@ function renderFreeCadObjectPropertySection() {
       <div class="kv-list">
         <div class="kv"><span>Name</span><strong>${escapeHtml(obj.name || "")}</strong></div>
         ${obj.label && obj.label !== obj.name ? `<div class="kv"><span>Label</span><strong>${escapeHtml(obj.label)}</strong></div>` : ""}
+        ${freeCadObjectSemanticRoleText(obj) ? `<div class="kv"><span>${escapeHtml(t("semanticRole"))}</span><strong>${escapeHtml(freeCadObjectSemanticRoleText(obj))}</strong></div>` : ""}
         ${freeCadObjectGeometryText(obj) ? `<div class="kv"><span>${escapeHtml(t("shapeSummary"))}</span><strong>${escapeHtml(freeCadObjectGeometryText(obj))}</strong></div>` : ""}
         ${shape.failure_class ? `<div class="kv"><span>${escapeHtml(t("geometryChecks"))}</span><strong>${escapeHtml(shape.failure_class)}</strong></div>` : ""}
       </div>

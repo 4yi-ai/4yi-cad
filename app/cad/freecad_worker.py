@@ -3918,10 +3918,11 @@ def site_layout_roles_for_summary(item):
     for role, patterns in SITE_LAYOUT_ROLE_PATTERNS:
         if any(re.search(pattern, text) for pattern in patterns):
             roles.add(role)
-    if "building_articulation" in roles and "residential_building" in roles:
-        label_text = " ".join([safe_text(item.get("name"), 120), safe_text(item.get("label"), 120)]).lower()
-        if re.search(r"\b(podium|lobby|roof|floor\s*band|story\s*band|cap)\b|裙楼|大堂|屋顶|层带|机房", label_text):
-            roles.discard("residential_building")
+    label_text = " ".join([safe_text(item.get("name"), 120), safe_text(item.get("label"), 120)]).lower()
+    if re.search(r"\b(podium|lobby|roof|floor[\s_-]*bands?|story[\s_-]*bands?|cap)\b|裙楼|大堂|屋顶|层带|机房", label_text):
+        roles.add("building_articulation")
+        roles.discard("residential_building")
+        roles.discard("public_amenity")
     return sorted(roles)
 
 
@@ -4080,13 +4081,22 @@ def site_layout_requirements_report(components):
 def site_layout_estimated_metrics(components, plot_bbox):
     plot_area = bbox_xy_area(plot_bbox or {})
     role_area = {}
+    at_grade_articulation_area = 0.0
     for component in list(components or []):
         area = float(component.get("area_xy") or 0.0)
         if area <= 0:
             continue
         for role in list(component.get("roles") or []):
             role_area[role] = role_area.get(role, 0.0) + area
-    building_area = role_area.get("residential_building", 0.0) + role_area.get("public_amenity", 0.0)
+        if "building_articulation" in set(component.get("roles") or []):
+            min_z = bbox_min_z(component.get("bbox"))
+            if min_z is not None and min_z <= 250.0:
+                at_grade_articulation_area += area
+    building_area = (
+        role_area.get("residential_building", 0.0)
+        + role_area.get("public_amenity", 0.0)
+        + at_grade_articulation_area
+    )
     green_area = role_area.get("landscape_open_space", 0.0)
     return {
         "plot_area": plot_area if plot_area else None,
@@ -4159,6 +4169,27 @@ def append_site_layout_building_spacing_issues(issues, components, minimum_spaci
         })
 
 
+def append_site_layout_object_budget_issues(issues, components, geometry, min_count=20, max_count=60):
+    component_count = len(list(components or []))
+    shape_object_count = int((geometry or {}).get("shape_object_count") or component_count)
+    if component_count and component_count < min_count:
+        issues.append({
+            "severity": "warning",
+            "code": "site_layout_object_budget_below_reference",
+            "message": "High-end community master plans should use enough named objects to read as a complete site, not a few coarse blocks.",
+            "component_count": component_count,
+            "minimum_component_count": min_count,
+        })
+    if shape_object_count > max_count:
+        issues.append({
+            "severity": "warning",
+            "code": "site_layout_object_budget_above_reference",
+            "message": "Site layout exceeds the concept-plan object budget; group repeated details before export.",
+            "shape_object_count": shape_object_count,
+            "maximum_shape_object_count": max_count,
+        })
+
+
 def site_layout_audit(summaries, geometry):
     components = site_layout_components(summaries)
     applicable = site_layout_is_applicable(components, geometry)
@@ -4181,6 +4212,7 @@ def site_layout_audit(summaries, geometry):
     plot_bbox = site_layout_plot_bbox(components, geometry)
     append_site_layout_spatial_issues(issues, components, plot_bbox)
     append_site_layout_building_spacing_issues(issues, components)
+    append_site_layout_object_budget_issues(issues, components, geometry)
     issue_severity = "ok"
     if any(item.get("severity") == "error" for item in issues):
         issue_severity = "error"

@@ -123,6 +123,8 @@ async def test_site_prompt_injects_component_planner_message():
     assert "Site-layout component plan" in user_message
     assert "add_perimeter_wall" in user_message
     assert "add_artificial_lake" in user_message
+    assert "20-60 named exportable" in user_message
+    assert "only actual villa/tower bodies" in user_message
     assert "document_summary.site_layout.status == \"pass\"" in user_message
 
 

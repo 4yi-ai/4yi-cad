@@ -52,6 +52,25 @@ def test_site_layout_repair_template_uses_plot_bbox_frame():
     assert "template_box" in script
 
 
+def test_site_layout_template_repair_maps_under_budget_to_program_detail():
+    audit = {"issues": [{"code": "site_layout_object_budget_below_reference"}]}
+    repair_script = site_layout_repair_script(audit)
+
+    assert "'program_detail': True" in repair_script
+    assert "add_program_detail" in repair_script
+    assert "add_tower_detail" in repair_script
+    assert "Floor_Bands" in repair_script
+
+
+def test_worker_defines_site_layout_object_budget_audit():
+    source = WORKER_SOURCE.read_text(encoding="utf-8")
+
+    assert "append_site_layout_object_budget_issues" in source
+    assert "site_layout_object_budget_below_reference" in source
+    assert "site_layout_object_budget_above_reference" in source
+    assert "append_site_layout_object_budget_issues(issues, components, geometry)" in source
+
+
 def test_run_freecad_script_reports_missing_binary(monkeypatch):
     monkeypatch.delenv("FREECADCMD_BINARY", raising=False)
     monkeypatch.setattr("app.cad.freecad_worker.shutil.which", lambda name: None)
@@ -1185,6 +1204,70 @@ result = [plot, road, building_a, building_b, building_c, water, playground, gre
     assert repaired_audit["component_counts"]["fire_access"] >= 1
     assert repaired_audit["component_counts"]["parking_underground"] >= 1
     assert repaired_audit["component_counts"]["planning_metrics"] >= 1
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_site_layout_template_repair_fills_under_budget_detail():
+    source = run_freecad_script(
+        """
+import FreeCAD
+
+doc = FreeCAD.newDocument("UnderBudgetSiteLayout")
+
+def add_box(name, label, x, y, z, length, width, height):
+    obj = doc.addObject("Part::Box", name)
+    obj.Label = label
+    obj.Length = length
+    obj.Width = width
+    obj.Height = height
+    obj.Placement.Base = FreeCAD.Vector(x, y, z)
+    return obj
+
+items = [
+    add_box("Plot_Redline", "Plot redline boundary", 0, 0, -80, 100000, 100000, 80),
+    add_box("Setback_Control", "Setback control line", 8000, 8000, 0, 84000, 200, 80),
+    add_box("North_Axis", "NorthAxis marker", 92000, 74000, 0, 800, 15000, 120),
+    add_box("Boundary_Wall_North", "Boundary wall north", 0, 99600, 0, 100000, 400, 3300),
+    add_box("Boundary_Wall_West", "Boundary wall west", 0, 0, 0, 400, 100000, 3300),
+    add_box("Boundary_Wall_East", "Boundary wall east", 99600, 0, 0, 400, 100000, 3300),
+    add_box("Main_Entrance_Gate", "Entrance gate", 43000, 700, 0, 14000, 2200, 5600),
+    add_box("Main_Road", "Road path circulation", 45500, 500, 0, 9000, 28500, 120),
+    add_box("Fire_Road", "Fire lane ladder access", 10000, 22000, 0, 80000, 6000, 120),
+    add_box("Garage_Ramp", "Underground garage ramp parking", 69000, 5200, 0, 9000, 15500, 320),
+    add_box("Villa_Residential", "Villa residential building", 12000, 33000, 0, 8000, 8200, 4200),
+    add_box("HighRise_Tower", "HighRise residential tower", 62000, 61500, 0, 13000, 15000, 72000),
+    add_box("Clubhouse_Amenity", "Clubhouse amenity", 66500, 44500, 0, 15000, 11000, 6200),
+    add_box("Water_Lake", "Water artificial lake", 30000, 42000, 0, 26000, 18000, 100),
+    add_box("Children_Playground", "Children playground green", 73500, 27000, 0, 11000, 8800, 100),
+    add_box("PlanningMetrics", "PlanningMetrics FAR density green ratio", 2500, 87000, 0, 18000, 9000, 120),
+]
+
+doc.recompute()
+result = items
+""",
+        timeout=90,
+    )
+    assert source["ok"] is True
+    inspected = run_freecad_document_inspect(source["exports"]["fcstd"], timeout=90)
+    audit = inspected["document_summary"]["site_layout"]
+    assert audit["status"] == "needs_review"
+    assert "site_layout_object_budget_below_reference" in {item["code"] for item in audit["issues"]}
+
+    repaired = run_freecad_document_script(
+        site_layout_repair_script(audit),
+        source["exports"]["fcstd"],
+        timeout=90,
+    )
+    assert repaired["ok"] is True
+    repaired_inspected = run_freecad_document_inspect(repaired["exports"]["fcstd"], timeout=90)
+    repaired_audit = repaired_inspected["document_summary"]["site_layout"]
+    assert repaired_audit["status"] == "pass"
+    assert repaired_audit["issues"] == []
+    assert repaired_audit["component_count"] >= 20
+    assert repaired_audit["component_counts"]["landscape_open_space"] >= 4
 
 
 @pytest.mark.skipif(

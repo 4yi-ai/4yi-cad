@@ -69,33 +69,37 @@ The current generated site shown in the UI is still below this baseline:
 
 ## Fix Plan
 
-1. Add a site-layout component planner before script generation.
+1. Add a site-layout component planner before script generation. **Done.**
    The agent should produce a component checklist from the prompt first, then generate
    FreeCAD objects from that checklist. For this prompt, the checklist must include the
    reference program above.
 
-2. Add missing-first repair after FreeCAD inspect.
+2. Add missing-first repair after FreeCAD inspect. **Done.**
    If `document_summary.site_layout.status != "pass"`, feed the concrete audit issues
    back into a repair pass before returning the model. Do not rely on the initial script.
 
-3. Introduce reusable high-end community templates.
+3. Introduce reusable high-end community templates. **Done.**
    Provide small parametric builders for redline/setback, perimeter walls, entry sequence,
    road/fire loop, underground parking, villas, towers, clubhouse, organic lake, play area,
    and metrics panel.
 
-4. Add spatial validation before export.
+4. Add spatial validation before export. **Done.**
    Enforce inside-plot placement, z datum landing, tower spacing around 12000 mm, no
    floating public/traffic/landscape components, and a 20-60 exportable object budget.
 
-5. Improve semantic naming rules.
+5. Improve semantic naming rules. **Done.**
    Names and labels should contain role terms used by the audit, while avoiding false
    positives such as roof caps or private gardens being counted as residential massing.
 
-6. Add UI-side comparison support.
+6. Add UI-side comparison support. **Done.**
    Show reference-vs-generated audit deltas: missing roles, failed spatial checks,
    object count, building density, landscape ratio, and selected object semantic role.
 
-7. Tune visual style after the audit passes.
+7. Tune visual style after the audit passes. **Partially done.**
    Use restrained CAD materials and a professional plan composition: muted site base,
    dark roads, translucent water, green landscape, warm amenity, light residential massing,
    and a default top/axon view that reveals the full site.
+
+The remaining visual work is now product tuning rather than a blocker: improve camera
+defaults and optional presentation materials after generated/imported models already pass
+the structural site audit.
