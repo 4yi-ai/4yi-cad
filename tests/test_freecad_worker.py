@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cad.freecad import MINIMAL_FREECAD_SMOKE_SCRIPT
+from app.cad.freecad import MINIMAL_FREECAD_SMOKE_SCRIPT, _freecad_cpu_seconds
 from app.cad.freecad_worker import (
     FREECAD_RESULT_PREFIX,
     resolve_freecadcmd,
@@ -1109,6 +1109,14 @@ def test_resolve_freecadcmd_prefers_explicit_env(monkeypatch):
     monkeypatch.setenv("FREECADCMD_BINARY", "/custom/FreeCADCmd")
 
     assert resolve_freecadcmd() == "/custom/FreeCADCmd"
+
+
+def test_freecad_cpu_limit_is_disabled_for_local_macos(monkeypatch):
+    monkeypatch.setattr("app.cad.freecad.sys.platform", "darwin")
+    assert _freecad_cpu_seconds(240) is None
+
+    monkeypatch.setattr("app.cad.freecad.sys.platform", "linux")
+    assert _freecad_cpu_seconds(240) == 240
 
 
 @pytest.mark.skipif(

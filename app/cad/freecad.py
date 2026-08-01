@@ -21,6 +21,15 @@ doc.recompute()
 """
 
 
+def _freecad_cpu_seconds(cpu_seconds: int | None) -> int | None:
+    # FreeCAD/OCCT exports can trip macOS RLIMIT_CPU in local development even
+    # while making progress. Keep the wall-clock timeout and preserve CPU limits
+    # for Linux containers.
+    if sys.platform == "darwin":
+        return None
+    return cpu_seconds
+
+
 def run_freecad_sandboxed(
     script: str,
     *,
@@ -31,7 +40,7 @@ def run_freecad_sandboxed(
     return run_sandboxed(
         {"script": script},
         timeout_s=timeout_s,
-        cpu_seconds=cpu_seconds,
+        cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )
@@ -54,7 +63,7 @@ def run_freecad_import_sandboxed(
             "filename": filename,
         },
         timeout_s=timeout_s,
-        cpu_seconds=cpu_seconds,
+        cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )
@@ -75,7 +84,7 @@ def run_freecad_document_edit_sandboxed(
             "fcstd_b64": fcstd_b64,
         },
         timeout_s=timeout_s,
-        cpu_seconds=cpu_seconds,
+        cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )
@@ -94,7 +103,7 @@ def run_freecad_document_inspect_sandboxed(
             "fcstd_b64": fcstd_b64,
         },
         timeout_s=timeout_s,
-        cpu_seconds=cpu_seconds,
+        cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )
@@ -117,7 +126,7 @@ def run_freecad_document_patch_sandboxed(
             "dry_run": dry_run,
         },
         timeout_s=timeout_s,
-        cpu_seconds=cpu_seconds,
+        cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
         worker_argv=FREECAD_WORKER_ARGV,
     )

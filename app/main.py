@@ -65,6 +65,11 @@ _INDEX_HTML = Path(__file__).resolve().parents[1] / "index.html"
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_FREECAD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 FREECAD_IMPORT_FORMATS = ("fcstd", "step", "stp", "iges", "igs", "brep")
+FREECAD_SANDBOX_TIMEOUT_S = 240
+FREECAD_SANDBOX_CPU_SECONDS = 240
+FREECAD_SANDBOX_ADDRESS_SPACE_MB = 4096
+FREECAD_SMOKE_TIMEOUT_S = 120
+FREECAD_SMOKE_CPU_SECONDS = 90
 
 
 def _freecad_upload_max_bytes() -> int:
@@ -559,9 +564,9 @@ async def _inspect_fcstd_b64(fcstd_b64: str | None) -> dict:
     res = await asyncio.to_thread(
         run_freecad_document_inspect_sandboxed,
         fcstd_b64,
-        timeout_s=180,
-        cpu_seconds=120,
-        address_space_mb=4096,
+        timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+        cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+        address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
     )
     return _freecad_inspection_from_sandbox(res, "FreeCAD document inspection failed")
 
@@ -686,9 +691,9 @@ async def default_freecad_execute(script: str) -> ExecResult:
     res = await asyncio.to_thread(
         run_freecad_sandboxed,
         script,
-        timeout_s=180,
-        cpu_seconds=120,
-        address_space_mb=4096,
+        timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+        cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+        address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
     )
     result = _freecad_exec_result_from_sandbox(res, "FreeCAD sandbox execution failed")
     if not result.ok:
@@ -710,9 +715,9 @@ async def default_freecad_execute(script: str) -> ExecResult:
         run_freecad_document_edit_sandboxed,
         repair_script,
         result.exports.get("fcstd"),
-        timeout_s=180,
-        cpu_seconds=120,
-        address_space_mb=4096,
+        timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+        cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+        address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
     )
     repaired = _freecad_exec_result_from_sandbox(repair_res, "FreeCAD site-layout repair failed")
     repaired.diagnostics.update(result.diagnostics)
@@ -968,9 +973,9 @@ def create_app(
         res = await asyncio.to_thread(
             run_freecad_sandboxed,
             MINIMAL_FREECAD_SMOKE_SCRIPT,
-            timeout_s=120,
-            cpu_seconds=90,
-            address_space_mb=4096,
+            timeout_s=FREECAD_SMOKE_TIMEOUT_S,
+            cpu_seconds=FREECAD_SMOKE_CPU_SECONDS,
+            address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
         )
         if not res.success or not isinstance(res.result, dict):
             return {
@@ -1004,9 +1009,9 @@ def create_app(
             req.format,
             req.data_b64,
             filename=req.filename,
-            timeout_s=180,
-            cpu_seconds=120,
-            address_space_mb=4096,
+            timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+            cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+            address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
         )
         result = _freecad_exec_result_from_sandbox(res, "FreeCAD import failed")
         if not result.ok:
@@ -1092,9 +1097,9 @@ def create_app(
             run_freecad_document_edit_sandboxed,
             req.script,
             fcstd_b64,
-            timeout_s=180,
-            cpu_seconds=120,
-            address_space_mb=4096,
+            timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+            cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+            address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
         )
         result = _freecad_exec_result_from_sandbox(res, "FreeCAD document edit failed")
         if not result.ok:
@@ -1195,9 +1200,9 @@ def create_app(
             patches,
             fcstd_b64,
             dry_run=req.dry_run,
-            timeout_s=180,
-            cpu_seconds=120,
-            address_space_mb=4096,
+            timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+            cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+            address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
         )
         result = _freecad_exec_result_from_sandbox(res, "FreeCAD document patch failed")
         raw_result = res.result or {}
