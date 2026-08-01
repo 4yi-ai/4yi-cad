@@ -28,27 +28,30 @@ The reference covers the minimum professional layers expected for this prompt:
 Generated locally with FreeCAD 1.1.3 and imported through the same 4yi-cad
 `run_freecad_import_model("fcstd", ...)` path.
 
-- Viewer objects: 53.
+- Viewer objects: 60.
+- Geometry detail: 870 faces, 1704 edges, 0 invalid objects, 0 OCC check errors.
 - Site audit status after import: `pass`.
 - Coverage score after import: `1.0`.
+- Reference-quality status after import: `pass`.
 - Issues after import: `[]`.
-- Estimated building density: `0.149228`.
-- Estimated landscape ratio: `0.2808687243397721`.
+- Estimated building density: `0.1505048`.
+- Estimated landscape ratio: `0.4113337243397721`.
 
 Key imported component counts:
 
-- `plot_boundary`: 3
+- `plot_boundary`: 4
 - `setback_control`: 1
 - `north_axis`: 1
-- `elevation_benchmark`: 1
+- `elevation_benchmark`: 3
 - `boundary_wall`: 5
-- `entrance_system`: 5
-- `traffic_network`: 8
+- `entrance_system`: 6
+- `traffic_network`: 10
 - `fire_access`: 6
 - `parking_underground`: 3
 - `residential_building`: 6
-- `public_amenity`: 4
-- `landscape_open_space`: 14
+- `building_articulation`: 13
+- `public_amenity`: 3
+- `landscape_open_space`: 11
 - `planning_metrics`: 1
 
 ## Gap Against Current AI Output
@@ -77,17 +80,20 @@ The current generated site shown in the UI is still below this baseline:
 2. Add missing-first repair after FreeCAD inspect. **Done.**
    If `document_summary.site_layout.status != "pass"`, feed the concrete audit issues
    back into a repair pass before returning the model. Missing roles are filled
-   incrementally; spatial/object-budget quality failures trigger a canonical rebuild
-   instead of asking the model to keep appending detail.
+   incrementally; spatial/object-budget/reference-quality failures trigger a canonical
+   rebuild instead of asking the model to keep appending detail.
 
 3. Introduce reusable high-end community templates. **Done.**
    Provide small parametric builders for redline/setback, perimeter walls, entry sequence,
    road/fire loop, underground parking, villas, towers, clubhouse, organic lake, play area,
-   and metrics panel.
+   metrics panel, tower facade fins, villa courtyard walls, clubhouse colonnade, lake
+   promenade, entrance paving, and tree groves.
 
-4. Add spatial validation before export. **Done.**
+4. Add spatial and FreeCAD-reference validation before export. **Done.**
    Enforce inside-plot placement, z datum landing, tower spacing around 12000 mm, no
-   floating public/traffic/landscape components, and a 20-60 exportable object budget.
+   floating public/traffic/landscape components, a 20-60 exportable object budget,
+   clean OCC checks, and reference detail thresholds of roughly 620+ faces and 1200+
+   edges for high-end residential master plans.
 
 5. Improve semantic naming rules. **Done.**
    Names and labels should contain role terms used by the audit, while avoiding false
@@ -103,6 +109,9 @@ The current generated site shown in the UI is still below this baseline:
    a default top/axon view that reveals the full site, and reusable viewer
    presentation presets for plan, axon, street-edge, and section review.
 
-The remaining visual work is optional product material rather than a blocker: curated
-screenshots can be added after generated/imported models already pass the structural site
-audit and carry viewer presentation hints/presets.
+8. Compare the 4yi-cad repair/import result against the local FreeCAD reference. **Done.**
+   `tests/test_freecad_worker.py::test_local_freecadcmd_site_layout_repair_matches_freecad_reference_quality`
+   generates the reference in FreeCAD, repairs a coarse 4yi-cad model to the canonical
+   template, imports the repaired FCStd back through 4yi-cad, and requires matching
+   status, clean geometry, object budget, face/edge complexity, density, landscape ratio,
+   and component-role depth.

@@ -66,7 +66,8 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "convert to\n  millimetres" in SYSTEM_PROMPT
     assert "rather than collapsing everything into one block" in SYSTEM_PROMPT
     assert "Private beta complexity budget" in SYSTEM_PROMPT
-    assert "20-40 major exportable objects" in SYSTEM_PROMPT
+    assert "20-60 exportable objects" in SYSTEM_PROMPT
+    assert "45-60 named components" in SYSTEM_PROMPT
     assert "Massing-level does not mean blank boxes" in SYSTEM_PROMPT
     assert "horizontal floor/story bands grouped every 2-4" in SYSTEM_PROMPT
     assert "Avoid individual windows" in SYSTEM_PROMPT
@@ -75,6 +76,7 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "fire lane" in SYSTEM_PROMPT
     assert "parking or basement" in SYSTEM_PROMPT
     assert "12000 mm" in SYSTEM_PROMPT
+    assert "620+ faces" in SYSTEM_PROMPT
     assert "ViewObject.ShapeColor" in SYSTEM_PROMPT
     assert "translucent blue" in SYSTEM_PROMPT
     assert "multi-object site/building layouts" in freecad_description
@@ -124,6 +126,8 @@ async def test_site_prompt_injects_component_planner_message():
     assert "add_perimeter_wall" in user_message
     assert "add_artificial_lake" in user_message
     assert "20-60 named exportable" in user_message
+    assert "45-60 exportable components" in user_message
+    assert "620+ faces and 1200+" in user_message
     assert "only actual villa/tower bodies" in user_message
     assert "document_summary.site_layout.status == \"pass\"" in user_message
 

@@ -34,6 +34,10 @@ SITE_LAYOUT_PLANNER_MESSAGE = """Site-layout component plan for this FreeCAD req
   objects. Use grouped detail objects such as tower floor bands, roof caps, villa
   roofs, private gardens, lake bridge, and playground equipment instead of a few
   blank boxes or hundreds of repeated façade pieces.
+- Match the local FreeCAD high-end community reference quality: clean geometry with
+  no OCC check errors, 45-60 exportable components, roughly 620+ faces and 1200+
+  edges, and layered detail for tower facades, villa courtyards, clubhouse frontage,
+  lake promenade, entrance paving, trees, road/fire access, and underground parking.
 - Avoid false-positive naming: roof caps, podiums, lobbies, and floor bands should
   include articulation terms, but only actual villa/tower bodies should be labeled
   as residential building masses.

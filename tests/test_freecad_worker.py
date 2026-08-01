@@ -29,6 +29,51 @@ SITE_LAYOUT_REFERENCE_SCRIPT = (
 SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = SITE_LAYOUT_REFERENCE_SCRIPT.read_text(encoding="utf-8")
 
 
+def _site_layout_quality_snapshot(summary: dict) -> dict:
+    audit = summary["site_layout"]
+    geometry = summary["geometry"]
+    metrics = audit["estimated_metrics"]
+    return {
+        "status": audit["status"],
+        "quality_status": audit["reference_quality"]["status"],
+        "quality_score": audit["reference_quality"]["score"],
+        "shape_object_count": geometry["shape_object_count"],
+        "face_count": geometry["face_count"],
+        "edge_count": geometry["edge_count"],
+        "check_error_count": geometry["check_error_count"],
+        "component_counts": audit["component_counts"],
+        "building_density": metrics["estimated_building_density"],
+        "landscape_ratio": metrics["estimated_landscape_ratio"],
+        "plot_size": geometry["bbox"]["size"],
+    }
+
+
+def _assert_site_layout_matches_reference_quality(generated: dict, reference: dict):
+    assert generated["status"] == "pass"
+    assert generated["quality_status"] == "pass"
+    assert generated["quality_score"] == 1
+    assert generated["check_error_count"] == 0
+    assert generated["shape_object_count"] <= 60
+    assert generated["face_count"] >= reference["face_count"] * 0.95
+    assert generated["edge_count"] >= reference["edge_count"] * 0.95
+    assert abs(generated["building_density"] - reference["building_density"]) <= 0.01
+    assert abs(generated["landscape_ratio"] - reference["landscape_ratio"]) <= 0.01
+    assert generated["plot_size"][:2] == [100000.0, 100000.0]
+    for role in (
+        "boundary_wall",
+        "entrance_system",
+        "traffic_network",
+        "fire_access",
+        "parking_underground",
+        "residential_building",
+        "building_articulation",
+        "landscape_open_space",
+        "public_amenity",
+        "planning_metrics",
+    ):
+        assert generated["component_counts"].get(role, 0) >= reference["component_counts"].get(role, 0) - 1
+
+
 def test_site_layout_repair_template_uses_plot_bbox_frame():
     audit = {
         "plot_bbox": {
@@ -218,6 +263,9 @@ def test_worker_defines_site_layout_missing_first_audit():
         "site_layout_audit",
         "site_layout_requirements_report",
         "site_layout_estimated_metrics",
+        "site_layout_reference_quality_report",
+        "freecad.site_layout_reference_quality.v1",
+        "site_layout_reference_quality_below_reference",
         "plot_control",
         "planning_controls",
         "fire_access",
@@ -1158,12 +1206,21 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
 
     inspected = run_freecad_document_inspect(result["exports"]["fcstd"], timeout=90)
     assert inspected["ok"] is True
+    geometry = inspected["document_summary"]["geometry"]
+    assert 55 <= geometry["shape_object_count"] <= 60
+    assert geometry["face_count"] >= 620
+    assert geometry["edge_count"] >= 1200
+    assert geometry["invalid_object_count"] == 0
+    assert geometry["check_error_count"] == 0
     audit = inspected["document_summary"]["site_layout"]
     assert audit["schema"] == "freecad.site_layout_audit.v1"
     assert audit["applicable"] is True
     assert audit["status"] == "pass"
     assert audit["coverage_score"] == 1
     assert audit["issues"] == []
+    assert audit["reference_quality"]["schema"] == "freecad.site_layout_reference_quality.v1"
+    assert audit["reference_quality"]["status"] == "pass"
+    assert audit["reference_quality"]["score"] == 1
     assert all(item["status"] == "pass" for item in audit["requirements"])
     counts = audit["component_counts"]
     assert counts["plot_boundary"] >= 1
@@ -1194,6 +1251,81 @@ def test_local_freecadcmd_site_layout_smoke_exports_named_scene_objects():
     imported_inspected = run_freecad_document_inspect(imported["exports"]["fcstd"], timeout=90)
     assert imported_inspected["document_summary"]["site_layout"]["status"] == "pass"
     assert imported_inspected["document_summary"]["site_layout"]["issues"] == []
+    assert imported_inspected["document_summary"]["site_layout"]["reference_quality"]["status"] == "pass"
+    assert imported_inspected["document_summary"]["geometry"]["face_count"] >= 620
+    assert imported_inspected["document_summary"]["geometry"]["edge_count"] >= 1200
+    assert imported_inspected["document_summary"]["geometry"]["check_error_count"] == 0
+
+
+@pytest.mark.skipif(
+    resolve_freecadcmd() is None,
+    reason="FreeCADCmd is not installed locally",
+)
+def test_local_freecadcmd_site_layout_repair_matches_freecad_reference_quality():
+    reference = run_freecad_script(SITE_LAYOUT_FREECAD_SMOKE_SCRIPT, timeout=120)
+    assert reference["ok"] is True
+    reference_inspected = run_freecad_document_inspect(reference["exports"]["fcstd"], timeout=120)
+    reference_snapshot = _site_layout_quality_snapshot(reference_inspected["document_summary"])
+    assert reference_snapshot["status"] == "pass"
+    assert reference_snapshot["quality_status"] == "pass"
+
+    coarse = run_freecad_script(
+        """
+import FreeCAD
+
+doc = FreeCAD.newDocument("CoarseHighEndCommunity")
+
+def add_box(name, label, x, y, z, length, width, height):
+    obj = doc.addObject("Part::Box", name)
+    obj.Label = label
+    obj.Length = length
+    obj.Width = width
+    obj.Height = height
+    obj.Placement.Base = FreeCAD.Vector(x, y, z)
+    return obj
+
+items = [
+    add_box("Plot_Redline", "Plot redline boundary", 0, 0, -80, 100000, 100000, 80),
+    add_box("Main_Road", "Road path circulation", 45500, 500, 0, 9000, 28500, 120),
+    add_box("Villa_Block", "Villa residential building", 15000, 30000, 0, 9000, 9000, 4200),
+    add_box("Tower_Block", "HighRise residential tower", 60000, 60000, 0, 13000, 15000, 72000),
+    add_box("Clubhouse", "Clubhouse amenity", 65000, 44000, 0, 15000, 11000, 6200),
+    add_box("Lake", "Water artificial lake", 30000, 42000, 0, 26000, 18000, 100),
+    add_box("Playground", "Children playground green", 73500, 27000, 0, 11000, 8800, 100),
+]
+
+doc.recompute()
+result = items
+""",
+        timeout=120,
+    )
+    assert coarse["ok"] is True
+    coarse_inspected = run_freecad_document_inspect(coarse["exports"]["fcstd"], timeout=120)
+    coarse_audit = coarse_inspected["document_summary"]["site_layout"]
+    coarse_issue_codes = {issue["code"] for issue in coarse_audit["issues"]}
+    assert coarse_audit["status"] == "fail"
+    assert "site_layout_reference_quality_below_reference" in coarse_issue_codes
+
+    repaired = run_freecad_document_script(
+        site_layout_repair_script(coarse_audit),
+        coarse["exports"]["fcstd"],
+        timeout=120,
+    )
+    assert repaired["ok"] is True
+    repaired_inspected = run_freecad_document_inspect(repaired["exports"]["fcstd"], timeout=120)
+    repaired_snapshot = _site_layout_quality_snapshot(repaired_inspected["document_summary"])
+    _assert_site_layout_matches_reference_quality(repaired_snapshot, reference_snapshot)
+
+    imported = run_freecad_import_model(
+        "fcstd",
+        repaired["exports"]["fcstd"],
+        filename="repaired_high_end_community_100m.FCStd",
+        timeout=120,
+    )
+    assert imported["ok"] is True
+    imported_inspected = run_freecad_document_inspect(imported["exports"]["fcstd"], timeout=120)
+    imported_snapshot = _site_layout_quality_snapshot(imported_inspected["document_summary"])
+    _assert_site_layout_matches_reference_quality(imported_snapshot, reference_snapshot)
 
 
 @pytest.mark.skipif(

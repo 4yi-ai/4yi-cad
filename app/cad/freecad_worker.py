@@ -577,9 +577,9 @@ def style_from_hex(color, *, edge_color=None, point_color=None, opacity=0.84, ro
 
 
 SEMANTIC_VIEWER_STYLES = (
-    ("water", (r"water", r"lake", r"pond", r"pool", r"river", r"canal", r"湖", r"水", r"池"), "#38bdf8", "#0369a1", "#0ea5e9", 0.54),
-    ("green", (r"green", r"park", r"garden", r"lawn", r"landscape", r"grass", r"plant", r"绿", r"园", r"景观"), "#86c47a", "#3f7f4f", "#16a34a", 0.70),
-    ("play", (r"play", r"playground", r"sport", r"court", r"children", r"kid", r"儿童", r"游乐", r"运动"), "#f4b860", "#b45309", "#f59e0b", 0.76),
+    ("water", (r"\b(water|lake|pond|pool|river|canal)\b", r"湖", r"水", r"池"), "#38bdf8", "#0369a1", "#0ea5e9", 0.54),
+    ("green", (r"\b(green|park|garden|lawn|landscape|grass|plant)\b", r"绿", r"园", r"景观"), "#86c47a", "#3f7f4f", "#16a34a", 0.70),
+    ("play", (r"\b(play|playground|sport|fitness|children|kid)\b", r"儿童", r"游乐", r"运动"), "#f4b860", "#b45309", "#f59e0b", 0.76),
     ("road", (r"road", r"path", r"drive", r"street", r"lane", r"walk", r"pavement", r"路", r"道路", r"车道", r"步道"), "#56616f", "#263241", "#475569", 0.82),
     ("amenity", (r"club", r"clubhouse", r"hall", r"amenity", r"retail", r"lobby", r"会所", r"配套", r"商业"), "#d8a35d", "#9a5d1f", "#c97a24", 0.84),
     ("building", (r"building", r"tower", r"villa", r"apartment", r"residential", r"podium", r"house", r"楼", r"住宅", r"别墅", r"高层"), "#b9c2cc", "#334155", "#475569", 0.90),
@@ -3875,7 +3875,7 @@ SITE_LAYOUT_ROLE_PATTERNS = (
     ("fire_access", (r"\b(fire|emergency|turning\s*radius|ladder|appliance)\b", r"消防", r"登高", r"扑救", r"转弯半径")),
     ("parking_underground", (r"\b(parking|garage|basement|underground|ramp|bike)\b", r"停车", r"车库", r"地库", r"地下", r"坡道", r"非机动车")),
     ("residential_building", (r"\b(tower|building|residential|apartment|villa|house)\b", r"住宅", r"楼栋", r"高层", r"塔楼", r"别墅")),
-    ("building_articulation", (r"\b(podium|lobby|roof|floor\s*band|story\s*band|cap)\b", r"裙楼", r"大堂", r"屋顶", r"层带", r"机房")),
+    ("building_articulation", (r"\b(podium|lobby|roof|floor\s*band|story\s*band|cap|facade|fins?|balcony|screen)\b", r"裙楼", r"大堂", r"屋顶", r"层带", r"机房", r"立面", r"格栅", r"阳台")),
     ("public_amenity", (r"\b(club|clubhouse|amenity|hall|retail|service|property)\b", r"会所", r"配套", r"物业", r"服务", r"商业")),
     ("landscape_open_space", (r"\b(water|lake|pond|pool|green|garden|lawn|park|playground|children|sport|fitness)\b", r"湖", r"水", r"绿", r"草坪", r"花园", r"景观", r"儿童", r"游乐", r"健身")),
     ("planning_metrics", (r"\b(metrics|far|floor\s*area\s*ratio|coverage|density|green\s*ratio|gfa|planning)\b", r"指标", r"容积率", r"建筑密度", r"绿地率", r"计容", r"总建面")),
@@ -3982,6 +3982,21 @@ SITE_LAYOUT_REQUIREMENTS = (
     },
 )
 
+SITE_LAYOUT_REFERENCE_QUALITY_THRESHOLDS = {
+    "min_component_count": 45,
+    "max_shape_object_count": 60,
+    "min_face_count": 620,
+    "min_edge_count": 1200,
+    "min_traffic_network": 10,
+    "min_landscape_open_space": 10,
+    "min_building_articulation": 13,
+    "min_public_amenity": 3,
+    "min_building_density": 0.10,
+    "max_building_density": 0.25,
+    "min_landscape_ratio": 0.25,
+    "max_landscape_ratio": 0.50,
+}
+
 
 def site_layout_item_text(item):
     fields = [
@@ -4009,10 +4024,14 @@ def site_layout_roles_for_summary(item):
         if any(re.search(pattern, text) for pattern in patterns):
             roles.add(role)
     label_text = " ".join([safe_text(item.get("name"), 120), safe_text(item.get("label"), 120)]).lower()
-    if re.search(r"\b(podium|lobby|roof|floor[\s_-]*bands?|story[\s_-]*bands?|cap)\b|裙楼|大堂|屋顶|层带|机房", label_text):
+    if re.search(r"\b(podium|lobby|roof|floor[\s_-]*bands?|story[\s_-]*bands?|cap|facade|fins?|balcony|screen)\b|裙楼|大堂|屋顶|层带|机房|立面|格栅|阳台", label_text):
         roles.add("building_articulation")
         roles.discard("residential_building")
         roles.discard("public_amenity")
+    if "planning_metrics" in roles:
+        roles.discard("landscape_open_space")
+    if "plot_boundary" in roles and not re.search(r"\b(wall|fence|enclosure)\b|围墙|围合|边界墙", label_text):
+        roles.discard("boundary_wall")
     return sorted(roles)
 
 
@@ -4280,6 +4299,122 @@ def append_site_layout_object_budget_issues(issues, components, geometry, min_co
         })
 
 
+def site_layout_quality_check(key, passed, observed=None, threshold=None, message=""):
+    return {
+        "key": key,
+        "status": "pass" if passed else "fail",
+        "observed": observed,
+        "threshold": threshold,
+        "message": message,
+    }
+
+
+def site_layout_reference_quality_report(components, geometry, metrics):
+    counts = site_layout_role_counts(components)
+    geometry = geometry or {}
+    metrics = metrics or {}
+    thresholds = SITE_LAYOUT_REFERENCE_QUALITY_THRESHOLDS
+    component_count = len(list(components or []))
+    shape_object_count = int(geometry.get("shape_object_count") or component_count)
+    face_count = int(geometry.get("face_count") or 0)
+    edge_count = int(geometry.get("edge_count") or 0)
+    invalid_object_count = int(geometry.get("invalid_object_count") or 0)
+    check_error_count = int(geometry.get("check_error_count") or 0)
+    building_density = metrics.get("estimated_building_density")
+    landscape_ratio = metrics.get("estimated_landscape_ratio")
+
+    checks = [
+        site_layout_quality_check(
+            "component_depth",
+            component_count >= thresholds["min_component_count"],
+            component_count,
+            f'>= {thresholds["min_component_count"]}',
+            "Master plan needs enough named components to read as a developed site.",
+        ),
+        site_layout_quality_check(
+            "object_budget",
+            shape_object_count <= thresholds["max_shape_object_count"],
+            shape_object_count,
+            f'<= {thresholds["max_shape_object_count"]}',
+            "Repeated details should be grouped instead of exported as excessive objects.",
+        ),
+        site_layout_quality_check(
+            "topology_detail_faces",
+            face_count >= thresholds["min_face_count"],
+            face_count,
+            f'>= {thresholds["min_face_count"]}',
+            "FreeCAD reference quality requires compound geometry beyond plain box massing.",
+        ),
+        site_layout_quality_check(
+            "topology_detail_edges",
+            edge_count >= thresholds["min_edge_count"],
+            edge_count,
+            f'>= {thresholds["min_edge_count"]}',
+            "FreeCAD reference quality requires readable edges for site, facade, and landscape detail.",
+        ),
+        site_layout_quality_check(
+            "clean_geometry",
+            invalid_object_count == 0 and check_error_count == 0,
+            {"invalid_object_count": invalid_object_count, "check_error_count": check_error_count},
+            {"invalid_object_count": 0, "check_error_count": 0},
+            "Reference site templates should pass object validity and OCC shape checks.",
+        ),
+        site_layout_quality_check(
+            "traffic_network_depth",
+            int(counts.get("traffic_network") or 0) >= thresholds["min_traffic_network"],
+            int(counts.get("traffic_network") or 0),
+            f'>= {thresholds["min_traffic_network"]}',
+            "Circulation should include entrance, vehicular loop, pedestrian paths, and landscape links.",
+        ),
+        site_layout_quality_check(
+            "landscape_depth",
+            int(counts.get("landscape_open_space") or 0) >= thresholds["min_landscape_open_space"],
+            int(counts.get("landscape_open_space") or 0),
+            f'>= {thresholds["min_landscape_open_space"]}',
+            "High-end community plans need layered lake, green, garden, and play components.",
+        ),
+        site_layout_quality_check(
+            "building_articulation_depth",
+            int(counts.get("building_articulation") or 0) >= thresholds["min_building_articulation"],
+            int(counts.get("building_articulation") or 0),
+            f'>= {thresholds["min_building_articulation"]}',
+            "Buildings should carry roofs, podiums, floor bands, and facade articulation.",
+        ),
+        site_layout_quality_check(
+            "amenity_depth",
+            int(counts.get("public_amenity") or 0) >= thresholds["min_public_amenity"],
+            int(counts.get("public_amenity") or 0),
+            f'>= {thresholds["min_public_amenity"]}',
+            "The clubhouse should read as a complete amenity sequence, not one box.",
+        ),
+        site_layout_quality_check(
+            "building_density_range",
+            building_density is not None
+            and thresholds["min_building_density"] <= float(building_density) <= thresholds["max_building_density"],
+            stable_number(building_density),
+            f'{thresholds["min_building_density"]} - {thresholds["max_building_density"]}',
+            "Building footprint density should stay within the concept-plan reference band.",
+        ),
+        site_layout_quality_check(
+            "landscape_ratio_range",
+            landscape_ratio is not None
+            and thresholds["min_landscape_ratio"] <= float(landscape_ratio) <= thresholds["max_landscape_ratio"],
+            stable_number(landscape_ratio),
+            f'{thresholds["min_landscape_ratio"]} - {thresholds["max_landscape_ratio"]}',
+            "Landscape area should be substantial but not dominate the entire plot.",
+        ),
+    ]
+    failed = [item for item in checks if item["status"] != "pass"]
+    score = (len(checks) - len(failed)) / len(checks) if checks else 1.0
+    return {
+        "schema": "freecad.site_layout_reference_quality.v1",
+        "status": "pass" if not failed else "needs_review",
+        "score": score,
+        "checks": checks,
+        "failed_checks": failed[:12],
+    }
+
+
 def site_layout_audit(summaries, geometry):
     components = site_layout_components(summaries)
     applicable = site_layout_is_applicable(components, geometry)
@@ -4300,9 +4435,19 @@ def site_layout_audit(summaries, geometry):
         return report
     requirements, issues, passed_count = site_layout_requirements_report(components)
     plot_bbox = site_layout_plot_bbox(components, geometry)
+    metrics = site_layout_estimated_metrics(components, plot_bbox)
     append_site_layout_spatial_issues(issues, components, plot_bbox)
     append_site_layout_building_spacing_issues(issues, components)
     append_site_layout_object_budget_issues(issues, components, geometry)
+    reference_quality = site_layout_reference_quality_report(components, geometry, metrics)
+    if reference_quality.get("status") != "pass":
+        issues.append({
+            "severity": "warning",
+            "code": "site_layout_reference_quality_below_reference",
+            "message": "Generated master plan is complete enough to classify, but below the FreeCAD reference-quality bar.",
+            "score": reference_quality.get("score"),
+            "failed_checks": reference_quality.get("failed_checks") or [],
+        })
     issue_severity = "ok"
     if any(item.get("severity") == "error" for item in issues):
         issue_severity = "error"
@@ -4323,7 +4468,8 @@ def site_layout_audit(summaries, geometry):
         "plot_bbox": plot_bbox,
         "requirements": requirements,
         "issues": issues,
-        "estimated_metrics": site_layout_estimated_metrics(components, plot_bbox),
+        "estimated_metrics": metrics,
+        "reference_quality": reference_quality,
     })
     return report
 

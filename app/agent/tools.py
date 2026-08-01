@@ -117,9 +117,10 @@ Hard rules:
   roads/paths, water/green areas, clubhouse/play areas, and other requested zones
   as simple named massing objects rather than collapsing everything into one block.
 - Private beta complexity budget: site/community/building-layout outputs are
-  massing-level scenes with no more than 20-40 major exportable objects. Aggregate
-  repeated towers, windows, trees, cars, and furniture into simple named masses or
-  zones.
+  massing-level scenes with no more than 20-60 exportable objects. For high-end
+  residential master plans, target 45-60 named components with grouped compound
+  details rather than a few coarse blocks. Aggregate repeated towers, windows,
+  trees, cars, and furniture into simple named masses or zones.
 - Massing-level does not mean blank boxes. For buildings, include a small number
   of low-cost visual articulation elements when they fit the budget: roof caps,
   podiums, lobby volumes, and horizontal floor/story bands grouped every 2-4
@@ -130,7 +131,10 @@ Hard rules:
 - For high-end residential site plans, keep all ordinary components inside the
   plot boundary, land buildings/roads/landscape on the site datum, maintain a
   concept minimum tower spacing around 12000 mm unless the user says otherwise,
-  and avoid floating, intersecting, or randomly scattered components.
+  and avoid floating, intersecting, or randomly scattered components. Match the
+  local FreeCAD reference-quality bar: clean OCC checks, about 620+ faces and
+  1200+ edges, plus readable tower facade, villa courtyard, clubhouse frontage,
+  lake promenade, entrance paving, tree, fire-access, and garage/ramp layers.
 - For mechanical assembly prompts, create an editable concept assembly rather
   than one fused solid. Use named FreeCAD objects for major components such as
   tire, rim, axle, main strut, piston rod, actuator body, clevis/yoke brackets,

@@ -22,6 +22,7 @@ QUALITY_REBUILD_ISSUE_CODES = {
     "floating_site_components",
     "building_spacing_below_minimum",
     "site_layout_object_budget_above_reference",
+    "site_layout_reference_quality_below_reference",
 }
 
 CORE_REPAIR_TARGETS = tuple(
@@ -173,6 +174,9 @@ def frame_dy(value):
 def frame_dz(value):
     return max(1.0, float(value) * FRAME["scale_z"])
 
+def frame_dr(value):
+    return max(1.0, float(value) * min(FRAME["scale_x"], FRAME["scale_y"]))
+
 def template_box(x, y, z, length, width, height):
     return (
         frame_x(x),
@@ -240,12 +244,31 @@ def add_shape(name, label, shape, color, transparency=0, role=""):
     objects.append(obj)
     return obj
 
+def box_shape(x, y, z, length, width, height):
+    x, y, z, length, width, height = template_box(x, y, z, length, width, height)
+    return Part.makeBox(length, width, height, FreeCAD.Vector(x, y, z))
+
+def cylinder_shape(cx, cy, z, radius, height):
+    return Part.makeCylinder(
+        frame_dr(radius),
+        frame_dz(height),
+        FreeCAD.Vector(frame_x(cx), frame_y(cy), frame_z(z)),
+    )
+
+def add_compound_shapes(name, label, shapes, color, transparency=0, role=""):
+    if has_object(name):
+        return None
+    return add_shape(name, label, Part.makeCompound([shape for shape in shapes if shape]), color, transparency, role)
+
+def add_cylinder(name, label, cx, cy, z, radius, height, color, transparency=0, role=""):
+    if has_object(name):
+        return None
+    return add_shape(name, label, cylinder_shape(cx, cy, z, radius, height), color, transparency, role)
+
 def add_compound(name, label, specs, color, transparency=0, role=""):
     if has_object(name):
         return None
-    shapes = [Part.makeBox(length, width, height, FreeCAD.Vector(x, y, z))
-              for x, y, z, length, width, height in [template_box(*spec) for spec in specs]]
-    return add_shape(name, label, Part.makeCompound(shapes), color, transparency, role)
+    return add_compound_shapes(name, label, [box_shape(*spec) for spec in specs], color, transparency, role)
 
 def add_polygon_prism(name, label, points, z, height, color, transparency=0, role=""):
     if has_object(name):
@@ -289,6 +312,19 @@ def add_villa_detail(index, x, y, prefix="Repair_Detail"):
     add_shape("%s_Villa_%d_Roof" % (prefix, index), "Villa %d roof cap" % index, gable_roof_shape(x - 700, y - 700, 4200, 9400, 9600, 2300), (0.48, 0.54, 0.60), 0, "building articulation")
     add_box("%s_Private_Garden_%d" % (prefix, index), "Private garden green landscape %d" % index, x - 1600, y - 1700, 0, 11200, 11600, 70, (0.50, 0.72, 0.45), 35, "landscape open space")
 
+def add_villa_courtyard_detail(prefix="Repair_Detail"):
+    specs = []
+    for index, x in enumerate((12000, 34000, 56000, 78000), start=1):
+        y = 33000
+        specs.extend([
+            (x - 1500, y - 1560, 80, 10900, 180, 520),
+            (x - 1500, y + 9860, 80, 10900, 180, 520),
+            (x - 1500, y - 1220, 80, 180, 10600, 520),
+            (x + 9220, y - 1220, 80, 180, 10600, 520),
+            (x + 1850, y - 5200, 90, 3400, 1500, 90),
+        ])
+    add_compound("%s_Private_Courtyard_Details" % prefix, "Private courtyard low walls and paving", specs, (0.62, 0.68, 0.58), 14, "site detail")
+
 def add_tower_template(index, x, y, height, prefix="Repair"):
     add_box("%s_HighRise_Tower_%d_Body" % (prefix, index), "HighRise residential tower %d body" % index, x, y, 0, 13000, 15000, height, (0.70, 0.76, 0.83), 10, "residential building")
     add_tower_detail(index, x, y, height, prefix)
@@ -300,6 +336,18 @@ def add_tower_detail(index, x, y, height, prefix="Repair_Detail"):
         for z in range(12000, int(height), 12000)
     ], (0.54, 0.60, 0.68), 8, "building articulation")
     add_box("%s_HighRise_Tower_%d_Roof_Cap" % (prefix, index), "HighRise tower %d roof cap" % index, x + 2400, y + 3000, height, 8200, 9000, 2800, (0.60, 0.65, 0.72), 0, "building articulation")
+    add_tower_facade_detail(index, x, y, height, prefix)
+
+def add_tower_facade_detail(index, x, y, height, prefix="Repair_Detail"):
+    facade_height = max(12000, height - 9000)
+    specs = []
+    for offset in (2100, 5200, 8300, 11400):
+        specs.append((x - 260, y + offset, 5400, 180, 360, facade_height))
+        specs.append((x + 13080, y + offset, 5400, 180, 360, facade_height))
+    for offset in (2500, 6200, 9900):
+        specs.append((x + offset, y - 320, 5800, 420, 180, facade_height - 1800))
+        specs.append((x + offset, y + 15140, 5800, 420, 180, facade_height - 1800))
+    add_compound("%s_HighRise_Tower_%d_Facade_Fins" % (prefix, index), "HighRise tower %d facade fins and balcony lines" % index, specs, (0.36, 0.43, 0.51), 18, "building articulation")
 
 def add_clubhouse_template(prefix="Repair"):
     add_box("%s_Clubhouse_Amenity_Body" % prefix, "Clubhouse amenity body", 66500, 44500, 0, 15000, 11000, 6200, (0.84, 0.61, 0.34), 0, "public amenity")
@@ -307,11 +355,19 @@ def add_clubhouse_template(prefix="Repair"):
 
 def add_clubhouse_detail(prefix="Repair_Detail"):
     add_shape("%s_Clubhouse_Roof_Cap" % prefix, "Clubhouse roof cap", gable_roof_shape(65400, 43500, 6200, 17200, 13000, 2800), (0.50, 0.55, 0.62), 0, "building articulation")
-    add_box("%s_Clubhouse_Terrace" % prefix, "Clubhouse terrace amenity", 64000, 40700, 0, 20000, 3200, 160, (0.76, 0.67, 0.52), 5, "public amenity")
+    add_box("%s_Clubhouse_Terrace" % prefix, "Clubhouse ceremony terrace amenity", 64000, 40700, 0, 20000, 3200, 160, (0.76, 0.67, 0.52), 5, "public amenity")
+    add_compound_shapes("%s_Clubhouse_Colonnade" % prefix, "Clubhouse amenity colonnade and pergola", [
+        cylinder_shape(cx, 42100, 160, 360, 3600)
+        for cx in (65400, 68400, 71400, 74400, 77400, 80400)
+    ] + [
+        box_shape(65000 + index * 3600, 41700, 3900, 2400, 420, 260)
+        for index in range(5)
+    ], (0.78, 0.68, 0.53), 0, "public amenity")
 
 def add_landscape_template(prefix="Repair"):
     add_polygon_prism("%s_Water_Artificial_Lake" % prefix, "Water artificial lake", organic_lake_points(47200, 48500, 16800, 10500), 0, 100, (0.22, 0.70, 0.92), 46, "landscape open space")
     add_box("%s_Lake_Bridge" % prefix, "Lake bridge path", 41600, 48400, 80, 12500, 1700, 130, (0.48, 0.55, 0.60), 4, "traffic network")
+    add_lake_and_landscape_detail(prefix)
     add_polygon_prism("%s_Central_Green_Lawn" % prefix, "Central green lawn landscape", [
         (24500, 43700), (35500, 37000), (56000, 39200),
         (62000, 51600), (46200, 61200), (27000, 57000),
@@ -322,23 +378,55 @@ def add_landscape_template(prefix="Repair"):
         (79200, 30000, 120, 2200, 1100, 1200),
     ], (0.88, 0.47, 0.25), 0, "landscape open space")
 
+def add_lake_and_landscape_detail(prefix="Repair_Detail"):
+    add_compound("%s_Lake_Edge_Promenade" % prefix, "Lake edge promenade path and decks", [
+        (29400, 41400, 120, 11200, 1300, 120),
+        (53600, 41400, 120, 9600, 1300, 120),
+        (30200, 58600, 120, 12600, 1300, 120),
+        (52200, 57500, 120, 10300, 1300, 120),
+        (29000, 43200, 120, 1300, 11200, 120),
+        (61800, 44300, 120, 1300, 9500, 120),
+        (33600, 46800, 140, 5200, 2400, 120),
+        (55800, 49800, 140, 4600, 2200, 120),
+    ], (0.58, 0.62, 0.66), 12, "traffic network landscape open space")
+    tree_shapes = []
+    for cx, cy in (
+        (32600, 39800), (36200, 37600), (41200, 36500), (45800, 38200),
+        (54800, 60600), (58600, 57500), (60800, 62200), (63200, 54800),
+        (62800, 36500), (67600, 35800), (70400, 38600), (72000, 42000),
+    ):
+        tree_shapes.append(cylinder_shape(cx, cy, 0, 950, 900))
+    add_compound_shapes("%s_Landscape_Tree_Groves" % prefix, "Landscape tree groves and shaded allees", tree_shapes, (0.30, 0.57, 0.34), 12, "landscape open space")
+
+def add_entrance_detail(prefix="Repair_Detail"):
+    add_compound("%s_Entrance_Paving_Markings" % prefix, "Entrance paving markings pedestrian path and lane control", [
+        (43100, 8800, 150, 2400, 260, 70),
+        (46900, 8800, 150, 2400, 260, 70),
+        (50700, 8800, 150, 2400, 260, 70),
+        (54500, 8800, 150, 2400, 260, 70),
+        (41200, 21600, 150, 17600, 220, 70),
+        (41200, 30400, 150, 17600, 220, 70),
+    ], (0.86, 0.88, 0.84), 0, "entrance system traffic network")
+
 def add_program_detail():
     add_tower_detail(1, 18000, 61500, 66000, "Repair_Detail")
     add_tower_detail(2, 62000, 61500, 72000, "Repair_Detail")
     for index, x in enumerate((12000, 34000, 56000, 78000), start=1):
         add_villa_detail(index, x, 33000, "Repair_Detail")
+    add_villa_courtyard_detail("Repair_Detail")
     add_clubhouse_detail("Repair_Detail")
     add_landscape_template("Repair_Detail")
+    add_entrance_detail("Repair_Detail")
 
 def add_plot_controls():
     if needs("plot_control"):
         add_box("Repair_Plot_Redline_Boundary", "Plot redline boundary", 0, 0, -120, 100000, 100000, 120, (0.78, 0.88, 0.72), 48)
     if needs("planning_controls"):
         add_compound("Repair_Setback_Control_Lines", "Setback control lines", [
-            (8000, 8000, 0, 84000, 240, 80),
-            (8000, 91760, 0, 84000, 240, 80),
-            (8000, 8000, 0, 240, 84000, 80),
-            (91760, 8000, 0, 240, 84000, 80),
+            (8480, 8000, 0, 83040, 240, 80),
+            (8480, 91760, 0, 83040, 240, 80),
+            (8000, 8480, 0, 240, 83040, 80),
+            (91760, 8480, 0, 240, 83040, 80),
         ], (0.50, 0.66, 0.80), 35)
         add_box("Repair_North_Axis", "NorthAxis marker", 92000, 74500, 0, 900, 15500, 120, (0.18, 0.29, 0.47), 0)
         add_box("Repair_Elevation_Datum", "ElevationDatum benchmark", 4600, 90000, 0, 16000, 900, 120, (0.45, 0.49, 0.56), 0)
@@ -370,6 +458,7 @@ def add_enclosure_and_entrance():
         ], (0.84, 0.62, 0.34), 0)
         add_box("Repair_Guard_Booth", "Entrance guard booth", 59000, 4300, 0, 4200, 3100, 3400, (0.84, 0.62, 0.34), 0)
         add_box("Repair_Entrance_Dropoff", "Entrance dropoff court", 41000, 23500, 0, 18000, 7600, 120, (0.35, 0.38, 0.43), 8)
+        add_entrance_detail("Repair_Detail")
 
 def add_road_fire_and_parking():
     if needs("road_network", "fire_access"):
@@ -378,10 +467,10 @@ def add_road_fire_and_parking():
         add_box("Repair_Fire_Road_North", "Fire road north", 10000, 76000, 0, 80000, 6000, 140, (0.30, 0.35, 0.41), 4)
         add_box("Repair_Fire_Road_West", "Fire road west", 10000, 22000, 0, 6000, 60000, 140, (0.30, 0.35, 0.41), 4)
         add_box("Repair_Fire_Road_East", "Fire road east", 84000, 22000, 0, 6000, 60000, 140, (0.30, 0.35, 0.41), 4)
-        add_box("Repair_Pedestrian_Garden_Walk", "Pedestrian path garden walk", 49200, 31000, 0, 1800, 43000, 100, (0.54, 0.58, 0.62), 10)
+        add_box("Repair_Pedestrian_Main_Spine", "Pedestrian path main spine", 49200, 31000, 0, 1800, 43000, 100, (0.54, 0.58, 0.62), 10)
     if needs("fire_access"):
         add_box("Repair_Fire_Ladder_Access", "Fire ladder access frontage", 17500, 52000, 0, 65500, 8200, 90, (0.42, 0.47, 0.54), 20)
-        add_box("Repair_Fire_Turning_Radius", "Fire turning radius marker", 45500, 25200, 0, 9000, 9000, 90, (0.42, 0.47, 0.54), 26)
+        add_cylinder("Repair_Fire_Turning_Radius", "Fire turning radius marker", 50000, 29700, 0, 4500, 90, (0.42, 0.47, 0.54), 26, "fire access")
     if needs("parking_underground"):
         add_box("Repair_Underground_Garage", "Underground garage outline", 17000, 11500, -3200, 66000, 51000, 180, (0.38, 0.44, 0.52), 58)
         add_box("Repair_Basement_Ramp", "Basement ramp", 69200, 5200, 0, 9000, 15500, 320, (0.34, 0.39, 0.46), 8)
@@ -391,6 +480,7 @@ def add_residential_and_amenity():
     if needs("building_massing"):
         for index, x in enumerate((12000, 34000, 56000, 78000), start=1):
             add_villa_template(index, x, 33000)
+        add_villa_courtyard_detail("Repair_Detail")
         add_tower_template(1, 18000, 61500, 66000)
         add_tower_template(2, 62000, 61500, 72000)
     if needs("public_amenity"):
