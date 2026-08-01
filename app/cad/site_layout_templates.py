@@ -17,6 +17,17 @@ REPAIRABLE_REQUIREMENT_CODES = {
     "site_layout_object_budget_below_reference": "program_detail",
 }
 
+QUALITY_REBUILD_ISSUE_CODES = {
+    "outside_plot_boundary",
+    "floating_site_components",
+    "building_spacing_below_minimum",
+    "site_layout_object_budget_above_reference",
+}
+
+CORE_REPAIR_TARGETS = tuple(
+    sorted({target for target in REPAIRABLE_REQUIREMENT_CODES.values() if target != "program_detail"})
+)
+
 
 def _numeric(value, fallback: float | None = None) -> float | None:
     try:
@@ -93,11 +104,20 @@ def site_layout_issue_codes(audit: dict | None) -> list[str]:
 
 def repair_targets_from_audit(audit: dict | None) -> dict[str, bool]:
     targets = {key: False for key in REPAIRABLE_REQUIREMENT_CODES.values()}
+    if site_layout_needs_rebuild(audit):
+        for target in CORE_REPAIR_TARGETS:
+            targets[target] = True
+        targets["program_detail"] = False
+        return targets
     for code in site_layout_issue_codes(audit):
         target = REPAIRABLE_REQUIREMENT_CODES.get(code)
         if target:
             targets[target] = True
     return targets
+
+
+def site_layout_needs_rebuild(audit: dict | None) -> bool:
+    return any(code in QUALITY_REBUILD_ISSUE_CODES for code in site_layout_issue_codes(audit))
 
 
 def site_layout_failure_message(audit: dict | None) -> str:
@@ -123,6 +143,7 @@ def site_layout_repair_script(audit: dict | None) -> str:
     targets = repair_targets_from_audit(audit)
     target_literal = repr(dict(sorted(targets.items())))
     frame_literal = repr(dict(sorted(site_layout_plot_frame(audit).items())))
+    rebuild_literal = repr(site_layout_needs_rebuild(audit))
     return f"""
 import math
 import FreeCAD
@@ -131,6 +152,7 @@ import Part
 doc = FreeCAD.ActiveDocument or FreeCAD.newDocument("SiteLayoutRepair")
 NEEDS = {target_literal}
 FRAME = {frame_literal}
+REBUILD_EXISTING = {rebuild_literal}
 objects = []
 
 def frame_x(value):
@@ -181,6 +203,16 @@ def set_semantic_role(obj, role):
 
 def has_object(name):
     return any(getattr(obj, "Name", "") == name for obj in doc.Objects)
+
+def clear_existing_site_layout():
+    for obj in reversed(list(doc.Objects)):
+        try:
+            doc.removeObject(obj.Name)
+        except Exception:
+            pass
+
+if REBUILD_EXISTING:
+    clear_existing_site_layout()
 
 def add_box(name, label, x, y, z, length, width, height, color, transparency=0, role=""):
     if has_object(name):

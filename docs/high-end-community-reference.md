@@ -76,7 +76,9 @@ The current generated site shown in the UI is still below this baseline:
 
 2. Add missing-first repair after FreeCAD inspect. **Done.**
    If `document_summary.site_layout.status != "pass"`, feed the concrete audit issues
-   back into a repair pass before returning the model. Do not rely on the initial script.
+   back into a repair pass before returning the model. Missing roles are filled
+   incrementally; spatial/object-budget quality failures trigger a canonical rebuild
+   instead of asking the model to keep appending detail.
 
 3. Introduce reusable high-end community templates. **Done.**
    Provide small parametric builders for redline/setback, perimeter walls, entry sequence,
