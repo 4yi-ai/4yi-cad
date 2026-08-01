@@ -401,6 +401,28 @@ def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
     assert 'state.generatedViewerFitMode = "all";' in html
 
 
+def test_generated_viewer_manual_views_and_parameter_tree_drive_focus():
+    html = _html()
+    generated_tree_block = html[
+        html.index('if (state.previewMode === "generated")'):
+        html.index("  const enabled = enabledFeatureIds();")
+    ]
+
+    assert "viewerPresentationManualView" in html
+    assert 'state.viewerPresentationManualView = true;' in html
+    assert "} else if (state.viewerPresentationManualView) {" in html
+    assert 'state.viewerPresentationManualView = false;' in html
+    assert 'state.viewerPresentationManualView ? "manual-view" : "preset-view"' in html
+    assert "function generatedParameterFocusRule(param)" in html
+    assert "function selectedGeneratedParameterFocusInfo(viewerScene = null)" in html
+    assert "function selectedGeneratedParameterObjectNameSet()" in html
+    assert 'state.generatedViewerFitMode = "selection";\n  state.selectedGeneratedParameterName = name;' in html
+    assert "const docNodes = freeCadTreeDisplayNodes();" in generated_tree_block
+    assert "freeCadTreeDisplayNodes().slice(0, 24)" not in generated_tree_block
+    assert "params.slice(0, 18)" not in generated_tree_block
+    assert "selectedParameterNames.has(objectKey)" in html
+
+
 def test_agent_generation_exposes_working_activity_feedback():
     html = _html()
 

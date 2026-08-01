@@ -2298,6 +2298,7 @@ const state = {
   viewMode: "iso",
   generatedViewerFitMode: "all",
   viewerPresentationPresetId: "",
+  viewerPresentationManualView: false,
   selectionMode: "feature",
   measureMode: "distance",
   showBBox: true,
@@ -2534,6 +2535,7 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     viewMode: state.viewMode,
     generatedViewerFitMode: state.generatedViewerFitMode,
     viewerPresentationPresetId: state.viewerPresentationPresetId,
+    viewerPresentationManualView: state.viewerPresentationManualView,
     selectionMode: state.selectionMode,
     measureMode: state.measureMode,
     showBBox: state.showBBox,
@@ -2609,6 +2611,7 @@ function restoreWorkbenchSession() {
     state.viewMode = saved.viewMode || "iso";
     state.generatedViewerFitMode = saved.generatedViewerFitMode === "selection" ? "selection" : "all";
     state.viewerPresentationPresetId = saved.viewerPresentationPresetId || "";
+    state.viewerPresentationManualView = saved.viewerPresentationManualView === true;
     applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene);
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
       ? saved.selectionMode
@@ -2828,9 +2831,12 @@ function generatedCadViewerKey() {
     state.artifacts.stl ? `inline:${state.artifacts.stl.length}` : `ref:${stlRef?.url || ""}`,
     state.viewMode,
     state.generatedViewerFitMode,
+    state.viewerPresentationManualView ? "manual-view" : "preset-view",
     freeCadViewerSelectionMode(),
     state.showBBox ? "bbox" : "no-bbox",
     state.exploded ? "exploded" : "normal",
+    normalizeFreeCadToken(state.selectedGeneratedParameterName),
+    [...selectedGeneratedParameterObjectNameSet()].sort().join(","),
     normalizeFreeCadToken(state.selectedFreeCadObjectName),
     selectedFreeCadSubelementKey(),
     selectedFreeCadAssemblyJointKey(),
@@ -2893,6 +2899,7 @@ function freeCadPresentationPresetById(scene, id) {
 function freeCadApplyPresentationPreset(preset) {
   if (!preset || !["top", "front", "right", "iso"].includes(preset.view)) return false;
   state.viewerPresentationPresetId = String(preset.id || preset.view || "");
+  state.viewerPresentationManualView = false;
   state.viewMode = preset.view;
   if (preset.fit === "all") {
     state.generatedViewerFitMode = "all";
@@ -2901,6 +2908,11 @@ function freeCadApplyPresentationPreset(preset) {
 }
 
 function freeCadApplyViewerScenePresentation(scene, { force = false } = {}) {
+  if (force) {
+    state.viewerPresentationManualView = false;
+  } else if (state.viewerPresentationManualView) {
+    return;
+  }
   const presentation = freeCadViewerScenePresentation(scene);
   const presets = freeCadViewerScenePresets(scene);
   const defaultPresetId = presentation.default_preset || presentation.defaultPreset || presets[0]?.id || "";
@@ -3024,6 +3036,18 @@ function freeCadBboxInfo(bbox, fallbackCenter = null, padding = freeCadPickPaddi
   };
 }
 
+function freeCadUnionBboxInfo(infos) {
+  const boxes = (Array.isArray(infos) ? infos : []).filter((info) => {
+    return Array.isArray(info?.min) && Array.isArray(info?.max) && info.min.length >= 3 && info.max.length >= 3;
+  });
+  if (!boxes.length) return null;
+  const min = [0, 1, 2].map((index) => Math.min(...boxes.map((info) => Number(info.min[index]) || 0)));
+  const max = [0, 1, 2].map((index) => Math.max(...boxes.map((info) => Number(info.max[index]) || 0)));
+  const size = max.map((value, index) => Math.max(0, value - min[index]));
+  const center = min.map((value, index) => value + size[index] / 2);
+  return { min, max, size, center };
+}
+
 function freeCadExpandedPickInfo(info, kind, padding = freeCadPickPadding()) {
   if (!info) return null;
   const minByKind = {
@@ -3052,10 +3076,28 @@ function freeCadObjectFocusInfo(name = state.selectedFreeCadObjectName) {
   return freeCadBboxInfo(obj?.shape?.bbox);
 }
 
+function selectedGeneratedParameterFocusInfo(viewerScene = null) {
+  const param = selectedGeneratedParameter();
+  if (!param) return null;
+  const objects = generatedParameterRelatedFreeCadObjects(param);
+  const objectBoxes = objects
+    .map((obj) => freeCadBboxInfo(obj?.shape?.bbox))
+    .filter(Boolean);
+  const objectFocus = freeCadUnionBboxInfo(objectBoxes);
+  if (objectFocus) return objectFocus;
+  const names = selectedGeneratedParameterObjectNameSet();
+  if (!names.size || !Array.isArray(viewerScene?.objects)) return null;
+  const sceneBoxes = viewerScene.objects
+    .filter((obj) => names.has(normalizeFreeCadToken(obj?.name || obj?.label || "")))
+    .map((obj) => freeCadBboxInfo(obj?.bbox))
+    .filter(Boolean);
+  return freeCadUnionBboxInfo(sceneBoxes);
+}
+
 function selectedFreeCadFocusInfo(viewerScene = null) {
   if (state.generatedViewerFitMode !== "selection") return null;
   const objectName = state.selectedFreeCadObjectName;
-  if (!objectName) return null;
+  if (!objectName) return selectedGeneratedParameterFocusInfo(viewerScene);
   const obj = freeCadObjectByName(objectName);
   const sceneObject = viewerSceneObjectByName(viewerScene, objectName);
   const selectedSubelement = selectedFreeCadSubelementRef();
@@ -3208,10 +3250,12 @@ function freeCadBuildingFloorCount(info) {
 
 function addFreeCadBuildingDetailOverlays(THREE, group) {
   const selectedName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const selectedParameterNames = selectedGeneratedParameterObjectNameSet();
   for (const obj of freeCadSelectableShapeObjects()) {
     const objectStyle = freeCadViewerObjectStyle(obj);
     if (objectStyle.role !== "building") continue;
     const objectName = freeCadObjectKey(obj);
+    const objectKey = normalizeFreeCadToken(objectName);
     const info = freeCadBboxInfo(obj?.shape?.bbox);
     const floorCount = freeCadBuildingFloorCount(info);
     if (!objectName || !info || floorCount < 2) continue;
@@ -3240,17 +3284,19 @@ function addFreeCadBuildingDetailOverlays(THREE, group) {
     if (!positions.length) continue;
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    const selected = selectedName && normalizeFreeCadToken(objectName) === selectedName;
+    const selected = selectedName && objectKey === selectedName;
+    const parameterFocused = selectedParameterNames.has(objectKey);
+    const focused = selected || parameterFocused;
     const line = new THREE.LineSegments(
       geometry,
       new THREE.LineBasicMaterial({
-        color: selected ? 0x0b6fe8 : objectStyle.edgeColor,
+        color: focused ? 0x0b6fe8 : objectStyle.edgeColor,
         transparent: true,
-        opacity: selected ? 0.68 : 0.42,
+        opacity: focused ? 0.68 : 0.42,
         depthWrite: false,
       })
     );
-    line.renderOrder = selected ? 16 : 12;
+    line.renderOrder = focused ? 16 : 12;
     group.add(line);
   }
 }
@@ -3308,6 +3354,8 @@ function addFreeCadBoxTarget(THREE, group, options) {
 function addFreeCadSemanticObjectVisuals(THREE, group) {
   const targets = [];
   const selectedName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const selectedParameterNames = selectedGeneratedParameterObjectNameSet();
+  const hasParameterFocus = selectedParameterNames.size > 0;
   const opacityByRole = {
     water: 0.58,
     green: 0.48,
@@ -3320,19 +3368,24 @@ function addFreeCadSemanticObjectVisuals(THREE, group) {
   };
   for (const obj of freeCadSelectableShapeObjects()) {
     const objectName = freeCadObjectKey(obj);
+    const objectKey = normalizeFreeCadToken(objectName);
     const info = freeCadBboxInfo(obj?.shape?.bbox);
     if (!objectName || !info) continue;
     const objectStyle = freeCadViewerObjectStyle(obj);
-    const selected = selectedName && normalizeFreeCadToken(objectName) === selectedName;
-    if (!selected && objectStyle.role === "generic") continue;
+    const selected = selectedName && objectKey === selectedName;
+    const parameterFocused = selectedParameterNames.has(objectKey);
+    const focused = selected || parameterFocused;
+    if (!focused && objectStyle.role === "generic") continue;
     const minSize = Math.max(0.01, freeCadPickPadding() * 0.08);
     const size = info.size.map((value) => Math.max(Math.abs(Number(value) || 0), minSize));
     const geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
-    const opacity = selected
+    const opacity = focused
       ? Math.max(0.78, Math.min(0.96, objectStyle.opacity))
+      : hasParameterFocus
+      ? Math.min(0.18, opacityByRole[objectStyle.role] ?? 0.18)
       : opacityByRole[objectStyle.role] ?? 0.46;
     const material = new THREE.MeshStandardMaterial({
-      color: selected ? 0x60a5fa : objectStyle.color,
+      color: focused ? 0x60a5fa : objectStyle.color,
       roughness: 0.62,
       metalness: 0.02,
       transparent: true,
@@ -3346,21 +3399,21 @@ function addFreeCadSemanticObjectVisuals(THREE, group) {
       type: "object",
       objectName,
       kind: "Object",
-      priority: selected ? -1 : 8,
+      priority: focused ? -1 : 8,
     };
-    mesh.renderOrder = selected ? 6 : 1;
+    mesh.renderOrder = focused ? 6 : 1;
     group.add(mesh);
     targets.push(mesh);
 
     const edgeGeometry = new THREE.EdgesGeometry(geometry, 24);
     const edgeMaterial = new THREE.LineBasicMaterial({
-      color: selected ? 0x0b6fe8 : objectStyle.edgeColor,
+      color: focused ? 0x0b6fe8 : objectStyle.edgeColor,
       transparent: true,
-      opacity: selected ? 0.96 : Math.max(0.32, objectStyle.edgeOpacity),
+      opacity: focused ? 0.96 : hasParameterFocus ? 0.16 : Math.max(0.32, objectStyle.edgeOpacity),
     });
     const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
     edges.position.copy(mesh.position);
-    edges.renderOrder = selected ? 7 : 2;
+    edges.renderOrder = focused ? 7 : 2;
     group.add(edges);
   }
   return targets;
@@ -3385,9 +3438,11 @@ function addViewerSceneFaceMeshes(THREE, group, scene) {
   if (!viewerSceneHasFaceMeshes(scene)) return [];
   const targets = [];
   const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const selectedParameterNames = selectedGeneratedParameterObjectNameSet();
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
-    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectKey = normalizeFreeCadToken(objectName);
+    const objectSelected = (selectedObjectName && objectKey === selectedObjectName) || selectedParameterNames.has(objectKey);
     const objectStyle = freeCadViewerObjectStyle(obj);
     for (const face of obj.faces || []) {
       const reference = face.reference || face.name || "";
@@ -3459,9 +3514,11 @@ function addViewerSceneEdgeTargets(THREE, group, scene) {
   const targets = [];
   const mode = freeCadViewerSelectionMode();
   const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const selectedParameterNames = selectedGeneratedParameterObjectNameSet();
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
-    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectKey = normalizeFreeCadToken(objectName);
+    const objectSelected = (selectedObjectName && objectKey === selectedObjectName) || selectedParameterNames.has(objectKey);
     const objectStyle = freeCadViewerObjectStyle(obj);
     for (const edge of obj.edges || []) {
       const reference = edge.reference || edge.name || "";
@@ -3510,9 +3567,11 @@ function addViewerSceneVertexTargets(THREE, group, scene) {
   const mode = freeCadViewerSelectionMode();
   const radius = Math.max(0.35, freeCadPickPadding() * 0.55);
   const selectedObjectName = normalizeFreeCadToken(state.selectedFreeCadObjectName);
+  const selectedParameterNames = selectedGeneratedParameterObjectNameSet();
   for (const obj of scene.objects || []) {
     const objectName = obj.name || obj.label || "";
-    const objectSelected = selectedObjectName && normalizeFreeCadToken(objectName) === selectedObjectName;
+    const objectKey = normalizeFreeCadToken(objectName);
+    const objectSelected = (selectedObjectName && objectKey === selectedObjectName) || selectedParameterNames.has(objectKey);
     const objectStyle = freeCadViewerObjectStyle(obj);
     for (const vertex of obj.vertices || []) {
       const reference = vertex.reference || vertex.name || "";
@@ -5468,6 +5527,98 @@ function generatedParameterGroup(param) {
   return param.group || String(param.name || "").split("_", 1)[0] || "";
 }
 
+function generatedParameterFocusRule(param) {
+  const token = [
+    generatedParameterGroup(param),
+    param?.name,
+    param?.label,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const rules = [
+    { test: /wall|enclosure|fence|围墙|围合/, roles: ["boundary_wall"], terms: ["wall", "enclosure", "fence", "围墙"] },
+    { test: /entrance|gate|guard|drop.?off|入口|大门|门岗/, roles: ["entrance_system"], terms: ["entrance", "gate", "guard", "dropoff", "大门", "入口"] },
+    { test: /fire|ladder|turning|消防|登高/, roles: ["fire_access"], terms: ["fire", "ladder", "turning", "消防", "登高"] },
+    { test: /road|path|walk|drive|道路|路|步道/, roles: ["traffic_network"], terms: ["road", "path", "walk", "drive", "circulation", "道路", "步道"] },
+    { test: /bsmt|basement|garage|parking|ramp|地库|车库|停车|坡道/, roles: ["parking_underground"], terms: ["garage", "parking", "basement", "ramp", "地库", "车库"] },
+    { test: /villa|house|别墅/, roles: ["residential_building"], terms: ["villa", "house", "别墅"] },
+    { test: /tower|high.?rise|floor|storey|story|高层|塔楼|层/, roles: ["residential_building", "building_articulation"], terms: ["tower", "highrise", "high-rise", "floor", "storey", "story", "lobby", "roof", "bands", "高层", "塔楼"] },
+    { test: /club|amenity|facility|会所|配套/, roles: ["public_amenity"], semanticRoles: ["amenity"], terms: ["club", "clubhouse", "amenity", "facility", "会所"] },
+    { test: /lake|water|pond|pool|湖|水/, roles: ["landscape_open_space"], semanticRoles: ["water"], terms: ["lake", "water", "pond", "pool", "人工湖"] },
+    { test: /play|children|kids|儿童|游乐/, roles: ["landscape_open_space"], semanticRoles: ["play"], terms: ["playground", "children", "kids", "儿童", "游乐"] },
+    { test: /green|landscape|garden|lawn|park|绿|景观|花园|草坪/, roles: ["landscape_open_space"], semanticRoles: ["green"], terms: ["green", "landscape", "garden", "lawn", "park", "绿地", "花园"] },
+    { test: /plot|site|redline|setback|datum|north|ground|metrics|地块|用地|退界|北|标高|指标|场地/, roles: ["plot_boundary", "setback_control", "north_axis", "elevation_benchmark", "planning_metrics"], semanticRoles: ["plot"], terms: ["plot", "site", "redline", "setback", "northaxis", "datum", "metrics", "ground", "地块"] },
+  ];
+  return rules.find((rule) => rule.test.test(token)) || null;
+}
+
+function freeCadSiteLayoutComponents() {
+  const audit = freeCadSiteLayoutAudit();
+  return Array.isArray(audit?.components) ? audit.components : [];
+}
+
+function freeCadSiteLayoutRolesForObject(obj) {
+  const objectNames = [
+    obj?.name,
+    obj?.label,
+  ].map(normalizeFreeCadToken).filter(Boolean);
+  if (!objectNames.length) return [];
+  const roles = new Set();
+  for (const component of freeCadSiteLayoutComponents()) {
+    const ref = component?.object || {};
+    const refNames = [ref.name, ref.label].map(normalizeFreeCadToken).filter(Boolean);
+    if (!refNames.some((name) => objectNames.includes(name))) continue;
+    for (const role of component.roles || []) roles.add(String(role || ""));
+  }
+  return [...roles].filter(Boolean);
+}
+
+function freeCadObjectFocusText(obj) {
+  return [
+    obj?.name,
+    obj?.label,
+    obj?.type_id,
+    obj?.kind,
+    freeCadInferredSemanticRole(obj),
+    ...freeCadSiteLayoutRolesForObject(obj),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function freeCadObjectMatchesGeneratedParameterRule(obj, rule) {
+  if (!obj || !rule) return false;
+  const text = freeCadObjectFocusText(obj);
+  const roles = new Set(freeCadSiteLayoutRolesForObject(obj));
+  const semanticRole = freeCadInferredSemanticRole(obj);
+  const termMatch = (rule.terms || []).some((term) => text.includes(String(term).toLowerCase()));
+  const semanticMatch = (rule.semanticRoles || []).includes(semanticRole);
+  const roleMatch = (rule.roles || []).some((role) => roles.has(role));
+  if (termMatch || semanticMatch) return true;
+  return roleMatch && !(rule.terms || []).length;
+}
+
+function generatedParameterRelatedFreeCadObjects(param = selectedGeneratedParameter()) {
+  const rule = generatedParameterFocusRule(param);
+  if (!rule) return [];
+  const seen = new Set();
+  const objects = [];
+  for (const obj of freeCadSelectableShapeObjects()) {
+    const name = freeCadObjectKey(obj);
+    const key = normalizeFreeCadToken(name);
+    if (!key || seen.has(key)) continue;
+    if (!freeCadObjectMatchesGeneratedParameterRule(obj, rule)) continue;
+    seen.add(key);
+    objects.push(obj);
+  }
+  return objects;
+}
+
+function selectedGeneratedParameterObjectNameSet() {
+  const names = new Set();
+  for (const obj of generatedParameterRelatedFreeCadObjects()) {
+    const key = normalizeFreeCadToken(freeCadObjectKey(obj));
+    if (key) names.add(key);
+  }
+  return names;
+}
+
 function generatedParameterValueText(param) {
   if (!param) return "";
   const unit = generatedParameterUnit(param);
@@ -6377,7 +6528,7 @@ function renderTree() {
   if (!ds) return;
   if (state.previewMode === "generated") {
     const params = state.generatedParameters || [];
-    const docNodes = freeCadTreeDisplayNodes().slice(0, 24);
+    const docNodes = freeCadTreeDisplayNodes();
     const selectedParam = selectedGeneratedParameter();
     const selectedObj = selectedFreeCadObject();
     $("featureTree").innerHTML = `
@@ -6396,7 +6547,7 @@ function renderTree() {
       <button class="tree-item" style="padding-left:60px" type="button" onclick="showGeneratedParameters()">
         <span style="width:12px"></span>${icon("ruler")}<span class="name">${escapeHtml(t("scriptParameters"))}</span><span>${params.length}</span>
       </button>
-      ${params.slice(0, 18).map((param) => `
+      ${params.map((param) => `
         <button class="tree-item ${param.name === state.selectedGeneratedParameterName ? "active" : ""}" style="padding-left:84px" type="button" onclick="focusGeneratedParameter(${escapeHtml(jsString(param.name))})">
           <span style="width:12px"></span>${icon("ruler")}<span class="name">${escapeHtml(param.name)}</span>
         </button>
@@ -8744,10 +8895,11 @@ function setView(value) {
     applyGeneratedViewerCamera(generatedViewerRuntime, null);
     renderAll();
     return;
-  } else {
-    state.viewerPresentationPresetId = "";
-    state.viewMode = value;
   }
+  if (!["top", "front", "right", "iso"].includes(value)) return;
+  state.viewerPresentationPresetId = "";
+  state.viewerPresentationManualView = true;
+  state.viewMode = value;
   renderAll();
 }
 
@@ -9283,7 +9435,7 @@ function showGeneratedParameters() {
 
 function focusGeneratedParameter(name) {
   state.previewMode = "generated";
-  state.generatedViewerFitMode = "all";
+  state.generatedViewerFitMode = "selection";
   state.selectedGeneratedParameterName = name;
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
