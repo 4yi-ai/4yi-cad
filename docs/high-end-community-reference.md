@@ -95,11 +95,11 @@ The current generated site shown in the UI is still below this baseline:
    Show reference-vs-generated audit deltas: missing roles, failed spatial checks,
    object count, building density, landscape ratio, and selected object semantic role.
 
-7. Tune visual style after the audit passes. **Partially done.**
+7. Tune visual style after the audit passes. **Done.**
    Use restrained CAD materials and a professional plan composition: muted site base,
    dark roads, translucent water, green landscape, warm amenity, light residential massing,
    and a default top/axon view that reveals the full site.
 
-The remaining visual work is now product tuning rather than a blocker: improve camera
-defaults and optional presentation materials after generated/imported models already pass
-the structural site audit.
+The remaining visual work is optional product material rather than a blocker: curated
+screenshots and presentation presets can be added after generated/imported models already
+pass the structural site audit and carry viewer presentation hints.

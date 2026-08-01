@@ -836,6 +836,44 @@ def viewer_object_scene(obj, face_limit=96, total_triangle_limit=12000):
     return ref
 
 
+def viewer_scene_role_counts(scene_objects):
+    counts = {}
+    for item in list(scene_objects or []):
+        style = item.get("style") if isinstance(item, dict) else None
+        role = safe_text(style.get("semantic_role") if isinstance(style, dict) else "", 60)
+        if not role:
+            role = "generic"
+        counts[role] = counts.get(role, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def viewer_scene_is_site_layout(role_counts):
+    if not isinstance(role_counts, dict):
+        return False
+    if int(role_counts.get("plot") or 0) < 1:
+        return False
+    required_roles = ("building", "road", "water", "green", "play", "amenity")
+    return sum(1 for role in required_roles if int(role_counts.get(role) or 0) > 0) >= 4
+
+
+def viewer_scene_presentation(scene_objects, scene_bbox):
+    role_counts = viewer_scene_role_counts(scene_objects)
+    site_layout = viewer_scene_is_site_layout(role_counts)
+    center = bbox_center_from_summary(scene_bbox) if scene_bbox else None
+    return {
+        "schema": "freecad.viewer_scene_presentation.v1",
+        "site_layout": site_layout,
+        "default_view": "top" if site_layout else "iso",
+        "fit": "all",
+        "camera_hint": {
+            "target": center,
+            "distance_multiplier": 1.92 if site_layout else 1.65,
+            "elevation": "plan" if site_layout else "axon",
+        },
+        "role_counts": role_counts,
+    }
+
+
 def viewer_scene_summary(doc, objects):
     scene_objects = []
     triangle_count = 0
@@ -854,6 +892,7 @@ def viewer_scene_summary(doc, objects):
         "objects": scene_objects,
         "object_count": len(scene_objects),
         "triangle_count": triangle_count,
+        "presentation": viewer_scene_presentation(scene_objects, scene_bbox),
     }
 
 

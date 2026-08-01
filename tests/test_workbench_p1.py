@@ -380,6 +380,12 @@ def test_generated_viewer_uses_local_three_semantic_fallback_and_camera_focus():
     assert "opacity: hasSemanticVisuals ? 0.18 : 0.86" in html
     assert "function selectedFreeCadFocusInfo(viewerScene = null)" in html
     assert "function applyGeneratedViewerCamera(runtime, focusInfo = null)" in html
+    assert "function parseFreeCadViewerSceneB64(b64)" in html
+    assert "function freeCadViewerScenePresentation(scene)" in html
+    assert "function freeCadApplyViewerScenePresentation(scene, { force = false } = {})" in html
+    assert "applyFreeCadViewerSceneArtifactPresentation(ev.data_b64, { force: true })" in html
+    assert "presentation.default_view || presentation.defaultView" in html
+    assert "cameraHint.distance_multiplier ?? cameraHint.distanceMultiplier" in html
     assert "function addFreeCadBuildingDetailOverlays(THREE, group)" in html
     assert "function freeCadBuildingFloorCount(info)" in html
     assert "addFreeCadBuildingDetailOverlays(THREE, group);" in html

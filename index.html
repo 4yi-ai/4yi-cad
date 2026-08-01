@@ -2571,6 +2571,7 @@ function restoreWorkbenchSession() {
     state.assemblyConnectorAnchor = saved.assemblyConnectorAnchor && typeof saved.assemblyConnectorAnchor === "object" ? saved.assemblyConnectorAnchor : null;
     state.viewMode = saved.viewMode || "iso";
     state.generatedViewerFitMode = saved.generatedViewerFitMode === "selection" ? "selection" : "all";
+    applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene);
     state.selectionMode = ["object", "face", "edge", "vertex"].includes(saved.selectionMode)
       ? saved.selectionMode
       : "feature";
@@ -2813,14 +2814,7 @@ function base64ToArrayBuffer(b64) {
   return bytes.buffer;
 }
 
-async function generatedStlArrayBuffer() {
-  if (state.artifacts.stl) return base64ToArrayBuffer(state.artifacts.stl);
-  const b64 = await fetchArtifactRefB64(artifactRef("stl"));
-  return b64 ? base64ToArrayBuffer(b64) : null;
-}
-
-async function generatedViewerSceneData() {
-  const b64 = state.artifacts.viewer_scene || await fetchArtifactRefB64(artifactRef("viewer_scene"));
+function parseFreeCadViewerSceneB64(b64) {
   if (!b64) return null;
   try {
     const text = new TextDecoder().decode(base64ToArrayBuffer(b64));
@@ -2830,6 +2824,38 @@ async function generatedViewerSceneData() {
     console.warn("Unable to parse FreeCAD viewer scene", error);
     return null;
   }
+}
+
+function freeCadViewerScenePresentation(scene) {
+  const presentation = scene?.presentation;
+  return presentation && typeof presentation === "object" ? presentation : {};
+}
+
+function freeCadApplyViewerScenePresentation(scene, { force = false } = {}) {
+  const presentation = freeCadViewerScenePresentation(scene);
+  const defaultView = presentation.default_view || presentation.defaultView;
+  if (["top", "front", "right", "iso"].includes(defaultView) && (force || state.viewMode === "iso")) {
+    state.viewMode = defaultView;
+  }
+  if (presentation.fit === "all") {
+    state.generatedViewerFitMode = "all";
+  }
+}
+
+function applyFreeCadViewerSceneArtifactPresentation(b64, options = {}) {
+  const scene = parseFreeCadViewerSceneB64(b64);
+  if (scene) freeCadApplyViewerScenePresentation(scene, options);
+}
+
+async function generatedStlArrayBuffer() {
+  if (state.artifacts.stl) return base64ToArrayBuffer(state.artifacts.stl);
+  const b64 = await fetchArtifactRefB64(artifactRef("stl"));
+  return b64 ? base64ToArrayBuffer(b64) : null;
+}
+
+async function generatedViewerSceneData() {
+  const b64 = state.artifacts.viewer_scene || await fetchArtifactRefB64(artifactRef("viewer_scene"));
+  return parseFreeCadViewerSceneB64(b64);
 }
 
 async function loadThreeModules() {
@@ -2976,7 +3002,11 @@ function applyGeneratedViewerCamera(runtime, focusInfo = null) {
   const size = freeCadTriplet(focus.size) || freeCadTriplet(sceneBbox.size) || [1, 1, 1];
   const scaledMaxDim = Math.max(...size.map((value) => Math.abs(Number(value) || 0) * modelScale), 0.5);
   const fovRad = THREE.MathUtils.degToRad(camera.fov || 38);
-  const distance = Math.max(2.6, (scaledMaxDim / (2 * Math.tan(fovRad / 2))) * 1.65);
+  const presentation = runtime.presentation || {};
+  const cameraHint = presentation.camera_hint || presentation.cameraHint || {};
+  const hintedDistanceMultiplier = Number(cameraHint.distance_multiplier ?? cameraHint.distanceMultiplier);
+  const distanceMultiplier = Number.isFinite(hintedDistanceMultiplier) ? hintedDistanceMultiplier : 1.65;
+  const distance = Math.max(2.6, (scaledMaxDim / (2 * Math.tan(fovRad / 2))) * distanceMultiplier);
   const direction = generatedCameraVector(THREE, state.viewMode, 1).normalize();
   camera.up.copy(generatedCameraUpVector(THREE, state.viewMode));
   controls.target.copy(target);
@@ -4393,6 +4423,9 @@ async function mountGeneratedCadViewer() {
       generatedStlArrayBuffer(),
     ]);
     if (token !== generatedViewerToken || (!viewerScene && !stlBuffer) || !document.body.contains(container)) return;
+    freeCadApplyViewerScenePresentation(viewerScene);
+    const runtimeKey = generatedCadViewerKey();
+    container.dataset.viewerKey = runtimeKey;
     const { THREE, STLLoader, OrbitControls } = modules;
     const frame = container.closest(".generated-scene-frame");
     const scene = new THREE.Scene();
@@ -4628,7 +4661,7 @@ async function mountGeneratedCadViewer() {
     });
     resizeObserver.observe(container);
     generatedViewerRuntime = {
-      key,
+      key: runtimeKey,
       container,
       scene,
       renderer,
@@ -4640,10 +4673,11 @@ async function mountGeneratedCadViewer() {
       sceneBbox,
       sceneCenter: center,
       modelScale,
+      presentation: freeCadViewerScenePresentation(viewerScene),
     };
     applyGeneratedViewerCamera(generatedViewerRuntime, selectedFreeCadFocusInfo(viewerScene));
     const animate = () => {
-      if (!generatedViewerRuntime || generatedViewerRuntime.key !== key) return;
+      if (!generatedViewerRuntime || generatedViewerRuntime.key !== runtimeKey) return;
       generatedViewerRuntime.animationId = requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
@@ -4983,6 +5017,7 @@ async function applyStoredServerVersion(version, versions = null) {
   if (Array.isArray(versions)) state.history = historyItemsFromServerVersions(versions);
   state.artifactRefs = refs;
   state.artifacts = hydrated.artifacts || {};
+  applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene, { force: true });
   state.previewPng = hydrated.previewPng || null;
   state.engine = normalizeEngine(metadata.engine);
   state.freecadVersion = metadata.freecad_version || "";
@@ -5211,6 +5246,7 @@ async function importFreeCadModelFile(file) {
     state.previewPng = imported.preview_png_b64 || null;
     state.artifacts = imported.exports || {};
     state.artifactRefs = imported.artifact_refs || metadata.artifact_refs || {};
+    applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene, { force: true });
     state.exportStatus = hasStepStlArtifacts() ? "ready" : "notReady";
     state.selectedFreeCadObjectName = firstFreeCadSelectionName();
     if (imported.session_id) {
@@ -8699,6 +8735,7 @@ async function commitGeneratedParameter(name, rawValue) {
     state.previewPng = rendered.preview_png_b64 || null;
     state.artifacts = rendered.exports || {};
     state.artifactRefs = {};
+    applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene, { force: true });
     state.exportStatus = "ready";
     addHistory(
       t("history.scriptParameter", { name }),
@@ -8806,6 +8843,7 @@ async function applyFreeCadDocumentPatch(parsedPatch, userInstruction) {
     state.previewPng = patched.preview_png_b64 || null;
     state.artifacts = patched.exports || {};
     state.artifactRefs = patched.artifact_refs || {};
+    applyFreeCadViewerSceneArtifactPresentation(state.artifacts.viewer_scene, { force: true });
     state.exportStatus = hasStepStlArtifacts() ? "ready" : "notReady";
     addHistory(
       t("history.freecadDocumentPatch", { name: parsedPatch.name }),
@@ -9074,6 +9112,7 @@ async function renderDesign() {
     if (rendered.exports) {
       state.artifacts = { ...state.artifacts, ...rendered.exports };
       for (const key of Object.keys(rendered.exports)) delete state.artifactRefs[key];
+      applyFreeCadViewerSceneArtifactPresentation(rendered.exports.viewer_scene, { force: true });
     }
     if (rendered.preview_png_b64) delete state.artifactRefs.preview;
     state.exportStatus = rendered.ok ? "ready" : "unavailable";
@@ -10952,6 +10991,7 @@ function handleAgentEvent(ev, context = {}) {
     if (ev.freecad_version) state.freecadVersion = ev.freecad_version;
     state.artifacts[ev.format] = ev.data_b64;
     delete state.artifactRefs[ev.format];
+    if (ev.format === "viewer_scene") applyFreeCadViewerSceneArtifactPresentation(ev.data_b64, { force: true });
     if (hasStepStlArtifacts()) state.exportStatus = "ready";
     pushGenerationActivity("activityArtifact", { format: ev.format }, "artifact");
     log(t("log.artifactReady", { format: ev.format }));
