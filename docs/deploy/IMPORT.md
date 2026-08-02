@@ -24,8 +24,9 @@ the edited wizard proposal should match.
      fall back to pod-local `/tmp`. Confirm the live install is PVC/object-storage
      backed and that `CAD_DATA_DIR` is writable by the app user before making
      Public Beta/GA durability claims.
-   - for a short-term personal/demo install, keep the fixed `freecad-gui` service
-     from `Dockerfile.freecad-gui` on port **6080** and set the web app to
+   - for a short-term personal/demo install, keep one public `web` service and
+     add an internal fixed `freecad-gui` service from `Dockerfile.freecad-gui`
+     on port **6080**. The web app proxies noVNC at `/freecad` and uses
      `CAD_GUI_SESSION_BACKEND=shared_service`. This is one shared desktop per
      dedicated app install, not per model tab.
 3. **Release** — CodeBuild → ECR (sets `last_image_uri`). Confirm the image builds
@@ -71,10 +72,12 @@ Short-term fixed FreeCAD GUI service for personal/dedicated app smoke:
 # Web app service
 CAD_GUI_SESSION_BACKEND=shared_service
 CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
-CAD_REMOTE_DESKTOP_BASE_URL=https://<freecad-gui-route>/vnc.html?autoconnect=1&resize=remote
+CAD_REMOTE_DESKTOP_BASE_URL=/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify
 CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
+CAD_FREECAD_GUI_PROXY_PREFIX=/freecad
+CAD_FREECAD_GUI_UPSTREAM_URL=http://app-4yi-cad-freecad-gui:6080
 
-# freecad-gui service
+# Internal freecad-gui service
 CAD_SESSION_ID=shared-freecad-gui
 CAD_REMOTE_SESSION_ID=shared-freecad-gui
 CAD_WORKBENCH_SESSION_ID=shared-freecad-gui

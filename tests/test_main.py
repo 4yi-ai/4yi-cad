@@ -8,6 +8,7 @@ trivial and independent of config (it is the k8s readiness/liveness probe).
 import base64
 import json
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.agent.loop import ExecResult, MAX_CHAT_HISTORY_MESSAGE_CHARS
@@ -16,7 +17,11 @@ from app.cad.design_state import default_design_state, render_cadquery_script
 from app.cad.runner import SandboxResult
 from app.freecad_gui_orchestrator import FreeCadGuiSessionLaunch
 from app.gateway import ChatCompletion
-from app.main import create_app, default_freecad_execute
+from app.main import (
+    _freecad_gui_proxy_target_url,
+    create_app,
+    default_freecad_execute,
+)
 from app.session_store import SqliteSessionStore
 
 
@@ -552,9 +557,13 @@ def test_freecad_shared_service_session_uses_fixed_id_and_load_model_command(
     monkeypatch.setenv("CAD_SHARED_FREECAD_SESSION_ID", "shared-freecad-gui")
     monkeypatch.setenv(
         "CAD_REMOTE_DESKTOP_BASE_URL",
-        "https://freecad-gui.example.test/vnc.html?autoconnect=1&resize=remote",
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
     )
     monkeypatch.setenv("CAD_GUI_SESSION_CONTROL_PLANE_URL", "http://app-4yi-cad:8080")
+    monkeypatch.setenv(
+        "CAD_FREECAD_GUI_UPSTREAM_URL",
+        "http://app-4yi-cad-freecad-gui:6080",
+    )
     client = _client_with_store(tmp_path)
     state = default_design_state()
     script = render_cadquery_script(state)
@@ -585,10 +594,13 @@ def test_freecad_shared_service_session_uses_fixed_id_and_load_model_command(
     remote = created.json()
     assert remote["session_id"] == "shared-freecad-gui"
     assert remote["status"] == "ready"
-    assert remote["remote_url"] == "https://freecad-gui.example.test/vnc.html?autoconnect=1&resize=remote"
+    assert remote["remote_url"] == (
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify"
+    )
     assert remote["metadata"]["gui_session_backend"] == "shared_service"
     assert remote["metadata"]["shared_remote_session_id"] == "shared-freecad-gui"
     assert remote["metadata"]["load_model_required"] is True
+    assert remote["metadata"]["freecad_gui_proxy_configured"] is True
 
     queued = client.post(
         "/api/freecad/sessions/shared-freecad-gui/commands",
@@ -609,6 +621,73 @@ def test_freecad_shared_service_session_uses_fixed_id_and_load_model_command(
     readiness = client.get("/api/production/readiness").json()
     assert readiness["remote_gui"]["ready"] is True
     assert readiness["remote_gui"]["shared_service_configured"] is True
+    assert readiness["remote_gui"]["freecad_gui_proxy_required"] is True
+    assert readiness["remote_gui"]["freecad_gui_proxy_configured"] is True
+
+
+def test_freecad_gui_proxy_target_url_builds_http_and_websocket_urls(monkeypatch):
+    monkeypatch.setenv(
+        "CAD_FREECAD_GUI_UPSTREAM_URL",
+        "http://app-4yi-cad-freecad-gui:6080/novnc",
+    )
+
+    assert _freecad_gui_proxy_target_url("vnc.html", b"autoconnect=1") == (
+        "http://app-4yi-cad-freecad-gui:6080/novnc/vnc.html?autoconnect=1"
+    )
+    assert _freecad_gui_proxy_target_url("websockify", b"", websocket=True) == (
+        "ws://app-4yi-cad-freecad-gui:6080/novnc/websockify"
+    )
+
+
+def test_freecad_gui_http_proxy_forwards_to_internal_novnc(monkeypatch):
+    requests = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, url, *, headers):
+            requests.append({"method": method, "url": url, "headers": headers})
+            return httpx.Response(
+                200,
+                content=b"<html>noVNC</html>",
+                headers={
+                    "content-type": "text/html; charset=utf-8",
+                    "connection": "close",
+                },
+            )
+
+    monkeypatch.setenv("CAD_FREECAD_GUI_UPSTREAM_URL", "http://freecad-gui:6080")
+    monkeypatch.setattr("app.main.httpx.AsyncClient", FakeAsyncClient)
+    resp = _client().get("/freecad/vnc.html?autoconnect=1")
+
+    assert resp.status_code == 200
+    assert resp.text == "<html>noVNC</html>"
+    assert requests == [
+        {
+            "method": "GET",
+            "url": "http://freecad-gui:6080/vnc.html?autoconnect=1",
+            "headers": requests[0]["headers"],
+        }
+    ]
+    assert "host" not in {key.lower() for key in requests[0]["headers"]}
+
+
+def test_freecad_gui_http_proxy_requires_upstream(monkeypatch):
+    monkeypatch.delenv("CAD_FREECAD_GUI_UPSTREAM_URL", raising=False)
+    monkeypatch.delenv("FOURYI_CAD_FREECAD_GUI_UPSTREAM_URL", raising=False)
+
+    resp = _client().get("/freecad/vnc.html")
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "FreeCAD GUI proxy upstream is not configured"
 
 
 def test_freecad_bridge_heartbeat_poll_and_command_result(tmp_path):

@@ -15,10 +15,21 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import urllib.parse
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query
+import httpx
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -74,6 +85,18 @@ FREECAD_SANDBOX_CPU_SECONDS = 240
 FREECAD_SANDBOX_ADDRESS_SPACE_MB = 4096
 FREECAD_SMOKE_TIMEOUT_S = 120
 FREECAD_SMOKE_CPU_SECONDS = 90
+FREECAD_GUI_PROXY_DEFAULT_PREFIX = "/freecad"
+FREECAD_GUI_PROXY_HTTP_TIMEOUT_S = 20.0
+HOP_BY_HOP_HEADERS = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+}
 
 
 def _freecad_upload_max_bytes() -> int:
@@ -830,6 +853,85 @@ def _remote_desktop_url_for(remote_session_id: str) -> str | None:
     return f"{base_url.rstrip('/')}/{remote_session_id}"
 
 
+def _freecad_gui_proxy_prefix() -> str:
+    raw = (
+        os.environ.get("CAD_FREECAD_GUI_PROXY_PREFIX")
+        or os.environ.get("FOURYI_CAD_FREECAD_GUI_PROXY_PREFIX")
+        or FREECAD_GUI_PROXY_DEFAULT_PREFIX
+    ).strip()
+    prefix = f"/{raw.strip('/')}"
+    return prefix if prefix != "/" else FREECAD_GUI_PROXY_DEFAULT_PREFIX
+
+
+def _freecad_gui_upstream_url() -> str | None:
+    raw = (
+        os.environ.get("CAD_FREECAD_GUI_UPSTREAM_URL")
+        or os.environ.get("FOURYI_CAD_FREECAD_GUI_UPSTREAM_URL")
+        or ""
+    ).strip().rstrip("/")
+    if not raw:
+        return None
+    parts = urllib.parse.urlsplit(raw)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return None
+    return raw
+
+
+def _remote_desktop_uses_freecad_gui_proxy() -> bool:
+    base_url = _remote_desktop_base_url() or ""
+    prefix = _freecad_gui_proxy_prefix()
+    return (
+        base_url == prefix
+        or base_url.startswith(f"{prefix}/")
+        or base_url.startswith(f"{prefix}?")
+    )
+
+
+def _freecad_gui_proxy_target_url(
+    path: str,
+    query_string: bytes = b"",
+    *,
+    websocket: bool = False,
+) -> str | None:
+    upstream = _freecad_gui_upstream_url()
+    if not upstream:
+        return None
+    parts = urllib.parse.urlsplit(upstream)
+    scheme = parts.scheme
+    if websocket:
+        scheme = "wss" if scheme == "https" else "ws"
+    relative_path = urllib.parse.quote(
+        path.lstrip("/"),
+        safe="/._~!$&'()*+,;=:@%",
+    )
+    upstream_path = parts.path.rstrip("/")
+    target_path = (
+        f"{upstream_path}/{relative_path}"
+        if relative_path
+        else (upstream_path or "/")
+    )
+    request_query = query_string.decode("latin-1") if query_string else ""
+    target_query = "&".join(item for item in [parts.query, request_query] if item)
+    return urllib.parse.urlunsplit((scheme, parts.netloc, target_path, target_query, ""))
+
+
+def _freecad_gui_proxy_request_headers(headers) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() != "host"
+    }
+
+
+def _freecad_gui_proxy_response_headers(headers) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS
+        and key.lower() not in {"content-encoding", "content-length"}
+    }
+
+
 def _remote_session_config_metadata(metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     gui_backend = _freecad_gui_backend()
     shared_service = _shared_freecad_service_enabled()
@@ -845,6 +947,7 @@ def _remote_session_config_metadata(metadata: dict[str, Any] | None = None) -> d
     if shared_service:
         config_metadata["shared_remote_session_id"] = _shared_freecad_session_id()
         config_metadata["load_model_required"] = True
+        config_metadata["freecad_gui_proxy_configured"] = bool(_freecad_gui_upstream_url())
     return config_metadata
 
 
@@ -922,7 +1025,17 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
     gui_runtime_configured = gui_orchestrator_configured or gui_shared_service_configured
     gui_control_plane_configured = _configured_env("CAD_GUI_SESSION_CONTROL_PLANE_URL")
     remote_desktop_configured = bool(_remote_desktop_base_url()) or gui_backend == "local_docker"
-    gui_ready = bool(gui_runtime_configured and gui_control_plane_configured and remote_desktop_configured)
+    gui_proxy_required = (
+        _shared_freecad_service_enabled()
+        and _remote_desktop_uses_freecad_gui_proxy()
+    )
+    gui_proxy_configured = bool(_freecad_gui_upstream_url())
+    gui_ready = bool(
+        gui_runtime_configured
+        and gui_control_plane_configured
+        and remote_desktop_configured
+        and (not gui_proxy_required or gui_proxy_configured)
+    )
 
     upload_max_bytes = _freecad_upload_max_bytes()
     upload_policy_ready = upload_max_bytes >= DEFAULT_FREECAD_UPLOAD_MAX_BYTES
@@ -996,7 +1109,10 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
             "pass" if gui_ready else "fail",
             "Remote GUI runtime, control-plane URL, and desktop routing are configured."
             if gui_ready
-            else "Remote FreeCAD GUI handoff needs a runtime backend, control-plane URL, and desktop routing.",
+            else (
+                "Remote FreeCAD GUI handoff needs a runtime backend, control-plane URL, "
+                "desktop routing, and proxy upstream when using the fixed internal desktop."
+            ),
             required_for=["public_beta", "ga"],
             details={
                 "gui_session_backend": gui_backend,
@@ -1007,6 +1123,8 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
                 else None,
                 "control_plane_url_configured": gui_control_plane_configured,
                 "remote_desktop_configured": remote_desktop_configured,
+                "freecad_gui_proxy_required": gui_proxy_required,
+                "freecad_gui_proxy_configured": gui_proxy_configured,
             },
         ),
         _release_check(
@@ -1090,6 +1208,9 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
             else None,
             "control_plane_url_configured": gui_control_plane_configured,
             "remote_desktop_configured": remote_desktop_configured,
+            "freecad_gui_proxy_required": gui_proxy_required,
+            "freecad_gui_proxy_configured": gui_proxy_configured,
+            "freecad_gui_proxy_prefix": _freecad_gui_proxy_prefix(),
             "ready": gui_ready,
         },
         "license": {
@@ -1304,6 +1425,96 @@ def create_app(
     app.state.freecad_gui_orchestrator = freecad_gui_orchestrator
     if _STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+    @app.api_route("/freecad", methods=["GET", "HEAD", "OPTIONS"])
+    @app.api_route("/freecad/{path:path}", methods=["GET", "HEAD", "OPTIONS"])
+    async def proxy_freecad_gui_http(request: Request, path: str = ""):
+        target_url = _freecad_gui_proxy_target_url(
+            path,
+            request.scope.get("query_string", b""),
+        )
+        if not target_url:
+            raise HTTPException(
+                status_code=503,
+                detail="FreeCAD GUI proxy upstream is not configured",
+            )
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=False,
+                timeout=FREECAD_GUI_PROXY_HTTP_TIMEOUT_S,
+            ) as client:
+                upstream = await client.request(
+                    request.method,
+                    target_url,
+                    headers=_freecad_gui_proxy_request_headers(request.headers),
+                )
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"FreeCAD GUI proxy request failed: {exc}",
+            ) from exc
+        return Response(
+            content=b"" if request.method == "HEAD" else upstream.content,
+            status_code=upstream.status_code,
+            headers=_freecad_gui_proxy_response_headers(upstream.headers),
+        )
+
+    @app.websocket("/freecad")
+    @app.websocket("/freecad/{path:path}")
+    async def proxy_freecad_gui_websocket(websocket: WebSocket, path: str = ""):
+        target_url = _freecad_gui_proxy_target_url(
+            path,
+            websocket.scope.get("query_string", b""),
+            websocket=True,
+        )
+        await websocket.accept()
+        if not target_url:
+            await websocket.close(
+                code=1011,
+                reason="FreeCAD GUI proxy upstream is not configured",
+            )
+            return
+        try:
+            import websockets
+
+            async with websockets.connect(target_url, max_size=None) as upstream:
+                async def browser_to_freecad():
+                    while True:
+                        message = await websocket.receive()
+                        if message["type"] == "websocket.disconnect":
+                            break
+                        if message.get("bytes") is not None:
+                            await upstream.send(message["bytes"])
+                        elif message.get("text") is not None:
+                            await upstream.send(message["text"])
+
+                async def freecad_to_browser():
+                    async for message in upstream:
+                        if isinstance(message, bytes):
+                            await websocket.send_bytes(message)
+                        else:
+                            await websocket.send_text(message)
+
+                tasks = {
+                    asyncio.create_task(browser_to_freecad()),
+                    asyncio.create_task(freecad_to_browser()),
+                }
+                done, pending = await asyncio.wait(
+                    tasks,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    task.result()
+                for task in pending:
+                    with suppress(asyncio.CancelledError):
+                        await task
+        except WebSocketDisconnect:
+            return
+        except Exception:
+            with suppress(RuntimeError):
+                await websocket.close(code=1011)
 
     @app.get("/healthz")
     async def healthz():
