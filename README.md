@@ -111,6 +111,44 @@ curl -s localhost:8080/healthz     # {"status":"ok"}
 curl -s localhost:8080/api/freecad/smoke
 ```
 
+## FreeCAD GUI session spike
+
+Phase 1 remote GUI work uses a separate interactive image so the production
+FastAPI container stays focused on the web/control-plane path:
+
+```bash
+docker build -f Dockerfile.freecad-gui -t 4yi-cad-freecad-gui:phase1-spike .
+docker run --rm -p 6080:6080 \
+  -v "$PWD/.local/freecad-gui-workspace:/workspace" \
+  4yi-cad-freecad-gui:phase1-spike
+# then open:
+# http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=remote
+```
+
+The FastAPI control plane can also start one local GUI container per remote
+session when explicitly enabled:
+
+```bash
+CAD_GUI_SESSION_BACKEND=local_docker \
+CAD_GUI_SESSION_IMAGE=4yi-cad-freecad-gui:phase1-spike \
+CAD_GUI_SESSION_CONTROL_PLANE_URL=http://host.docker.internal:8081 \
+CAD_GUI_SESSION_HEALTH_WAIT_SECONDS=60 \
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8081
+```
+
+See `docs/PHASE1-freecad-gui-spike.md` for loading an existing FCStd, API-driven
+startup, and the manual save smoke path. See
+`docs/PHASE2-freecad-gui-bridge.md` for the bridge heartbeat/poll/result
+contract, and `docs/PHASE3-freecad-bridge-chat.md` for the autostart bridge
+client, bridge context endpoint, command lookup endpoint, and Web Chat routing
+flow. See `docs/PHASE4-freecad-workbench-integration.md` for the in-process
+FreeCAD addon bridge and shared desktop/remote companion panel. See
+`docs/PHASE5-web-native-workbench.md` for the Web-native high-frequency
+workbench layer, operation routing, object visibility/isolation, measurement,
+and bridge selection/revision sync. See `docs/PHASE6-release-readiness.md` for
+the production readiness API, Web release gate, and Private/Public Beta/GA
+promotion checks.
+
 ## Install as a 4yi app
 
 Import via `/admin/marketplace/ai-import` as a **Dedicated app** (`public_git`,
@@ -122,6 +160,11 @@ this repo URL + branch). Proposal must have: one public service, `runtime_port`
 Beta 100 MB upload cap. Size memory to measured peak RSS, schedulable on one
 node, and confirm the platform injects a writable `CAD_DATA_DIR` backed by
 durable storage before claiming Public Beta/GA persistence.
+
+Before promotion, run `/api/production/readiness`. Private Beta requires the
+gateway, storage, upload, FreeCAD smoke, and bridge observability checks. Public
+Beta adds durable storage, remote GUI bridge routing, and license acceptance. GA
+also requires a split hardened FreeCAD worker.
 
 > **Pre-public-release license gate:** FreeCAD ships GPL components and any ported
 > Text23D code must be license-compatible — resolve before making the repo public.

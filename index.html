@@ -840,6 +840,8 @@
   }
   .typed-action-button:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); border-color: #bdd8ff; }
   .typed-action-button.active { background: var(--primary-soft); color: var(--primary); border-color: #bdd8ff; }
+  .typed-action-button.warning { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
+  .typed-action-button.warning:hover:not(:disabled) { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
   .typed-action-button:disabled { opacity: .48; cursor: not-allowed; }
   .typed-action-button svg { width: 14px; height: 14px; stroke-width: 2; }
   .typed-action-toggle {
@@ -882,6 +884,50 @@
   }
   .selected-object-summary strong { display: block; color: var(--primary); font-size: 13px; }
   .selected-object-summary span { display: block; margin-top: 3px; color: var(--muted); }
+  .operation-route-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 10px;
+    margin-top: 10px;
+  }
+  .operation-route-card.remote_freecad { border-color: #fed7aa; background: #fff7ed; }
+  .operation-route-card.web_patch { border-color: #cfe4ff; background: var(--primary-soft); }
+  .operation-route-card.batch_worker { border-color: #d9e2ec; background: #f8fafc; }
+  .operation-route-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .operation-route-head strong { font-size: 13px; color: var(--text); }
+  .operation-route-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    border-radius: 999px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 800;
+    background: var(--panel-2);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .operation-route-badge.web_patch { background: #dbeafe; color: #0b6fe8; }
+  .operation-route-badge.batch_worker { background: #e2e8f0; color: #334155; }
+  .operation-route-badge.remote_freecad { background: #ffedd5; color: #9a3412; }
+  .operation-route-card p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .visibility-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .visibility-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--muted);
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 750;
+  }
+  .visibility-chip.active { border-color: #cfe4ff; background: var(--primary-soft); color: var(--primary); }
+  .visibility-chip.warning { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
   .readonly-property {
     min-height: 34px;
     display: grid;
@@ -951,6 +997,30 @@
   .diagnostic-row.warning { border-color: #ffe1a6; background: #fff8e8; color: var(--warning); }
   .diagnostic-row.error { border-color: #f4b8b8; background: #fff0f0; color: var(--danger); }
   .diagnostic-row.info { border-color: #cfe4ff; background: #f5f9ff; color: var(--primary); }
+  .readiness-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+  .readiness-target {
+    min-height: 54px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+  .readiness-target strong,
+  .readiness-target span {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .readiness-target span { margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  .readiness-target.pass { border-color: #ccebd8; background: #f4fbf6; }
+  .readiness-target.fail { border-color: #f4b8b8; background: #fff0f0; }
+  .readiness-target.pass span { color: var(--success); }
+  .readiness-target.fail span { color: var(--danger); }
+  .readiness-summary { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+  .readiness-checks { max-height: 250px; overflow: auto; padding-right: 2px; }
   .site-layout-requirements {
     display: grid;
     gap: 6px;
@@ -1245,6 +1315,7 @@
       <input class="hidden-file-input" id="freeCadImportInput" type="file" accept=".FCStd,.fcstd,.step,.stp,.iges,.igs,.brep" onchange="importFreeCadModelFile(this.files && this.files[0]); this.value = '';" />
       <button class="top-action-button" id="newSessionButton" type="button" onclick="startNewWorkbenchSession()" title="Start a new workbench session"><span data-icon="redo"></span><span id="newSessionButtonText">New Session</span></button>
       <button class="top-action-button" id="sessionHistoryButton" type="button" onclick="openSessionHistory()" title="Open previous workbench sessions"><span data-icon="undo"></span><span id="sessionHistoryButtonText">Sessions</span></button>
+      <button class="top-action-button" id="remoteFreeCadButton" type="button" onclick="openRemoteFreeCadSession()" title="Open current model in a remote FreeCAD GUI session"><span data-icon="box"></span><span id="remoteFreeCadButtonText">Open FreeCAD</span></button>
       <button class="top-action-button" id="importButton" type="button" onclick="openFreeCadImportPicker()" title="Import FCStd, STEP, IGES, or BREP"><span data-icon="download"></span><span id="importButtonText">Import</span></button>
       <button class="lang-button" id="localeToggle" type="button" onclick="toggleLocale()">中文</button>
     </div>
@@ -1323,6 +1394,8 @@ const I18N = {
     versionCount: "{count} versions",
     lastUpdated: "Updated {time}",
     untitledSession: "Untitled session",
+    remoteFreeCad: "Open FreeCAD",
+    remoteFreeCadTitle: "Open current model in a remote FreeCAD GUI session",
     importModel: "Import",
     importModelTitle: "Import FCStd, STEP, IGES, or BREP",
     langToggle: "中文",
@@ -1503,6 +1576,59 @@ const I18N = {
     techDrawDimensions: "Dimensions",
     objectBadge: "Object: {name}",
     objectProperties: "Object properties",
+    webNativeWorkbench: "Web workbench",
+    productionReadiness: "Release readiness",
+    checkProductionReadiness: "Check readiness",
+    readinessNotChecked: "Not checked",
+    readinessLoading: "Checking readiness",
+    readinessUpdated: "Updated {time}",
+    readinessPrivateBeta: "Private Beta",
+    readinessPublicBeta: "Public Beta",
+    readinessGa: "GA",
+    readinessPass: "pass",
+    readinessWarn: "warn",
+    readinessFail: "fail",
+    readinessBlockers: "Blockers",
+    releaseReady: "ready",
+    releaseBlocked: "blocked",
+    readinessChecks: "Checks",
+    readinessNoBlockers: "No blockers",
+    operationRoute: "Operation route",
+    routeCurrentEdit: "Current edit",
+    routeSimplePatchDetail: "Numeric properties and placement are applied as controlled Web patches.",
+    routeBatchWorkerDetail: "Generation, import, export, and document rebuilds run through the batch worker.",
+    routeRemoteDetail: "Complex workbench edits are routed to the remote FreeCAD session.",
+    routeWebViewDetail: "Selection, measurement, and visibility are local Web view operations.",
+    routeNotAvailableDetail: "No editable route is available for this object yet.",
+    routeWebPatch: "Web patch",
+    routeBatchWorker: "Batch worker",
+    routeRemoteFreeCad: "Remote FreeCAD",
+    routeWebView: "Web view",
+    routeUnavailable: "Unavailable",
+    bridgeSelection: "Bridge selection",
+    bridgeRevision: "Bridge revision",
+    syncBridgeSelection: "Sync selection",
+    pushSelectionToBridge: "Send selection",
+    pullBridgeRevision: "Pull revision",
+    openRemoteFreeCad: "Open FreeCAD",
+    objectVisibility: "Visibility",
+    visibleObjects: "Visible objects",
+    hiddenObjects: "Hidden objects",
+    isolatedObject: "Isolated object",
+    hideObject: "Hide",
+    showObject: "Show",
+    isolateObject: "Isolate",
+    clearIsolation: "Clear isolation",
+    visibilityVisible: "visible",
+    visibilityHidden: "hidden",
+    visibilityIsolated: "isolated",
+    measurements: "Measurements",
+    envelope: "Envelope",
+    center: "Center",
+    surfaceArea: "Surface area",
+    volume: "Volume",
+    sectioningRoute: "Sectioning",
+    sectioningRemoteDetail: "Section planes and complex cut views open in remote FreeCAD.",
     editableProperties: "Editable properties",
     readonlyProperties: "Read-only properties",
     geometryChecks: "Geometry checks",
@@ -1641,6 +1767,9 @@ const I18N = {
       rollbackFailed: "Rollback failed: {message}",
       sessionRestored: "Restored session: {title}.",
       commandNotUnderstood: "I could not map that to an existing CAD parameter or typed edit.",
+      remoteFreeCadContext: "FreeCAD bridge context: {selection}; document {document}; bridge {status}.",
+      remoteFreeCadCommandCompleted: "FreeCAD bridge command completed: {op}. {summary}",
+      remoteFreeCadCommandFailed: "FreeCAD bridge command failed: {op}: {message}",
       generationFailed: "Generation failed: {message}",
       generationOk: "Generated a CAD script and available preview/artifacts.",
       generationBad: "Generation failed. See Logs for details.",
@@ -1723,6 +1852,18 @@ const I18N = {
       commandNotUnderstood: "Command was not routed because it did not match an existing parameter or typed edit.",
       streamEndedWithoutDone: "Generation stream ended before a final done event",
       newSessionStarted: "Started new workbench session",
+      remoteFreeCadReady: "Remote FreeCAD session ready.",
+      remoteFreeCadNoUrl: "Remote FreeCAD session requested; desktop URL is not configured.",
+      remoteFreeCadContext: "FreeCAD bridge context refreshed: {selection}",
+      remoteFreeCadCommandQueued: "Queued FreeCAD bridge command: {op}",
+      remoteFreeCadCommandCompleted: "FreeCAD bridge command {status}: {op}",
+      bridgeSelectionPushed: "Sent Web selection to FreeCAD bridge: {name}",
+      bridgeRevisionPulled: "Pulled FreeCAD bridge revision: {version}",
+      bridgeRevisionPullFailed: "Bridge revision pull failed: {message}",
+      objectVisibilityChanged: "Updated Web object visibility: {name}",
+      productionReadinessUpdated: "Production readiness updated: {summary}",
+      productionReadinessFailed: "Production readiness failed: {message}",
+      remoteFreeCadFailed: "Remote FreeCAD session failed: {message}",
       unknownError: "unknown error",
     },
     status: {
@@ -1743,6 +1884,10 @@ const I18N = {
       loadingVersion: "loading version",
       rollingBack: "rolling back",
       importingModel: "importing model",
+      remoteFreeCadStarting: "starting FreeCAD session",
+      remoteFreeCadCommandRunning: "running FreeCAD bridge command",
+      remoteFreeCadSyncing: "syncing FreeCAD bridge",
+      productionReadinessChecking: "checking production readiness",
       waking: "waking up ({attempt})",
       generationFailed: "generation failed",
       done: "done",
@@ -1776,6 +1921,8 @@ const I18N = {
     versionCount: "{count} 个版本",
     lastUpdated: "更新于 {time}",
     untitledSession: "未命名会话",
+    remoteFreeCad: "打开 FreeCAD",
+    remoteFreeCadTitle: "在远程 FreeCAD GUI 会话中打开当前模型",
     importModel: "导入",
     importModelTitle: "导入 FCStd、STEP、IGES 或 BREP",
     langToggle: "EN",
@@ -1956,6 +2103,59 @@ const I18N = {
     techDrawDimensions: "尺寸",
     objectBadge: "对象：{name}",
     objectProperties: "对象属性",
+    webNativeWorkbench: "Web 工作台",
+    productionReadiness: "发布门禁",
+    checkProductionReadiness: "检查门禁",
+    readinessNotChecked: "未检查",
+    readinessLoading: "检查中",
+    readinessUpdated: "更新于 {time}",
+    readinessPrivateBeta: "Private Beta",
+    readinessPublicBeta: "Public Beta",
+    readinessGa: "GA",
+    readinessPass: "通过",
+    readinessWarn: "警告",
+    readinessFail: "失败",
+    readinessBlockers: "阻断项",
+    releaseReady: "就绪",
+    releaseBlocked: "阻断",
+    readinessChecks: "检查项",
+    readinessNoBlockers: "无阻断项",
+    operationRoute: "操作路径",
+    routeCurrentEdit: "当前编辑",
+    routeSimplePatchDetail: "数值属性和放置修改会作为受控 Web patch 应用。",
+    routeBatchWorkerDetail: "生成、导入、导出和文档重建会进入 batch worker。",
+    routeRemoteDetail: "复杂工作台编辑会路由到远程 FreeCAD 会话。",
+    routeWebViewDetail: "选择、测量和可见性是本地 Web 视图操作。",
+    routeNotAvailableDetail: "这个对象暂时没有可用的编辑路径。",
+    routeWebPatch: "Web patch",
+    routeBatchWorker: "Batch worker",
+    routeRemoteFreeCad: "远程 FreeCAD",
+    routeWebView: "Web 视图",
+    routeUnavailable: "不可用",
+    bridgeSelection: "Bridge 选择",
+    bridgeRevision: "Bridge 版本",
+    syncBridgeSelection: "同步选择",
+    pushSelectionToBridge: "发送选择",
+    pullBridgeRevision: "拉取版本",
+    openRemoteFreeCad: "打开 FreeCAD",
+    objectVisibility: "可见性",
+    visibleObjects: "可见对象",
+    hiddenObjects: "隐藏对象",
+    isolatedObject: "隔离对象",
+    hideObject: "隐藏",
+    showObject: "显示",
+    isolateObject: "隔离",
+    clearIsolation: "取消隔离",
+    visibilityVisible: "可见",
+    visibilityHidden: "已隐藏",
+    visibilityIsolated: "已隔离",
+    measurements: "测量",
+    envelope: "包围盒",
+    center: "中心",
+    surfaceArea: "表面积",
+    volume: "体积",
+    sectioningRoute: "截面",
+    sectioningRemoteDetail: "截面平面和复杂剖切视图会打开远程 FreeCAD。",
     editableProperties: "可编辑属性",
     readonlyProperties: "只读属性",
     geometryChecks: "几何检查",
@@ -2094,6 +2294,9 @@ const I18N = {
       rollbackFailed: "回滚失败：{message}",
       sessionRestored: "已恢复会话：{title}。",
       commandNotUnderstood: "还不能把这句话映射到现有 CAD 参数或类型化编辑。",
+      remoteFreeCadContext: "FreeCAD bridge 上下文：{selection}；文档 {document}；bridge {status}。",
+      remoteFreeCadCommandCompleted: "FreeCAD bridge 命令已完成：{op}。{summary}",
+      remoteFreeCadCommandFailed: "FreeCAD bridge 命令失败：{op}：{message}",
       generationFailed: "生成失败：{message}",
       generationOk: "已生成 CAD 脚本和可用预览 / 产物。",
       generationBad: "生成失败。请查看日志。",
@@ -2176,6 +2379,18 @@ const I18N = {
       commandNotUnderstood: "命令未路由：没有匹配到现有参数或类型化编辑。",
       streamEndedWithoutDone: "生成流结束但没有收到最终 done 事件",
       newSessionStarted: "已新建工作台会话",
+      remoteFreeCadReady: "远程 FreeCAD 会话已就绪。",
+      remoteFreeCadNoUrl: "已请求远程 FreeCAD 会话；远程桌面 URL 尚未配置。",
+      remoteFreeCadContext: "FreeCAD bridge 上下文已刷新：{selection}",
+      remoteFreeCadCommandQueued: "已入队 FreeCAD bridge 命令：{op}",
+      remoteFreeCadCommandCompleted: "FreeCAD bridge 命令 {status}：{op}",
+      bridgeSelectionPushed: "已将 Web 选择发送到 FreeCAD bridge：{name}",
+      bridgeRevisionPulled: "已拉取 FreeCAD bridge 版本：{version}",
+      bridgeRevisionPullFailed: "拉取 bridge 版本失败：{message}",
+      objectVisibilityChanged: "已更新 Web 对象可见性：{name}",
+      productionReadinessUpdated: "生产发布门禁已更新：{summary}",
+      productionReadinessFailed: "生产发布门禁检查失败：{message}",
+      remoteFreeCadFailed: "远程 FreeCAD 会话失败：{message}",
       unknownError: "未知错误",
     },
     status: {
@@ -2196,6 +2411,10 @@ const I18N = {
       loadingVersion: "正在加载版本",
       rollingBack: "正在回滚",
       importingModel: "正在导入模型",
+      remoteFreeCadStarting: "正在启动 FreeCAD 会话",
+      remoteFreeCadCommandRunning: "正在执行 FreeCAD bridge 命令",
+      remoteFreeCadSyncing: "正在同步 FreeCAD bridge",
+      productionReadinessChecking: "正在检查生产发布门禁",
       waking: "正在唤醒 ({attempt})",
       generationFailed: "生成失败",
       done: "完成",
@@ -2284,6 +2503,9 @@ const state = {
   selectedGeneratedParameterName: "",
   selectedFreeCadObjectName: "",
   selectedFreeCadSubelement: null,
+  freeCadHiddenObjectNames: [],
+  freeCadIsolatedObjectName: "",
+  freeCadBridgeSyncEnabled: true,
   selectedFreeCadAssemblyJoint: null,
   selectedFreeCadSketchElement: null,
   sketchCoincidenceAnchor: null,
@@ -2314,6 +2536,13 @@ const state = {
   sessionHistoryLoading: false,
   sessionHistoryItems: [],
   sessionHistoryError: "",
+  remoteFreeCadSession: null,
+  remoteFreeCadBridgeContext: null,
+  remoteFreeCadLastCommand: null,
+  remoteFreeCadLoading: false,
+  productionReadiness: null,
+  productionReadinessLoading: false,
+  productionReadinessError: "",
   chatHistory: [],
   chatMessages: [
     { role: "assistant", key: "chat.initial" },
@@ -2524,6 +2753,9 @@ function sessionSnapshot({ includeHeavyArtifacts = true } = {}) {
     selectedGeneratedParameterName: state.selectedGeneratedParameterName,
     selectedFreeCadObjectName: state.selectedFreeCadObjectName,
     selectedFreeCadSubelement: state.selectedFreeCadSubelement,
+    freeCadHiddenObjectNames: state.freeCadHiddenObjectNames,
+    freeCadIsolatedObjectName: state.freeCadIsolatedObjectName,
+    freeCadBridgeSyncEnabled: state.freeCadBridgeSyncEnabled,
     selectedFreeCadAssemblyJoint: state.selectedFreeCadAssemblyJoint,
     selectedFreeCadSketchElement: state.selectedFreeCadSketchElement,
     sketchCoincidenceAnchor: state.sketchCoincidenceAnchor,
@@ -2600,6 +2832,9 @@ function restoreWorkbenchSession() {
     state.selectedGeneratedParameterName = saved.selectedGeneratedParameterName || "";
     state.selectedFreeCadObjectName = saved.selectedFreeCadObjectName || "";
     state.selectedFreeCadSubelement = saved.selectedFreeCadSubelement && typeof saved.selectedFreeCadSubelement === "object" ? saved.selectedFreeCadSubelement : null;
+    state.freeCadHiddenObjectNames = Array.isArray(saved.freeCadHiddenObjectNames) ? saved.freeCadHiddenObjectNames.filter(Boolean) : [];
+    state.freeCadIsolatedObjectName = saved.freeCadIsolatedObjectName || "";
+    state.freeCadBridgeSyncEnabled = saved.freeCadBridgeSyncEnabled !== false;
     state.selectedFreeCadAssemblyJoint = saved.selectedFreeCadAssemblyJoint && typeof saved.selectedFreeCadAssemblyJoint === "object" ? saved.selectedFreeCadAssemblyJoint : null;
     state.selectedFreeCadSketchElement = saved.selectedFreeCadSketchElement && typeof saved.selectedFreeCadSketchElement === "object" ? saved.selectedFreeCadSketchElement : null;
     state.sketchCoincidenceAnchor = saved.sketchCoincidenceAnchor && typeof saved.sketchCoincidenceAnchor === "object" ? saved.sketchCoincidenceAnchor : null;
@@ -2835,6 +3070,8 @@ function generatedCadViewerKey() {
     freeCadViewerSelectionMode(),
     state.showBBox ? "bbox" : "no-bbox",
     state.exploded ? "exploded" : "normal",
+    [...freeCadHiddenObjectTokenSet()].sort().join(","),
+    normalizeFreeCadToken(state.freeCadIsolatedObjectName),
     normalizeFreeCadToken(state.selectedGeneratedParameterName),
     [...selectedGeneratedParameterObjectNameSet()].sort().join(","),
     normalizeFreeCadToken(state.selectedFreeCadObjectName),
@@ -2870,6 +3107,22 @@ function parseFreeCadViewerSceneB64(b64) {
   }
 }
 
+function freeCadFilteredViewerScene(scene) {
+  if (!scene || !Array.isArray(scene.objects)) return scene;
+  const objects = scene.objects.filter((obj) => freeCadObjectIsVisible(obj?.name || obj?.label || ""));
+  if (objects.length === scene.objects.length) return scene;
+  const bbox = freeCadUnionBboxInfo(objects.map((obj) => freeCadBboxInfo(obj.bbox)).filter(Boolean));
+  return {
+    ...scene,
+    objects,
+    bbox: bbox || scene.bbox,
+    visibility_filter: {
+      hidden_object_names: Array.isArray(state.freeCadHiddenObjectNames) ? state.freeCadHiddenObjectNames : [],
+      isolated_object_name: state.freeCadIsolatedObjectName || null,
+    },
+  };
+}
+
 function freeCadViewerScenePresentation(scene) {
   const presentation = scene?.presentation;
   return presentation && typeof presentation === "object" ? presentation : {};
@@ -2882,7 +3135,7 @@ function freeCadViewerScenePresets(scene) {
 }
 
 function currentFreeCadViewerSceneData() {
-  return parseFreeCadViewerSceneB64(state.artifacts.viewer_scene);
+  return freeCadFilteredViewerScene(parseFreeCadViewerSceneB64(state.artifacts.viewer_scene));
 }
 
 function freeCadPresentationPresetLabel(preset) {
@@ -2943,7 +3196,7 @@ async function generatedStlArrayBuffer() {
 
 async function generatedViewerSceneData() {
   const b64 = state.artifacts.viewer_scene || await fetchArtifactRefB64(artifactRef("viewer_scene"));
-  return parseFreeCadViewerSceneB64(b64);
+  return freeCadFilteredViewerScene(parseFreeCadViewerSceneB64(b64));
 }
 
 async function loadThreeModules() {
@@ -3854,7 +4107,7 @@ function addFreeCadViewerLabelSprite(THREE, group, text, point, options = {}) {
 }
 
 function freeCadSketchObjects() {
-  return freeCadDocumentObjects().filter((obj) => freeCadObjectIsSketch(obj) && obj.sketch);
+  return freeCadDocumentObjects().filter((obj) => freeCadObjectIsVisible(obj) && freeCadObjectIsSketch(obj) && obj.sketch);
 }
 
 function activeFreeCadSketchObject() {
@@ -5176,6 +5429,9 @@ function resetClientWorkbenchSession() {
   state.selectedGeneratedParameterName = "";
   state.selectedFreeCadObjectName = "";
   state.selectedFreeCadSubelement = null;
+  state.freeCadHiddenObjectNames = [];
+  state.freeCadIsolatedObjectName = "";
+  state.freeCadBridgeSyncEnabled = true;
   state.selectedFreeCadAssemblyJoint = null;
   state.selectedFreeCadSketchElement = null;
   state.sketchCoincidenceAnchor = null;
@@ -5203,6 +5459,13 @@ function resetClientWorkbenchSession() {
   state.sessionHistoryLoading = false;
   state.sessionHistoryItems = [];
   state.sessionHistoryError = "";
+  state.remoteFreeCadSession = null;
+  state.remoteFreeCadBridgeContext = null;
+  state.remoteFreeCadLastCommand = null;
+  state.remoteFreeCadLoading = false;
+  state.productionReadiness = null;
+  state.productionReadinessLoading = false;
+  state.productionReadinessError = "";
   state.chatHistory = [];
   state.chatMessages = [{ role: "assistant", key: "chat.newSessionStarted" }];
 }
@@ -5218,6 +5481,301 @@ async function ensureServerSession() {
   localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, state.serverSessionId);
   persistWorkbenchSession();
   return state.serverSessionId;
+}
+
+function remoteFreeCadSessionId() {
+  return state.remoteFreeCadSession?.id || state.remoteFreeCadSession?.session_id || "";
+}
+
+function remoteBridgeSelectionLabel(context = state.remoteFreeCadBridgeContext) {
+  const selection = context?.selection || context?.bridge?.selection || {};
+  const active = selection.active_object || (Array.isArray(selection.objects) ? selection.objects[0] : null);
+  return active?.label || active?.name || t("none");
+}
+
+function remoteBridgeDocumentLabel(context = state.remoteFreeCadBridgeContext) {
+  const document = context?.document_tree?.document || context?.bridge?.document_tree?.document || {};
+  return document.name || context?.bridge?.document_name || t("none");
+}
+
+function remoteBridgeActiveObjectName(context = state.remoteFreeCadBridgeContext) {
+  const selection = context?.selection || context?.bridge?.selection || {};
+  const active = selection.active_object || (Array.isArray(selection.objects) ? selection.objects[0] : null) || {};
+  return active.name || active.label || "";
+}
+
+function remoteBridgeRevisionLabel(context = state.remoteFreeCadBridgeContext) {
+  const session = context?.session || state.remoteFreeCadSession || {};
+  if (!context && !state.remoteFreeCadSession) return t("none");
+  return session.current_version_id || context?.bridge?.current_version_id || context?.revision || t("none");
+}
+
+function applyRemoteFreeCadBridgeContext(context, { syncSelection = state.freeCadBridgeSyncEnabled } = {}) {
+  state.remoteFreeCadBridgeContext = context;
+  if (context?.session) state.remoteFreeCadSession = context.session;
+  if (!syncSelection || state.engine !== "freecad") return context;
+  const activeName = remoteBridgeActiveObjectName(context);
+  const obj = activeName ? freeCadObjectByName(activeName) : null;
+  if (!obj) return context;
+  state.previewMode = "generated";
+  state.generatedViewerFitMode = "selection";
+  state.selectedGeneratedParameterName = "";
+  state.selectedFreeCadObjectName = freeCadObjectKey(obj);
+  state.selectedFreeCadSubelement = null;
+  if (freeCadSelectionAvailable()) state.selectionMode = "object";
+  return context;
+}
+
+function remoteBridgeCommandSummary(command) {
+  const result = command?.result || {};
+  const changed = Array.isArray(result.changed_objects) ? result.changed_objects.filter(Boolean) : [];
+  const recomputeStatus = result.recompute_status?.status || result.transaction?.recompute_status?.status || "";
+  const artifactKeys = Object.keys(result.artifact_refs || {});
+  const parts = [];
+  if (changed.length) parts.push(`changed ${changed.join(", ")}`);
+  if (recomputeStatus) parts.push(`recompute ${recomputeStatus}`);
+  if (artifactKeys.length) parts.push(`artifacts ${artifactKeys.join(", ")}`);
+  return parts.join("; ") || command?.status || "";
+}
+
+async function refreshRemoteFreeCadContext({ announce = false } = {}) {
+  const sessionId = remoteFreeCadSessionId();
+  if (!sessionId) return null;
+  const context = await fetchJson(`/api/freecad/sessions/${encodeURIComponent(sessionId)}/bridge/context`);
+  applyRemoteFreeCadBridgeContext(context);
+  if (announce) {
+    const selection = remoteBridgeSelectionLabel(context);
+    state.chatMessages.unshift({
+      role: "assistant",
+      key: "chat.remoteFreeCadContext",
+      vars: {
+        selection,
+        document: remoteBridgeDocumentLabel(context),
+        status: context.bridge_status || state.remoteFreeCadSession?.bridge_status || t("waiting"),
+      },
+    });
+    log(t("log.remoteFreeCadContext", { selection }));
+    setBottomTab("chat");
+    renderAll();
+  }
+  return context;
+}
+
+function remoteFreeCadBridgeCommandForText(text, context = state.remoteFreeCadBridgeContext) {
+  const normalized = text.toLowerCase();
+  if (/\b(screenshot|capture)\b|截图|截屏/.test(normalized)) {
+    return { op: "capture_screenshot", input: { instruction: text } };
+  }
+  if (/\b(save|revision)\b|保存|版本|修订/.test(normalized)) {
+    return { op: "save_revision", input: { message: text } };
+  }
+  if (/\b(selected|selection|current)\b|选中|当前/.test(normalized)) {
+    return {
+      op: "run_macro",
+      input: {
+        instruction: text,
+        selection: context?.selection || {},
+        macro: remoteFreeCadSelectionEditMacro(text, context),
+      },
+    };
+  }
+  return null;
+}
+
+function remoteFreeCadSelectionEditMacro(text, context = state.remoteFreeCadBridgeContext) {
+  const selection = context?.selection || {};
+  const active = selection.active_object || (Array.isArray(selection.objects) ? selection.objects[0] : null) || {};
+  const objectName = active.name || active.label || "";
+  const value = parseMeasurementValue(text);
+  const safeObject = JSON.stringify(objectName);
+  const safeInstruction = JSON.stringify(text);
+  const safeValue = value !== null && Number.isFinite(Number(value)) ? String(Number(value)) : "None";
+  return [
+    "import FreeCAD as App",
+    "doc = App.ActiveDocument",
+    `instruction = ${safeInstruction}`,
+    `object_name = ${safeObject}`,
+    `target_mm = ${safeValue}`,
+    "if doc is None:",
+    "    raise RuntimeError('No active FreeCAD document')",
+    "if not object_name:",
+    "    raise RuntimeError('No active FreeCAD selection')",
+    "obj = doc.getObject(object_name)",
+    "if obj is None:",
+    "    raise RuntimeError('Selected object was not found: %s' % object_name)",
+    "changed = []",
+    "if target_mm is not None:",
+    "    for prop in ('Diameter', 'HoleDiameter', 'Radius'):",
+    "        if hasattr(obj, prop):",
+    "            setattr(obj, prop, target_mm / 2.0 if prop == 'Radius' else target_mm)",
+    "            changed.append('%s.%s' % (object_name, prop))",
+    "            break",
+    "if not changed:",
+    "    raise RuntimeError('No editable diameter/radius property found on %s' % object_name)",
+    "doc.recompute()",
+    "App.Console.PrintMessage('4yi bridge changed %s\\n' % ', '.join(changed))",
+  ].join("\n");
+}
+
+async function waitRemoteFreeCadCommand(commandId, { timeoutMs = 15000, intervalMs = 1000 } = {}) {
+  const sessionId = remoteFreeCadSessionId();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const body = await fetchJson(`/api/freecad/sessions/${encodeURIComponent(sessionId)}/commands/${encodeURIComponent(commandId)}`);
+    const command = body.command;
+    if (command?.status === "completed" || command?.status === "failed") return command;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error("FreeCAD bridge command timed out");
+}
+
+async function syncSelectedFreeCadObjectToBridge(objectName = state.selectedFreeCadObjectName) {
+  const sessionId = remoteFreeCadSessionId();
+  const obj = freeCadObjectByName(objectName);
+  if (!sessionId || !obj || state.engine !== "freecad") return false;
+  setStatus("remoteFreeCadSyncing");
+  const payload = {
+    object_name: obj.name || freeCadObjectKey(obj),
+    label: obj.label || obj.name || "",
+    type_id: obj.type_id || "",
+    selector: freeCadObjectSelector(obj),
+  };
+  try {
+    const queued = await fetchJson(`/api/freecad/sessions/${encodeURIComponent(sessionId)}/commands`, {
+      op: "select_object",
+      input: payload,
+      base_version_id: state.activeServerVersionId || state.remoteFreeCadSession?.current_version_id || null,
+    });
+    const command = await waitRemoteFreeCadCommand(queued.command_id);
+    state.remoteFreeCadLastCommand = command;
+    await refreshRemoteFreeCadContext();
+    const ok = command.status === "completed";
+    log(t(ok ? "log.bridgeSelectionPushed" : "log.remoteFreeCadCommandCompleted", {
+      name: freeCadObjectDisplayName(obj),
+      op: command.op,
+      status: command.status,
+    }));
+    setStatus(ok ? "ready" : "failed");
+    renderAll();
+    return ok;
+  } catch (error) {
+    log(t("log.remoteFreeCadFailed", { message: error.message || t("log.unknownError") }));
+    setStatus("failed");
+    renderAll();
+    return false;
+  }
+}
+
+async function pullRemoteFreeCadRevisionFromBridge() {
+  const context = await refreshRemoteFreeCadContext();
+  const session = context?.session || state.remoteFreeCadSession || {};
+  const versionId = session.current_version_id || "";
+  const workbenchSessionId = session.workbench_session_id || state.serverSessionId || "";
+  if (!workbenchSessionId || !versionId) return false;
+  setStatus("remoteFreeCadSyncing");
+  const previousUi = {
+    bottomTab: state.bottomTab,
+    chatHistory: [...state.chatHistory],
+    chatMessages: [...state.chatMessages],
+  };
+  try {
+    const sessionBody = await fetchJson(`/api/sessions/${encodeURIComponent(workbenchSessionId)}`);
+    let version = sessionBody.active_version?.id === versionId ? sessionBody.active_version : null;
+    if (!version) {
+      const body = await fetchJson(`/api/sessions/${encodeURIComponent(workbenchSessionId)}/versions/${encodeURIComponent(versionId)}`);
+      version = body.version || null;
+    }
+    if (!version) throw new Error(t("sessionHistoryEmpty"));
+    state.serverSessionId = workbenchSessionId;
+    localStorage.setItem(SERVER_SESSION_ID_STORAGE_KEY, workbenchSessionId);
+    const restored = await applyStoredServerVersion(version, sessionBody.versions || null);
+    if (!restored) throw new Error(t("sessionHistoryEmpty"));
+    state.bottomTab = previousUi.bottomTab;
+    state.chatHistory = previousUi.chatHistory;
+    state.chatMessages = previousUi.chatMessages;
+    applyRemoteFreeCadBridgeContext(context);
+    log(t("log.bridgeRevisionPulled", { version: version.version_number || versionId }));
+    setStatus("ready");
+    renderAll();
+    return true;
+  } catch (error) {
+    state.bottomTab = previousUi.bottomTab;
+    state.chatHistory = previousUi.chatHistory;
+    state.chatMessages = previousUi.chatMessages;
+    log(t("log.bridgeRevisionPullFailed", { message: error.message || t("log.unknownError") }));
+    setStatus("failed");
+    renderAll();
+    return false;
+  }
+}
+
+async function submitRemoteFreeCadBridgeCommand(text) {
+  const sessionId = remoteFreeCadSessionId();
+  if (!sessionId || state.engine !== "freecad") return false;
+  const context = await refreshRemoteFreeCadContext();
+  const routed = remoteFreeCadBridgeCommandForText(text, context);
+  if (!routed) return false;
+  setStatus("remoteFreeCadCommandRunning");
+  log(t("log.remoteFreeCadCommandQueued", { op: routed.op }));
+  const queued = await fetchJson(`/api/freecad/sessions/${encodeURIComponent(sessionId)}/commands`, {
+    op: routed.op,
+    input: routed.input,
+    base_version_id: state.remoteFreeCadSession?.current_version_id || state.activeServerVersionId || null,
+  });
+  const command = await waitRemoteFreeCadCommand(queued.command_id);
+  state.remoteFreeCadLastCommand = command;
+  await refreshRemoteFreeCadContext();
+  const ok = command.status === "completed";
+  state.chatMessages.unshift({
+    role: "assistant",
+    key: ok ? "chat.remoteFreeCadCommandCompleted" : "chat.remoteFreeCadCommandFailed",
+    vars: {
+      op: command.op,
+      summary: remoteBridgeCommandSummary(command),
+      message: command.result?.error?.message || command.error || t("log.unknownError"),
+    },
+  });
+  log(t("log.remoteFreeCadCommandCompleted", { op: command.op, status: command.status }));
+  setStatus(ok ? "ready" : "failed");
+  setBottomTab("chat");
+  renderAll();
+  return true;
+}
+
+async function openRemoteFreeCadSession() {
+  if (state.remoteFreeCadLoading) return;
+  state.remoteFreeCadLoading = true;
+  setStatus("remoteFreeCadStarting");
+  renderStaticText();
+  try {
+    const sessionId = await ensureServerSession();
+    const remote = await fetchJson("/api/freecad/sessions", {
+      session_id: sessionId,
+      version_id: state.activeServerVersionId || null,
+      mode: "freecad_gui",
+      reuse: true,
+      metadata: {
+        source: "web_workbench",
+        engine: state.engine,
+        has_fcstd_artifact: Boolean(artifactRef("fcstd")),
+      },
+    });
+    state.remoteFreeCadSession = remote;
+    if (remote.remote_url) {
+      window.open(remote.remote_url, "_blank", "noopener,noreferrer");
+      log(t("log.remoteFreeCadReady"));
+    } else {
+      log(t("log.remoteFreeCadNoUrl"));
+    }
+    await refreshRemoteFreeCadContext({ announce: true });
+    setStatus("ready");
+  } catch (error) {
+    log(t("log.remoteFreeCadFailed", { message: error.message || t("log.unknownError") }));
+    setStatus("failed");
+  } finally {
+    state.remoteFreeCadLoading = false;
+    renderStaticText();
+  }
 }
 
 async function recordServerVersion(intent, userInstruction = "", status = "ok", error = "") {
@@ -5343,7 +5901,15 @@ async function fetchJson(url, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || json.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = json.detail || json.error || `HTTP ${res.status}`;
+    if (Array.isArray(detail)) {
+      detail = detail.map((item) => item?.msg || item?.type || String(item)).join("; ");
+    } else if (detail && typeof detail === "object") {
+      detail = detail.message || JSON.stringify(detail);
+    }
+    throw new Error(detail);
+  }
   return json;
 }
 
@@ -5864,7 +6430,7 @@ function freeCadShapeObjects() {
 }
 
 function freeCadSelectableShapeObjects() {
-  return freeCadShapeObjects().filter((obj) => {
+  return freeCadShapeObjects().filter((obj) => freeCadObjectIsVisible(obj)).filter((obj) => {
     const bbox = obj?.shape?.bbox;
     return Array.isArray(bbox?.min) && Array.isArray(bbox?.max);
   });
@@ -5881,6 +6447,52 @@ function freeCadObjectByName(name) {
     return normalizeFreeCadToken(obj.name) === normalized
       || normalizeFreeCadToken(obj.label) === normalized;
   }) || null;
+}
+
+function freeCadObjectVisibilityToken(objOrName) {
+  if (typeof objOrName === "string") return normalizeFreeCadToken(objOrName);
+  return normalizeFreeCadToken(freeCadObjectKey(objOrName));
+}
+
+function freeCadHiddenObjectTokenSet() {
+  return new Set((Array.isArray(state.freeCadHiddenObjectNames) ? state.freeCadHiddenObjectNames : [])
+    .map((name) => normalizeFreeCadToken(name))
+    .filter(Boolean));
+}
+
+function freeCadObjectIsHidden(objOrName) {
+  const token = freeCadObjectVisibilityToken(objOrName);
+  return Boolean(token && freeCadHiddenObjectTokenSet().has(token));
+}
+
+function freeCadObjectIsIsolated(objOrName) {
+  const isolated = normalizeFreeCadToken(state.freeCadIsolatedObjectName);
+  const token = freeCadObjectVisibilityToken(objOrName);
+  return Boolean(isolated && token && isolated === token);
+}
+
+function freeCadObjectIsVisible(objOrName) {
+  const token = freeCadObjectVisibilityToken(objOrName);
+  if (!token) return true;
+  const isolated = normalizeFreeCadToken(state.freeCadIsolatedObjectName);
+  if (isolated && token !== isolated) return false;
+  return !freeCadObjectIsHidden(objOrName);
+}
+
+function freeCadVisibleDocumentObjects() {
+  return freeCadDocumentObjects().filter((obj) => freeCadObjectIsVisible(obj));
+}
+
+function freeCadVisibilitySummary() {
+  const objects = freeCadDocumentObjects();
+  const visible = objects.filter((obj) => freeCadObjectIsVisible(obj)).length;
+  const hidden = objects.filter((obj) => freeCadObjectIsHidden(obj)).length;
+  const isolated = freeCadObjectByName(state.freeCadIsolatedObjectName);
+  return {
+    visible,
+    hidden,
+    isolated: isolated ? freeCadObjectDisplayName(isolated) : t("none"),
+  };
 }
 
 function firstFreeCadSketchObject() {
@@ -6509,6 +7121,334 @@ function freeCadSubelementByRef(obj, reference, stableId = "") {
   return freeCadSubelements(obj).find((item) => normalizeFreeCadToken(item.reference || item.name) === normalized) || null;
 }
 
+function pruneFreeCadVisibilityState() {
+  const known = new Set(freeCadDocumentObjects().map((obj) => freeCadObjectVisibilityToken(obj)).filter(Boolean));
+  if (!known.size) {
+    state.freeCadHiddenObjectNames = [];
+    state.freeCadIsolatedObjectName = "";
+    return;
+  }
+  const nextHidden = [];
+  const seen = new Set();
+  for (const name of Array.isArray(state.freeCadHiddenObjectNames) ? state.freeCadHiddenObjectNames : []) {
+    const token = normalizeFreeCadToken(name);
+    if (!token || !known.has(token) || seen.has(token)) continue;
+    const obj = freeCadObjectByName(name);
+    nextHidden.push(obj ? freeCadObjectKey(obj) : name);
+    seen.add(token);
+  }
+  state.freeCadHiddenObjectNames = nextHidden;
+  if (state.freeCadIsolatedObjectName && !known.has(normalizeFreeCadToken(state.freeCadIsolatedObjectName))) {
+    state.freeCadIsolatedObjectName = "";
+  }
+}
+
+function setFreeCadObjectHidden(objectName, hidden) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj) return false;
+  const key = freeCadObjectKey(obj);
+  const target = normalizeFreeCadToken(key);
+  const next = [];
+  const seen = new Set();
+  for (const name of Array.isArray(state.freeCadHiddenObjectNames) ? state.freeCadHiddenObjectNames : []) {
+    const token = normalizeFreeCadToken(name);
+    if (!token || token === target || seen.has(token)) continue;
+    next.push(name);
+    seen.add(token);
+  }
+  if (hidden) next.push(key);
+  state.freeCadHiddenObjectNames = next;
+  if (hidden && freeCadObjectIsIsolated(obj)) state.freeCadIsolatedObjectName = "";
+  log(t("log.objectVisibilityChanged", { name: freeCadObjectDisplayName(obj) }));
+  disposeGeneratedCadViewer();
+  renderAll();
+  return true;
+}
+
+function toggleFreeCadObjectVisibility(objectName) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj) return false;
+  return setFreeCadObjectHidden(freeCadObjectKey(obj), !freeCadObjectIsHidden(obj));
+}
+
+function isolateFreeCadObject(objectName) {
+  const obj = freeCadObjectByName(objectName);
+  if (!obj) return false;
+  const key = freeCadObjectKey(obj);
+  state.freeCadIsolatedObjectName = key;
+  state.freeCadHiddenObjectNames = (Array.isArray(state.freeCadHiddenObjectNames) ? state.freeCadHiddenObjectNames : [])
+    .filter((name) => normalizeFreeCadToken(name) !== normalizeFreeCadToken(key));
+  log(t("log.objectVisibilityChanged", { name: freeCadObjectDisplayName(obj) }));
+  disposeGeneratedCadViewer();
+  renderAll();
+  return true;
+}
+
+function clearFreeCadObjectIsolation() {
+  if (!state.freeCadIsolatedObjectName) return false;
+  state.freeCadIsolatedObjectName = "";
+  disposeGeneratedCadViewer();
+  renderAll();
+  return true;
+}
+
+function setFreeCadBridgeSyncEnabled(enabled) {
+  state.freeCadBridgeSyncEnabled = Boolean(enabled);
+  if (state.freeCadBridgeSyncEnabled && state.remoteFreeCadBridgeContext) {
+    applyRemoteFreeCadBridgeContext(state.remoteFreeCadBridgeContext, { syncSelection: true });
+  }
+  renderAll();
+}
+
+function freeCadObjectWorkbenchFamily(obj) {
+  const text = `${obj?.type_id || ""} ${obj?.kind || ""} ${obj?.name || ""} ${obj?.label || ""}`.toLowerCase();
+  if (freeCadObjectIsSketch(obj)) return "Sketcher";
+  if (/techdraw/.test(text)) return "TechDraw";
+  if (/assembly/.test(text)) return "Assembly";
+  if (/partdesign/.test(text)) return "PartDesign";
+  return "";
+}
+
+function freeCadObjectRequiresRemoteRoute(obj) {
+  const family = freeCadObjectWorkbenchFamily(obj);
+  return family === "Sketcher" || family === "Assembly" || family === "TechDraw";
+}
+
+function freeCadOperationRouteForObject(obj, operation = "edit") {
+  if (!obj) return "unavailable";
+  if (["visibility", "measurement", "selection"].includes(operation)) return "web_view";
+  if (["section", "complex"].includes(operation)) return "remote_freecad";
+  if (freeCadObjectRequiresRemoteRoute(obj)) return "remote_freecad";
+  if (freeCadEditableProperties(obj).length || Array.isArray(obj.placement?.base)) return "web_patch";
+  if (state.engine === "freecad" && state.activeServerVersionId) return "batch_worker";
+  return "unavailable";
+}
+
+function freeCadOperationRouteLabelKey(route) {
+  return {
+    web_patch: "routeWebPatch",
+    batch_worker: "routeBatchWorker",
+    remote_freecad: "routeRemoteFreeCad",
+    web_view: "routeWebView",
+  }[route] || "routeUnavailable";
+}
+
+function freeCadOperationRouteDetailKey(route) {
+  return {
+    web_patch: "routeSimplePatchDetail",
+    batch_worker: "routeBatchWorkerDetail",
+    remote_freecad: "routeRemoteDetail",
+    web_view: "routeWebViewDetail",
+  }[route] || "routeNotAvailableDetail";
+}
+
+function renderFreeCadRouteBadge(route) {
+  return `<span class="operation-route-badge ${escapeHtml(route)}">${escapeHtml(t(freeCadOperationRouteLabelKey(route)))}</span>`;
+}
+
+function renderFreeCadOperationRouteCard(route, titleKey = "routeCurrentEdit", detailKey = "") {
+  const key = detailKey || freeCadOperationRouteDetailKey(route);
+  return `<div class="operation-route-card ${escapeHtml(route)}">
+    <div class="operation-route-head">
+      <strong>${escapeHtml(t(titleKey))}</strong>
+      ${renderFreeCadRouteBadge(route)}
+    </div>
+    <p>${escapeHtml(t(key))}</p>
+    ${route === "remote_freecad" ? `<div class="feature-actions">
+      <button class="typed-action-button warning" type="button" onclick="openRemoteFreeCadSession()">${icon("box")} ${escapeHtml(t("openRemoteFreeCad"))}</button>
+    </div>` : ""}
+  </div>`;
+}
+
+function freeCadWorkbenchRouteCounts() {
+  const counts = { web_patch: 0, batch_worker: 0, remote_freecad: 0 };
+  for (const obj of freeCadDocumentObjects()) {
+    const route = freeCadOperationRouteForObject(obj, "edit");
+    if (counts[route] !== undefined) counts[route] += 1;
+  }
+  return counts;
+}
+
+function freeCadObjectMeasurementRows(obj) {
+  const shape = obj?.shape || {};
+  const info = freeCadBboxInfo(shape.bbox);
+  const selected = selectedFreeCadSubelementRef();
+  const selectedItem = selected ? freeCadSubelementByRef(obj, selected.reference, selected.stableId) : null;
+  const rows = [];
+  if (info?.size) rows.push([t("envelope"), `${info.size.map(formatNumber).join(" x ")} ${t("unitMm")}`]);
+  if (info?.center) rows.push([t("center"), info.center.map(formatNumber).join(", ")]);
+  if (Number.isFinite(Number(shape.volume))) rows.push([t("volume"), formatNumber(shape.volume)]);
+  const area = shape.area ?? shape.surface_area ?? shape.surfaceArea;
+  if (Number.isFinite(Number(area))) rows.push([t("surfaceArea"), formatNumber(area)]);
+  if (Number.isFinite(Number(shape.face_count)) || Number.isFinite(Number(shape.edge_count))) {
+    rows.push([t("topologySummary"), `faces ${shape.face_count ?? 0} · edges ${shape.edge_count ?? 0}`]);
+  }
+  if (selected && selectedItem) {
+    rows.push([t("selectedReference"), freeCadSubelementSummaryText(selectedItem) || selected.reference]);
+  }
+  return rows;
+}
+
+function renderFreeCadMeasurementSection(obj) {
+  const rows = freeCadObjectMeasurementRows(obj);
+  if (!rows.length) return "";
+  return `<section class="section">
+    <h3>${icon("ruler")} ${escapeHtml(t("measurements"))}</h3>
+    <div class="kv-list">
+      ${rows.map(([label, value]) => `<div class="kv"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
+    </div>
+    <div class="feature-actions">
+      <button class="typed-action-button ${state.measureMode === "distance" ? "active" : ""}" type="button" onclick="setMeasureMode('distance')">${icon("ruler")} ${escapeHtml(t("toolbar.distance"))}</button>
+      <button class="typed-action-button ${state.measureMode === "diameter" ? "active" : ""}" type="button" onclick="setMeasureMode('diameter')">${icon("ruler")} ${escapeHtml(t("toolbar.diameter"))}</button>
+      <button class="typed-action-button ${state.measureMode === "angle" ? "active" : ""}" type="button" onclick="setMeasureMode('angle')">${icon("ruler")} ${escapeHtml(t("toolbar.angle"))}</button>
+    </div>
+  </section>`;
+}
+
+function renderFreeCadOperationRouteSection(obj) {
+  const editRoute = freeCadOperationRouteForObject(obj, "edit");
+  return `<section class="section">
+    <h3>${icon("layers")} ${escapeHtml(t("operationRoute"))}</h3>
+    ${renderFreeCadOperationRouteCard(editRoute)}
+    ${renderFreeCadOperationRouteCard("remote_freecad", "sectioningRoute", "sectioningRemoteDetail")}
+  </section>`;
+}
+
+function renderFreeCadObjectVisibilityActions(obj) {
+  const objectName = freeCadObjectKey(obj);
+  const hidden = freeCadObjectIsHidden(obj);
+  const isolated = freeCadObjectIsIsolated(obj);
+  return `<div class="feature-actions">
+    <button class="typed-action-button ${hidden ? "" : "active"}" type="button" onclick="toggleFreeCadObjectVisibility(${escapeHtml(jsString(objectName))})">${icon("eye")} ${escapeHtml(t(hidden ? "showObject" : "hideObject"))}</button>
+    <button class="typed-action-button ${isolated ? "active" : ""}" type="button" onclick="isolateFreeCadObject(${escapeHtml(jsString(objectName))})">${icon("pointer")} ${escapeHtml(t("isolateObject"))}</button>
+    <button class="typed-action-button" type="button" onclick="clearFreeCadObjectIsolation()" ${state.freeCadIsolatedObjectName ? "" : "disabled"}>${icon("undo")} ${escapeHtml(t("clearIsolation"))}</button>
+    ${remoteFreeCadSessionId() ? `<button class="typed-action-button" type="button" onclick="syncSelectedFreeCadObjectToBridge(${escapeHtml(jsString(objectName))})">${icon("pointer")} ${escapeHtml(t("pushSelectionToBridge"))}</button>` : ""}
+  </div>
+  <div class="visibility-strip">
+    <span class="visibility-chip ${hidden ? "warning" : "active"}">${icon("eye")} ${escapeHtml(hidden ? t("visibilityHidden") : t("visibilityVisible"))}</span>
+    ${isolated ? `<span class="visibility-chip active">${icon("pointer")} ${escapeHtml(t("visibilityIsolated"))}</span>` : ""}
+  </div>`;
+}
+
+function renderFreeCadWebWorkbenchSection() {
+  if (state.engine !== "freecad" || !state.documentSummary) return "";
+  const visibility = freeCadVisibilitySummary();
+  const counts = freeCadWorkbenchRouteCounts();
+  return `<section class="section">
+    <h3>${icon("sliders")} ${escapeHtml(t("webNativeWorkbench"))}</h3>
+    <div class="kv-list">
+      <div class="kv"><span>${escapeHtml(t("visibleObjects"))}</span><strong>${escapeHtml(String(visibility.visible))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("hiddenObjects"))}</span><strong>${escapeHtml(String(visibility.hidden))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("isolatedObject"))}</span><strong>${escapeHtml(visibility.isolated)}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("routeWebPatch"))}</span><strong>${escapeHtml(String(counts.web_patch))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("routeBatchWorker"))}</span><strong>${escapeHtml(String(counts.batch_worker))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("routeRemoteFreeCad"))}</span><strong>${escapeHtml(String(counts.remote_freecad))}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("bridgeSelection"))}</span><strong>${escapeHtml(remoteBridgeSelectionLabel())}</strong></div>
+      <div class="kv"><span>${escapeHtml(t("bridgeRevision"))}</span><strong>${escapeHtml(remoteBridgeRevisionLabel())}</strong></div>
+    </div>
+    <div class="feature-actions">
+      <label class="typed-action-toggle"><input type="checkbox" ${state.freeCadBridgeSyncEnabled ? "checked" : ""} onchange="setFreeCadBridgeSyncEnabled(this.checked)" /> ${icon("pointer")} ${escapeHtml(t("syncBridgeSelection"))}</label>
+      ${remoteFreeCadSessionId() ? `<button class="typed-action-button" type="button" onclick="refreshRemoteFreeCadContext({ announce: true })">${icon("redo")} ${escapeHtml(t("bridgeSelection"))}</button>` : ""}
+      ${remoteFreeCadSessionId() ? `<button class="typed-action-button" type="button" onclick="pullRemoteFreeCadRevisionFromBridge()">${icon("download")} ${escapeHtml(t("pullBridgeRevision"))}</button>` : `<button class="typed-action-button warning" type="button" onclick="openRemoteFreeCadSession()">${icon("box")} ${escapeHtml(t("openRemoteFreeCad"))}</button>`}
+      ${state.freeCadIsolatedObjectName ? `<button class="typed-action-button" type="button" onclick="clearFreeCadObjectIsolation()">${icon("undo")} ${escapeHtml(t("clearIsolation"))}</button>` : ""}
+    </div>
+  </section>`;
+}
+
+function productionReadinessStatusClass(status) {
+  if (status === "pass") return "info";
+  if (status === "warn") return "warning";
+  return "error";
+}
+
+function productionReadinessStatusLabel(status) {
+  return {
+    pass: t("readinessPass"),
+    warn: t("readinessWarn"),
+    fail: t("readinessFail"),
+  }[status] || String(status || t("notAvailable"));
+}
+
+function productionReadinessTargetRows(report = state.productionReadiness) {
+  const targets = report?.release_targets || {};
+  return [
+    ["private_beta_ready", "readinessPrivateBeta"],
+    ["public_beta_ready", "readinessPublicBeta"],
+    ["ga_ready", "readinessGa"],
+  ].map(([key, labelKey]) => {
+    const ready = Boolean(targets[key]);
+    return `<div class="readiness-target ${ready ? "pass" : "fail"}">
+      <strong>${escapeHtml(t(labelKey))}</strong>
+      <span>${escapeHtml(t(ready ? "releaseReady" : "releaseBlocked"))}</span>
+    </div>`;
+  }).join("");
+}
+
+function productionReadinessSummaryText(report = state.productionReadiness) {
+  if (!report) return t("readinessNotChecked");
+  const summary = report.summary || {};
+  return `${t("readinessPass")} ${summary.pass || 0} · ${t("readinessWarn")} ${summary.warn || 0} · ${t("readinessFail")} ${summary.fail || 0}`;
+}
+
+function productionReadinessGeneratedAtText(report = state.productionReadiness) {
+  if (!report?.generated_at) return t("readinessNotChecked");
+  const date = new Date(report.generated_at);
+  if (Number.isNaN(date.getTime())) return t("readinessNotChecked");
+  return t("readinessUpdated", {
+    time: date.toLocaleString(currentLocale === "zh" ? "zh-CN" : "en"),
+  });
+}
+
+function renderProductionReadinessSection() {
+  const report = state.productionReadiness;
+  const checks = Array.isArray(report?.checks) ? report.checks : [];
+  const blockers = Array.isArray(report?.summary?.blockers) ? report.summary.blockers : [];
+  return `<section class="section">
+    <h3>${icon("sliders")} ${escapeHtml(t("productionReadiness"))}</h3>
+    <div class="feature-actions" style="margin-top:0">
+      <button class="typed-action-button ${state.productionReadinessLoading ? "active" : ""}" type="button" onclick="loadProductionReadiness()" ${state.productionReadinessLoading ? "disabled" : ""}>${icon("redo")} ${escapeHtml(t("checkProductionReadiness"))}</button>
+    </div>
+    ${state.productionReadinessLoading ? `<p class="section-note">${escapeHtml(t("readinessLoading"))}</p>` : ""}
+    ${state.productionReadinessError ? `<div class="diagnostic-list"><div class="diagnostic-row error"><strong>${escapeHtml(t("readinessFail"))}</strong><span>${escapeHtml(state.productionReadinessError)}</span></div></div>` : ""}
+    ${report ? `
+      <div class="readiness-targets">${productionReadinessTargetRows(report)}</div>
+      <div class="kv-list">
+        <div class="kv"><span>${escapeHtml(t("readinessChecks"))}</span><strong>${escapeHtml(productionReadinessSummaryText(report))}</strong></div>
+        <div class="kv"><span>${escapeHtml(t("readinessBlockers"))}</span><strong>${escapeHtml(blockers.length ? blockers.join(", ") : t("readinessNoBlockers"))}</strong></div>
+      </div>
+      <p class="readiness-summary">${escapeHtml(productionReadinessGeneratedAtText(report))}</p>
+      <div class="diagnostic-list readiness-checks">
+        ${checks.map((check) => `<div class="diagnostic-row ${productionReadinessStatusClass(check.status)}">
+          <strong>${escapeHtml(`${check.key || "check"} · ${productionReadinessStatusLabel(check.status)}`)}</strong>
+          <span>${escapeHtml(check.message || "")}</span>
+        </div>`).join("")}
+      </div>
+    ` : (!state.productionReadinessLoading && !state.productionReadinessError ? `<p class="section-note">${escapeHtml(t("readinessNotChecked"))}</p>` : "")}
+  </section>`;
+}
+
+async function loadProductionReadiness() {
+  if (state.productionReadinessLoading) return;
+  state.productionReadinessLoading = true;
+  state.productionReadinessError = "";
+  setStatus("productionReadinessChecking");
+  renderProperties();
+  try {
+    const report = await fetchJson("/api/production/readiness");
+    state.productionReadiness = report;
+    const summary = productionReadinessSummaryText(report);
+    log(t("log.productionReadinessUpdated", { summary }));
+    setStatus(report.production_ready ? "ready" : "notReady");
+  } catch (error) {
+    state.productionReadinessError = error.message || t("log.unknownError");
+    log(t("log.productionReadinessFailed", { message: state.productionReadinessError }));
+    setStatus("failed");
+  } finally {
+    state.productionReadinessLoading = false;
+    renderAll();
+  }
+}
+
 function freeCadPropertyNames(obj) {
   return (Array.isArray(obj?.properties) ? obj.properties : [])
     .map((prop) => String(prop.name || ""))
@@ -6589,6 +7529,9 @@ function renderStaticText() {
   $("newSessionButton").title = t("newSessionTitle");
   $("sessionHistoryButtonText").textContent = t("sessionHistory");
   $("sessionHistoryButton").title = t("sessionHistoryButtonTitle");
+  $("remoteFreeCadButtonText").textContent = t("remoteFreeCad");
+  $("remoteFreeCadButton").title = t("remoteFreeCadTitle");
+  $("remoteFreeCadButton").disabled = Boolean(state.remoteFreeCadLoading);
   $("importButtonText").textContent = t("importModel");
   $("importButton").title = t("importModelTitle");
   $("localeToggle").textContent = t("langToggle");
@@ -6664,9 +7607,11 @@ function renderTree() {
         <span style="width:12px"></span>${icon("box")}<span class="name">${escapeHtml(state.generatedPrompt || t("agentModel"))}</span>
       </button>
       ${docNodes.map((node) => `
-        <button class="tree-item ${freeCadObjectKey(node.object) && normalizeFreeCadToken(freeCadObjectKey(node.object)) === normalizeFreeCadToken(state.selectedFreeCadObjectName) ? "active" : ""}" style="padding-left:${60 + node.depth * 16}px" type="button" onclick="selectFreeCadObject(${escapeHtml(jsString(freeCadObjectKey(node.object)))})" title="${escapeHtml(node.kind)}">
+        <button class="tree-item ${freeCadObjectKey(node.object) && normalizeFreeCadToken(freeCadObjectKey(node.object)) === normalizeFreeCadToken(state.selectedFreeCadObjectName) ? "active" : ""} ${freeCadObjectIsHidden(node.object) ? "inactive" : ""}" style="padding-left:${60 + node.depth * 16}px" type="button" onclick="selectFreeCadObject(${escapeHtml(jsString(freeCadObjectKey(node.object)))})" title="${escapeHtml(node.kind)}">
           <span style="width:12px"></span>${icon(freeCadFeatureIcon(node.kind, node.object))}<span class="name">${escapeHtml(freeCadObjectDisplayName(node.object))}</span>
           ${node.tip ? `<span>${escapeHtml(freeCadObjectDisplayName(node.tip))}</span>` : ""}
+          ${freeCadObjectIsHidden(node.object) ? `<span>${escapeHtml(t("visibilityHidden"))}</span>` : ""}
+          ${freeCadObjectIsIsolated(node.object) ? `<span>${escapeHtml(t("visibilityIsolated"))}</span>` : ""}
         </button>
       `).join("")}
       <button class="tree-item" style="padding-left:60px" type="button" onclick="showGeneratedParameters()">
@@ -7022,11 +7967,13 @@ function renderProperties() {
           <button class="icon-button" type="button" title="${escapeHtml(t("backToDesignState"))}" onclick="showParametricDesign()">${icon("undo")}</button>
       </div>
     </div>
+      ${renderFreeCadWebWorkbenchSection()}
       ${renderFreeCadDocumentSummarySection()}
       ${renderFreeCadAssemblySection()}
       ${renderFreeCadTechDrawSection()}
       ${renderFreeCadObjectPropertySection()}
       ${renderGeneratedParameterSection()}
+      ${renderProductionReadinessSection()}
       <section class="section">
         <h3>${icon("code")} ${escapeHtml(t("generatedSource"))}</h3>
         <div class="kv-list">
@@ -7076,6 +8023,7 @@ function renderProperties() {
         <div class="kv"><span>${escapeHtml(t("patchMode"))}</span><strong>${state.patch?.op || escapeHtml(t("none"))}</strong></div>
       </div>
     </section>
+    ${renderProductionReadinessSection()}
   `;
   $("renameInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") renameFeature();
@@ -7328,6 +8276,7 @@ function renderFreeCadObjectPropertySection() {
         <strong>${escapeHtml(freeCadObjectDisplayName(obj))}</strong>
         <span>${escapeHtml(obj.type_id || obj.name || "")}</span>
       </div>
+      ${renderFreeCadObjectVisibilityActions(obj)}
       <div class="kv-list">
         <div class="kv"><span>Name</span><strong>${escapeHtml(obj.name || "")}</strong></div>
         ${obj.label && obj.label !== obj.name ? `<div class="kv"><span>Label</span><strong>${escapeHtml(obj.label)}</strong></div>` : ""}
@@ -7336,6 +8285,8 @@ function renderFreeCadObjectPropertySection() {
         ${shape.failure_class ? `<div class="kv"><span>${escapeHtml(t("geometryChecks"))}</span><strong>${escapeHtml(shape.failure_class)}</strong></div>` : ""}
       </div>
     </section>
+    ${renderFreeCadMeasurementSection(obj)}
+    ${renderFreeCadOperationRouteSection(obj)}
     ${Array.isArray(placement.base) ? `<section class="section">
       <h3>${icon("ruler")} ${escapeHtml(t("placement"))}</h3>
       ${["X", "Y", "Z"].map((axis, index) => freeCadPlacementRow(obj, axis, index)).join("")}
@@ -8987,6 +9938,7 @@ function exportStateSnapshot() {
 }
 
 function renderAll() {
+  pruneFreeCadVisibilityState();
   renderStaticText();
   renderToolbar();
   renderTree();
@@ -11212,6 +12164,24 @@ async function submitCommand(event) {
     setBottomTab("chat");
     return;
   }
+  if (state.remoteFreeCadSession && state.engine === "freecad") {
+    try {
+      const routedToBridge = await submitRemoteFreeCadBridgeCommand(text);
+      if (routedToBridge) return;
+    } catch (error) {
+      const message = error.message || t("log.unknownError");
+      state.chatMessages.unshift({
+        role: "assistant",
+        key: "chat.remoteFreeCadCommandFailed",
+        vars: { op: "bridge", message },
+      });
+      log(t("log.remoteFreeCadFailed", { message }));
+      setStatus("failed");
+      setBottomTab("chat");
+      renderAll();
+      return;
+    }
+  }
   if (useAgent) {
     await generateFromPrompt(text, { mode: agentMode });
     return;
@@ -11563,6 +12533,15 @@ window.showGeneratedParameters = showGeneratedParameters;
 window.focusGeneratedParameter = focusGeneratedParameter;
 window.selectFreeCadObject = selectFreeCadObject;
 window.selectFreeCadSubelement = selectFreeCadSubelement;
+window.toggleFreeCadObjectVisibility = toggleFreeCadObjectVisibility;
+window.isolateFreeCadObject = isolateFreeCadObject;
+window.clearFreeCadObjectIsolation = clearFreeCadObjectIsolation;
+window.setFreeCadBridgeSyncEnabled = setFreeCadBridgeSyncEnabled;
+window.syncSelectedFreeCadObjectToBridge = syncSelectedFreeCadObjectToBridge;
+window.pullRemoteFreeCadRevisionFromBridge = pullRemoteFreeCadRevisionFromBridge;
+window.refreshRemoteFreeCadContext = refreshRemoteFreeCadContext;
+window.openRemoteFreeCadSession = openRemoteFreeCadSession;
+window.loadProductionReadiness = loadProductionReadiness;
 window.selectFreeCadSketchElement = selectFreeCadSketchElement;
 window.selectFreeCadSketchConstraintReference = selectFreeCadSketchConstraintReference;
 window.focusFreeCadSketchConstraintReferences = focusFreeCadSketchConstraintReferences;

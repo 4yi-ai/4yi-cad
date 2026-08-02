@@ -243,6 +243,12 @@ def test_p1_workbench_exposes_core_surfaces():
         "/rollback",
         "commitParameter",
         "submitCommand",
+        "refreshRemoteFreeCadContext",
+        "submitRemoteFreeCadBridgeCommand",
+        "/bridge/context",
+        "chat.remoteFreeCadContext",
+        "chat.remoteFreeCadCommandCompleted",
+        "remoteFreeCadCommandRunning",
         "4yi-cad Workbench",
         "4yi-cad 工作台",
     ):
@@ -433,6 +439,72 @@ def test_generated_viewer_manual_views_and_parameter_tree_drive_focus():
     assert "freeCadTreeDisplayNodes().slice(0, 24)" not in generated_tree_block
     assert "params.slice(0, 18)" not in generated_tree_block
     assert "selectedParameterNames.has(objectKey)" in html
+
+
+def test_phase5_web_native_workbench_routes_visibility_and_bridge_sync():
+    html = _html()
+
+    for marker in (
+        "freeCadHiddenObjectNames",
+        "freeCadIsolatedObjectName",
+        "freeCadBridgeSyncEnabled",
+        "function freeCadFilteredViewerScene(scene)",
+        "function freeCadVisibleDocumentObjects()",
+        "function freeCadOperationRouteForObject(obj, operation = \"edit\")",
+        "function freeCadObjectRequiresRemoteRoute(obj)",
+        "function renderFreeCadOperationRouteSection(obj)",
+        "function renderFreeCadWebWorkbenchSection()",
+        "function renderFreeCadMeasurementSection(obj)",
+        "function renderFreeCadObjectVisibilityActions(obj)",
+        "function freeCadWorkbenchRouteCounts()",
+        "function setFreeCadBridgeSyncEnabled(enabled)",
+        "function applyRemoteFreeCadBridgeContext(context",
+        "function syncSelectedFreeCadObjectToBridge",
+        "function pullRemoteFreeCadRevisionFromBridge",
+        "function remoteBridgeRevisionLabel",
+        "toggleFreeCadObjectVisibility",
+        "isolateFreeCadObject",
+        "clearFreeCadObjectIsolation",
+        "operation-route-card",
+        "operation-route-badge",
+        "visibility-strip",
+        "routeWebPatch",
+        "routeBatchWorker",
+        "routeRemoteFreeCad",
+        "routeWebView",
+        "sectioningRemoteDetail",
+        "pullBridgeRevision",
+        "pushSelectionToBridge",
+        "setStatus(\"remoteFreeCadSyncing\")",
+        "/versions/${encodeURIComponent(versionId)}",
+        "op: \"select_object\"",
+    ):
+        assert marker in html
+
+
+def test_phase6_release_readiness_panel_exposes_release_gates():
+    html = _html()
+
+    for marker in (
+        "productionReadiness",
+        "productionReadinessLoading",
+        "productionReadinessError",
+        "function renderProductionReadinessSection()",
+        "function loadProductionReadiness()",
+        "function productionReadinessStatusClass(status)",
+        "function productionReadinessTargetRows(report = state.productionReadiness)",
+        "/api/production/readiness",
+        "readinessPrivateBeta",
+        "readinessPublicBeta",
+        "readinessGa",
+        "readinessBlockers",
+        "readiness-checks",
+        "readiness-targets",
+        "log.productionReadinessUpdated",
+        "productionReadinessChecking",
+        "window.loadProductionReadiness = loadProductionReadiness;",
+    ):
+        assert marker in html
 
 
 def test_agent_generation_exposes_working_activity_feedback():

@@ -53,9 +53,13 @@ from app.cad.site_layout_templates import (
     site_layout_repair_script,
 )
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
+from app.freecad_gui_orchestrator import (
+    FreeCadGuiSessionOrchestrator,
+    freecad_gui_orchestrator_from_env,
+)
 from app.freecad_intents import parse_freecad_intent
 from app.freecad_state import storage_status, typed_state_diff
-from app.session_store import SessionStore, SqliteSessionStore
+from app.session_store import SessionStore, SqliteSessionStore, utc_now
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
 # Living at the root (next to pyproject/Dockerfile) also makes the deployment
@@ -364,6 +368,81 @@ class FreeCadDocumentPatchRequest(BaseModel):
     dry_run: bool = False
 
 
+class FreeCadRemoteSessionRequest(BaseModel):
+    session_id: str | None = Field(default=None, min_length=1)
+    workbench_session_id: str | None = Field(default=None, min_length=1)
+    version_id: str | None = Field(default=None, min_length=1)
+    mode: Literal["freecad_gui"] = "freecad_gui"
+    reuse: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreeCadRemoteSessionSaveRequest(BaseModel):
+    message: str | None = Field(default=None, max_length=4000)
+    fcstd_b64: str = Field(..., min_length=1)
+    base_version_id: str | None = Field(default=None, min_length=1)
+    preview_png_b64: str | None = Field(default=None, min_length=1)
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    include_derivatives: bool = True
+
+
+class FreeCadRemoteSessionCommandRequest(BaseModel):
+    op: Literal[
+        "inspect_document",
+        "select_object",
+        "run_macro",
+        "save_revision",
+        "capture_screenshot",
+    ]
+    input: dict[str, Any] = Field(default_factory=dict)
+    base_version_id: str | None = Field(default=None, min_length=1)
+
+
+class FreeCadRemoteSessionStopRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class FreeCadBridgeHeartbeatRequest(BaseModel):
+    bridge_id: str | None = Field(default=None, max_length=160)
+    freecad_version: str | None = Field(default=None, max_length=120)
+    document_name: str | None = Field(default=None, max_length=240)
+    active_document_path: str | None = Field(default=None, max_length=1000)
+    current_version_id: str | None = Field(default=None, min_length=1)
+    workbench: str | None = Field(default=None, max_length=160)
+    selection: dict[str, Any] = Field(default_factory=dict)
+    document_tree: dict[str, Any] = Field(default_factory=dict)
+    console_tail: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreeCadBridgePollRequest(FreeCadBridgeHeartbeatRequest):
+    max_commands: int = Field(default=10, ge=1, le=50)
+
+
+class FreeCadBridgeCommandResultRequest(BaseModel):
+    status: Literal["completed", "failed"]
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = Field(default=None, max_length=8000)
+    current_version_id: str | None = Field(default=None, min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreeCadPanelActionRequest(BaseModel):
+    action: Literal[
+        "prompt",
+        "explain_object",
+        "generate_patch",
+        "accept_patch",
+        "reject_patch",
+    ]
+    prompt: str | None = Field(default=None, max_length=8000)
+    selection: dict[str, Any] = Field(default_factory=dict)
+    patch_id: str | None = Field(default=None, max_length=240)
+    macro: str | None = Field(default=None, max_length=120000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 def _get_gateway(app: FastAPI):
     gw = getattr(app.state, "gateway", None)
     if gw is None:
@@ -405,6 +484,14 @@ def _get_artifact_store(app: FastAPI) -> ArtifactStore:
         store = FileArtifactStore()
         app.state.artifact_store = store
     return store
+
+
+def _get_freecad_gui_orchestrator(app: FastAPI) -> FreeCadGuiSessionOrchestrator:
+    orchestrator = getattr(app.state, "freecad_gui_orchestrator", None)
+    if orchestrator is None:
+        orchestrator = freecad_gui_orchestrator_from_env()
+        app.state.freecad_gui_orchestrator = orchestrator
+    return orchestrator
 
 
 def _metadata_with_artifact_refs(
@@ -508,6 +595,24 @@ def _artifact_b64(artifact_store: ArtifactStore, session_id: str, version_id: st
     )
     if artifact is None:
         raise HTTPException(status_code=422, detail=f"source version has no {name} artifact")
+    return base64.b64encode(artifact.path.read_bytes()).decode("ascii")
+
+
+def _optional_artifact_b64(
+    artifact_store: ArtifactStore,
+    session_id: str,
+    version_id: str | None,
+    name: str,
+) -> str | None:
+    if not version_id:
+        return None
+    artifact = artifact_store.get_artifact(
+        session_id=session_id,
+        version_id=version_id,
+        artifact_name=name,
+    )
+    if artifact is None:
+        return None
     return base64.b64encode(artifact.path.read_bytes()).decode("ascii")
 
 
@@ -639,6 +744,376 @@ def _freecad_response(
         if version
         else None,
         "error": result.error,
+    }
+
+
+def _remote_session_dict(remote_session) -> dict[str, Any]:
+    return {
+        "id": remote_session.id,
+        "session_id": remote_session.id,
+        "workbench_session_id": remote_session.workbench_session_id,
+        "base_version_id": remote_session.base_version_id,
+        "current_version_id": remote_session.current_version_id,
+        "status": remote_session.status,
+        "remote_url": remote_session.remote_url,
+        "bridge_status": remote_session.bridge_status,
+        "created_at": remote_session.created_at,
+        "started_at": remote_session.started_at,
+        "last_active_at": remote_session.last_active_at,
+        "stopped_at": remote_session.stopped_at,
+        "metadata": remote_session.metadata,
+    }
+
+
+def _remote_command_dict(command) -> dict[str, Any]:
+    return {
+        "id": command.id,
+        "command_id": command.id,
+        "remote_session_id": command.remote_session_id,
+        "session_id": command.remote_session_id,
+        "op": command.op,
+        "input": command.input,
+        "base_version_id": command.base_version_id,
+        "status": command.status,
+        "result": command.result,
+        "error": command.error,
+        "created_at": command.created_at,
+        "dispatched_at": command.dispatched_at,
+        "completed_at": command.completed_at,
+        "metadata": command.metadata,
+    }
+
+
+def _remote_desktop_base_url() -> str | None:
+    raw = (
+        os.environ.get("CAD_REMOTE_DESKTOP_BASE_URL")
+        or os.environ.get("FOURYI_CAD_REMOTE_DESKTOP_BASE_URL")
+        or ""
+    ).strip()
+    return raw or None
+
+
+def _session_orchestrator_url() -> str | None:
+    raw = (
+        os.environ.get("CAD_SESSION_ORCHESTRATOR_URL")
+        or os.environ.get("FOURYI_CAD_SESSION_ORCHESTRATOR_URL")
+        or ""
+    ).strip()
+    return raw or None
+
+
+def _remote_desktop_url_for(remote_session_id: str) -> str | None:
+    base_url = _remote_desktop_base_url()
+    if not base_url:
+        return None
+    if "{session_id}" in base_url:
+        return base_url.format(session_id=remote_session_id)
+    return f"{base_url.rstrip('/')}/{remote_session_id}"
+
+
+def _remote_session_config_metadata(metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    gui_backend = os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip() or "disabled"
+    return {
+        **dict(metadata or {}),
+        "mode": "freecad_gui",
+        "orchestrator_configured": bool(_session_orchestrator_url())
+        or gui_backend.lower() == "local_docker",
+        "gui_session_backend": gui_backend,
+        "remote_desktop_configured": bool(_remote_desktop_base_url()),
+    }
+
+
+def _truthy_env(*names: str) -> bool:
+    for name in names:
+        if os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}:
+            return True
+    return False
+
+
+def _configured_env(*names: str) -> bool:
+    return any(bool(os.environ.get(name, "").strip()) for name in names)
+
+
+def _release_check(
+    key: str,
+    status: Literal["pass", "warn", "fail"],
+    message: str,
+    *,
+    required_for: list[str] | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "status": status,
+        "message": message,
+        "required_for": required_for or [],
+        "details": details or {},
+    }
+
+
+def _release_target_ready(checks: list[dict[str, Any]], target: str) -> bool:
+    return all(
+        check.get("status") == "pass"
+        for check in checks
+        if target in set(check.get("required_for") or [])
+    )
+
+
+def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
+    store = _get_session_store(app)
+    artifact_store = _get_artifact_store(app)
+    storage = storage_status(
+        str(getattr(store, "db_path", "custom-session-store")),
+        str(getattr(artifact_store, "root", "custom-artifact-store")),
+    )
+    durable = all(item.get("durable_configured") for item in storage.values())
+    writable = all(item.get("writable") for item in storage.values())
+
+    gateway_base_configured = _configured_env("OPENAI_BASE_URL", "OPENAI_API_BASE")
+    gateway_base = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE") or ""
+    gateway_uses_platform = gateway_base_configured and "api.openai.com" not in gateway_base.lower()
+    gateway_configured = bool(
+        gateway_base_configured
+        and _configured_env("OPENAI_API_KEY")
+        and _configured_env("TEXT_MODEL")
+        and gateway_uses_platform
+    )
+
+    worker_endpoint = os.environ.get("FOURYI_FREECAD_WORKER_URL") or os.environ.get("FREECAD_WORKER_URL")
+    worker_split = bool(worker_endpoint)
+    security_controls = {
+        "egress_blocked": _truthy_env("FOURYI_FREECAD_WORKER_EGRESS_BLOCKED"),
+        "read_only_rootfs": _truthy_env("FOURYI_FREECAD_WORKER_READ_ONLY_ROOTFS"),
+        "seccomp_profile": _configured_env("FOURYI_FREECAD_WORKER_SECCOMP_PROFILE"),
+        "tmpfs_workspace": _truthy_env("FOURYI_FREECAD_WORKER_TMPFS"),
+    }
+    hardened_worker = bool(worker_split and all(security_controls.values()))
+
+    gui_backend = os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip().lower() or "disabled"
+    gui_orchestrator_configured = bool(_session_orchestrator_url()) or gui_backend == "local_docker"
+    gui_control_plane_configured = _configured_env("CAD_GUI_SESSION_CONTROL_PLANE_URL")
+    remote_desktop_configured = bool(_remote_desktop_base_url()) or gui_backend == "local_docker"
+    gui_ready = bool(gui_orchestrator_configured and gui_control_plane_configured and remote_desktop_configured)
+
+    upload_max_bytes = _freecad_upload_max_bytes()
+    upload_policy_ready = upload_max_bytes >= DEFAULT_FREECAD_UPLOAD_MAX_BYTES
+    license_review_accepted = _truthy_env(
+        "FOURYI_CAD_LICENSE_REVIEW_ACCEPTED",
+        "CAD_LICENSE_REVIEW_ACCEPTED",
+    )
+
+    checks = [
+        _release_check(
+            "healthz_contract",
+            "pass",
+            "/healthz is config-independent and returns a fast liveness response.",
+            required_for=["private_beta", "public_beta", "ga"],
+        ),
+        _release_check(
+            "gateway_contract",
+            "pass" if gateway_configured else "fail",
+            "Gateway env is configured for the platform OpenAI-compatible endpoint."
+            if gateway_configured
+            else "OPENAI_BASE_URL/OPENAI_API_BASE, OPENAI_API_KEY, and TEXT_MODEL must be injected; api.openai.com is not allowed.",
+            required_for=["private_beta", "public_beta", "ga"],
+            details={
+                "base_url_configured": gateway_base_configured,
+                "api_key_configured": _configured_env("OPENAI_API_KEY"),
+                "text_model_configured": _configured_env("TEXT_MODEL"),
+                "platform_endpoint": bool(gateway_uses_platform),
+            },
+        ),
+        _release_check(
+            "storage_writable",
+            "pass" if writable else "fail",
+            "Session DB and artifact root are writable."
+            if writable
+            else "Session DB and artifact root must be writable by the app user.",
+            required_for=["private_beta", "public_beta", "ga"],
+        ),
+        _release_check(
+            "durable_storage",
+            "pass" if durable else "fail",
+            "Session DB and artifacts are outside tmp-backed fallback storage."
+            if durable
+            else "CAD_DATA_DIR or explicit storage paths must be backed by durable storage before Public Beta/GA.",
+            required_for=["public_beta", "ga"],
+            details={"cad_data_dir_configured": _configured_env("CAD_DATA_DIR")},
+        ),
+        _release_check(
+            "freecad_upload_policy",
+            "pass" if upload_policy_ready else "fail",
+            "FreeCAD upload cap supports the 100 MB Private Beta default."
+            if upload_policy_ready
+            else "CAD_FREECAD_UPLOAD_MAX_BYTES is below the 100 MB Private Beta default.",
+            required_for=["private_beta", "public_beta", "ga"],
+            details={
+                "max_bytes": upload_max_bytes,
+                "formats": list(FREECAD_IMPORT_FORMATS),
+            },
+        ),
+        _release_check(
+            "freecad_smoke_endpoint",
+            "pass",
+            "/api/freecad/smoke is available for built-image FreeCADCmd verification.",
+            required_for=["private_beta", "public_beta", "ga"],
+            details={
+                "endpoint": "/api/freecad/smoke",
+                "manual_container_smoke_required": True,
+            },
+        ),
+        _release_check(
+            "remote_gui_bridge",
+            "pass" if gui_ready else "fail",
+            "Remote GUI session orchestration, control-plane URL, and desktop routing are configured."
+            if gui_ready
+            else "Remote FreeCAD GUI handoff needs session orchestration, control-plane URL, and desktop routing.",
+            required_for=["public_beta", "ga"],
+            details={
+                "gui_session_backend": gui_backend,
+                "orchestrator_configured": gui_orchestrator_configured,
+                "control_plane_url_configured": gui_control_plane_configured,
+                "remote_desktop_configured": remote_desktop_configured,
+            },
+        ),
+        _release_check(
+            "bridge_observability",
+            "pass",
+            "Remote session events, bridge heartbeat, command queue, and command results are persisted.",
+            required_for=["private_beta", "public_beta", "ga"],
+            details={
+                "context_endpoint": "/api/freecad/sessions/{id}/bridge/context",
+                "command_queue": "/api/freecad/sessions/{id}/commands",
+            },
+        ),
+        _release_check(
+            "worker_isolation",
+            "pass" if hardened_worker else "fail",
+            "Split FreeCAD worker and runtime isolation controls are configured."
+            if hardened_worker
+            else "GA requires a split FreeCAD worker with egress block, read-only rootfs, seccomp, and tmpfs workspace.",
+            required_for=["ga"],
+            details={
+                "split_service_configured": worker_split,
+                "security_controls": security_controls,
+            },
+        ),
+        _release_check(
+            "license_gate",
+            "pass" if license_review_accepted else "fail",
+            "FreeCAD/GPL and any ported-code license review has been accepted."
+            if license_review_accepted
+            else "Public release requires explicit license review acceptance.",
+            required_for=["public_beta", "ga"],
+        ),
+    ]
+    summary = {
+        "pass": sum(1 for check in checks if check["status"] == "pass"),
+        "warn": sum(1 for check in checks if check["status"] == "warn"),
+        "fail": sum(1 for check in checks if check["status"] == "fail"),
+        "blockers": [
+            check["key"]
+            for check in checks
+            if check["status"] == "fail" and check.get("required_for")
+        ],
+    }
+    release_targets = {
+        "private_beta_ready": _release_target_ready(checks, "private_beta"),
+        "public_beta_ready": _release_target_ready(checks, "public_beta"),
+        "ga_ready": _release_target_ready(checks, "ga"),
+    }
+    return {
+        "schema": "4yi-cad.production_readiness.v1",
+        "ok": bool(writable),
+        "phase": "phase6",
+        "generated_at": utc_now(),
+        "summary": summary,
+        "release_targets": release_targets,
+        "production_ready": release_targets["ga_ready"],
+        "durable_storage_configured": bool(durable),
+        "storage": storage,
+        "runtime": {
+            "gateway_configured": gateway_configured,
+            "gateway_base_url_configured": gateway_base_configured,
+            "gateway_platform_endpoint": bool(gateway_uses_platform),
+            "openai_api_key_configured": _configured_env("OPENAI_API_KEY"),
+            "text_model_configured": _configured_env("TEXT_MODEL"),
+            "port": os.environ.get("PORT", "8080"),
+        },
+        "freecad_worker": {
+            "mode": os.environ.get("FOURYI_CAD_WORKER_MODE", "single_container_subprocess"),
+            "split_service_configured": worker_split,
+            "endpoint_configured": worker_split,
+            "hardened_worker_service": hardened_worker,
+            "security_controls": security_controls,
+            "risk": None if hardened_worker else "FreeCAD still runs in the app container or lacks required runtime isolation controls",
+        },
+        "remote_gui": {
+            "gui_session_backend": gui_backend,
+            "orchestrator_configured": gui_orchestrator_configured,
+            "control_plane_url_configured": gui_control_plane_configured,
+            "remote_desktop_configured": remote_desktop_configured,
+            "ready": gui_ready,
+        },
+        "license": {
+            "review_accepted": license_review_accepted,
+        },
+        "checks": checks,
+    }
+
+
+def _remote_session_workbench_id(req: FreeCadRemoteSessionRequest) -> str:
+    workbench_session_id = req.workbench_session_id or req.session_id
+    if not workbench_session_id:
+        raise HTTPException(status_code=422, detail="session_id is required")
+    return workbench_session_id
+
+
+def _remote_session_conflict_detail(
+    *,
+    active_version_id: str | None,
+    expected_version_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "code": "cad_session_revision_conflict",
+        "message": "remote FreeCAD session is based on an older workbench version",
+        "active_version_id": active_version_id,
+        "expected_version_id": expected_version_id,
+    }
+
+
+def _remote_bridge_metadata(
+    existing_metadata: dict[str, Any],
+    req: FreeCadBridgeHeartbeatRequest,
+    *,
+    event: str,
+) -> dict[str, Any]:
+    bridge = dict((existing_metadata or {}).get("bridge") or {})
+    if req.bridge_id is not None:
+        bridge["bridge_id"] = req.bridge_id
+    if req.freecad_version is not None:
+        bridge["freecad_version"] = req.freecad_version
+    if req.document_name is not None:
+        bridge["document_name"] = req.document_name
+    if req.active_document_path is not None:
+        bridge["active_document_path"] = req.active_document_path
+    if req.workbench is not None:
+        bridge["workbench"] = req.workbench
+    if req.selection:
+        bridge["selection"] = dict(req.selection)
+    if req.document_tree:
+        bridge["document_tree"] = dict(req.document_tree)
+    if req.console_tail:
+        bridge["console_tail"] = list(req.console_tail[-80:])
+    if req.capabilities:
+        bridge["capabilities"] = list(req.capabilities)
+    if req.metadata:
+        bridge["metadata"] = dict(req.metadata)
+    bridge["last_event"] = event
+    bridge["last_seen_at"] = utc_now()
+    return {
+        **dict(existing_metadata or {}),
+        "bridge": bridge,
     }
 
 
@@ -781,6 +1256,7 @@ def create_app(
     freecad_execute=None,
     session_store: SessionStore | None = None,
     artifact_store: ArtifactStore | None = None,
+    freecad_gui_orchestrator: FreeCadGuiSessionOrchestrator | None = None,
 ) -> FastAPI:
     app = FastAPI(title="4yi-cad")
     app.state.gateway = gateway
@@ -788,6 +1264,7 @@ def create_app(
     app.state.freecad_execute = freecad_execute
     app.state.session_store = session_store
     app.state.artifact_store = artifact_store
+    app.state.freecad_gui_orchestrator = freecad_gui_orchestrator
     if _STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
@@ -797,37 +1274,19 @@ def create_app(
 
     @app.get("/api/production/smoke")
     async def production_smoke():
-        store = _get_session_store(app)
-        artifact_store = _get_artifact_store(app)
-        storage = storage_status(
-            str(getattr(store, "db_path", "custom-session-store")),
-            str(getattr(artifact_store, "root", "custom-artifact-store")),
-        )
-        durable = all(item.get("durable_configured") for item in storage.values())
-        writable = all(item.get("writable") for item in storage.values())
-        worker_endpoint = os.environ.get("FOURYI_FREECAD_WORKER_URL") or os.environ.get("FREECAD_WORKER_URL")
-        worker_split = bool(worker_endpoint)
-        security_controls = {
-            "egress_blocked": os.environ.get("FOURYI_FREECAD_WORKER_EGRESS_BLOCKED", "").lower() in {"1", "true", "yes", "on"},
-            "read_only_rootfs": os.environ.get("FOURYI_FREECAD_WORKER_READ_ONLY_ROOTFS", "").lower() in {"1", "true", "yes", "on"},
-            "seccomp_profile": bool(os.environ.get("FOURYI_FREECAD_WORKER_SECCOMP_PROFILE")),
-            "tmpfs_workspace": os.environ.get("FOURYI_FREECAD_WORKER_TMPFS", "").lower() in {"1", "true", "yes", "on"},
-        }
-        hardened_worker = bool(worker_split and all(security_controls.values()))
+        readiness = _production_readiness_report(app)
         return {
-            "ok": bool(writable),
-            "durable_storage_configured": bool(durable),
-            "production_ready": bool(durable and writable and hardened_worker),
-            "storage": storage,
-            "freecad_worker": {
-                "mode": os.environ.get("FOURYI_CAD_WORKER_MODE", "single_container_subprocess"),
-                "split_service_configured": worker_split,
-                "endpoint_configured": worker_split,
-                "hardened_worker_service": hardened_worker,
-                "security_controls": security_controls,
-                "risk": None if hardened_worker else "FreeCAD still runs in the app container or lacks required runtime isolation controls",
-            },
+            "ok": readiness["ok"],
+            "durable_storage_configured": readiness["durable_storage_configured"],
+            "production_ready": readiness["production_ready"],
+            "storage": readiness["storage"],
+            "freecad_worker": readiness["freecad_worker"],
+            "readiness": readiness,
         }
+
+    @app.get("/api/production/readiness")
+    async def production_readiness():
+        return _production_readiness_report(app)
 
     @app.post("/api/sessions")
     async def create_session(req: CreateSessionRequest | None = None):
@@ -1001,6 +1460,681 @@ def create_app(
             "max_bytes": max_bytes,
             "max_mb": round(max_bytes / 1024 / 1024, 2),
             "formats": list(FREECAD_IMPORT_FORMATS),
+        }
+
+    @app.post("/api/freecad/sessions")
+    async def create_freecad_remote_session(req: FreeCadRemoteSessionRequest):
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        orchestrator = _get_freecad_gui_orchestrator(app)
+        workbench_session_id = _remote_session_workbench_id(req)
+        orchestrator_enabled = orchestrator.enabled()
+        remote_url_configured = bool(_remote_desktop_base_url())
+        status = "starting" if orchestrator_enabled else ("ready" if remote_url_configured else "starting")
+        try:
+            remote_session, reused = store.create_or_reuse_remote_freecad_session(
+                workbench_session_id=workbench_session_id,
+                base_version_id=req.version_id,
+                reuse=req.reuse,
+                status=status,
+                bridge_status="pending",
+                metadata=_remote_session_config_metadata(req.metadata),
+            )
+
+            event_type = "session_reused" if reused else "session_requested"
+            event_metadata = {
+                "workbench_session_id": workbench_session_id,
+                "base_version_id": remote_session.base_version_id,
+                "mode": req.mode,
+                "remote_url_configured": bool(remote_session.remote_url),
+            }
+
+            should_launch = (
+                orchestrator_enabled
+                and (
+                    not reused
+                    or not remote_session.remote_url
+                    or remote_session.status != "ready"
+                )
+            )
+            if should_launch:
+                try:
+                    fcstd_b64 = _optional_artifact_b64(
+                        artifact_store,
+                        workbench_session_id,
+                        remote_session.base_version_id,
+                        "fcstd",
+                    )
+                    launch = await asyncio.to_thread(
+                        orchestrator.start_session,
+                        remote_session_id=remote_session.id,
+                        workbench_session_id=workbench_session_id,
+                        base_version_id=remote_session.base_version_id,
+                        fcstd_b64=fcstd_b64,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    failure_metadata = {
+                        **remote_session.metadata,
+                        "orchestrator_error": str(exc),
+                    }
+                    remote_session = store.update_remote_freecad_session(
+                        remote_session_id=remote_session.id,
+                        status="failed",
+                        metadata=failure_metadata,
+                    )
+                    store.add_remote_freecad_session_event(
+                        remote_session_id=remote_session.id,
+                        event_type="session_start_failed",
+                        metadata={
+                            **event_metadata,
+                            "error": str(exc),
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"remote FreeCAD session launch failed: {exc}",
+                    ) from exc
+
+                if launch is not None:
+                    remote_session = store.update_remote_freecad_session(
+                        remote_session_id=remote_session.id,
+                        status=launch.status,
+                        remote_url=launch.remote_url,
+                        bridge_status=launch.bridge_status,
+                        metadata={
+                            **remote_session.metadata,
+                            **launch.metadata,
+                        },
+                    )
+                    event_type = "session_started"
+                    event_metadata = {
+                        **event_metadata,
+                        "orchestrator_backend": launch.metadata.get("orchestrator_backend"),
+                        "remote_url_configured": bool(launch.remote_url),
+                    }
+
+            remote_url = _remote_desktop_url_for(remote_session.id)
+            if not orchestrator_enabled and remote_url and remote_session.remote_url != remote_url:
+                remote_session = store.update_remote_freecad_session(
+                    remote_session_id=remote_session.id,
+                    status="ready",
+                    remote_url=remote_url,
+                    metadata={
+                        **remote_session.metadata,
+                        "remote_desktop_configured": True,
+                    },
+                )
+                event_metadata["remote_url_configured"] = True
+
+            store.add_remote_freecad_session_event(
+                remote_session_id=remote_session.id,
+                event_type=event_type,
+                metadata=event_metadata,
+            )
+        except HTTPException:
+            raise
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="session or version not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        return {**_remote_session_dict(remote_session), "reused": reused}
+
+    @app.get("/api/freecad/sessions")
+    async def list_freecad_remote_sessions(
+        session_id: str | None = None,
+        workbench_session_id: str | None = None,
+        limit: int = Query(default=20, ge=1, le=100),
+    ):
+        store = _get_session_store(app)
+        try:
+            sessions = store.list_remote_freecad_sessions(
+                workbench_session_id=workbench_session_id or session_id,
+                limit=limit,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        return {"sessions": sessions}
+
+    @app.get("/api/freecad/sessions/{remote_session_id}")
+    async def get_freecad_remote_session(remote_session_id: str):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            events = store.list_remote_freecad_session_events(
+                remote_session_id=remote_session_id,
+                limit=100,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        return {**_remote_session_dict(remote_session), "events": events}
+
+    @app.delete("/api/freecad/sessions/{remote_session_id}")
+    async def stop_freecad_remote_session(
+        remote_session_id: str,
+        req: FreeCadRemoteSessionStopRequest | None = None,
+    ):
+        store = _get_session_store(app)
+        orchestrator = _get_freecad_gui_orchestrator(app)
+        try:
+            existing = store.get_remote_freecad_session(remote_session_id)
+            if existing is None:
+                raise KeyError(remote_session_id)
+            orchestrator_result = None
+            if orchestrator.enabled():
+                orchestrator_result = await asyncio.to_thread(
+                    orchestrator.stop_session,
+                    remote_session_id=remote_session_id,
+                )
+            remote_session = store.stop_remote_freecad_session(
+                remote_session_id=remote_session_id,
+                reason=req.reason if req else None,
+            )
+            metadata = remote_session.metadata
+            if orchestrator_result is not None:
+                metadata = {
+                    **metadata,
+                    "orchestrator_stop": orchestrator_result,
+                }
+                remote_session = store.update_remote_freecad_session(
+                    remote_session_id=remote_session_id,
+                    metadata=metadata,
+                )
+            store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="session_stopped",
+                metadata={
+                    "reason": req.reason if req else None,
+                    "orchestrator_stop": orchestrator_result,
+                },
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        return _remote_session_dict(remote_session)
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/commands")
+    async def queue_freecad_remote_session_command(
+        remote_session_id: str,
+        req: FreeCadRemoteSessionCommandRequest,
+    ):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            if (
+                req.base_version_id
+                and remote_session.current_version_id
+                and req.base_version_id != remote_session.current_version_id
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=_remote_session_conflict_detail(
+                        active_version_id=remote_session.current_version_id,
+                        expected_version_id=req.base_version_id,
+                    ),
+                )
+            command = store.create_remote_freecad_session_command(
+                remote_session_id=remote_session_id,
+                op=req.op,
+                input=req.input,
+                base_version_id=req.base_version_id or remote_session.current_version_id,
+                metadata={"source": "web_control_plane"},
+            )
+            event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="bridge_command_queued",
+                metadata={
+                    "command_id": command.id,
+                    "op": req.op,
+                    "input": req.input,
+                    "base_version_id": req.base_version_id
+                    or remote_session.current_version_id,
+                    "status": command.status,
+                },
+            )
+        except HTTPException:
+            raise
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        return {
+            "command_id": command.id,
+            "status": command.status,
+            "session_id": remote_session_id,
+            "command": _remote_command_dict(command),
+            "event": event.__dict__,
+        }
+
+    @app.get("/api/freecad/sessions/{remote_session_id}/commands/{command_id}")
+    async def get_freecad_remote_session_command(
+        remote_session_id: str,
+        command_id: str,
+    ):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            command = store.get_remote_freecad_session_command(
+                remote_session_id=remote_session_id,
+                command_id=command_id,
+            )
+            if command is None:
+                raise KeyError(command_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD command not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD command lookup failed: {exc}",
+            ) from exc
+        return {
+            "session": _remote_session_dict(remote_session),
+            "command": _remote_command_dict(command),
+        }
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/panel/actions")
+    async def create_freecad_panel_action(
+        remote_session_id: str,
+        req: FreeCadPanelActionRequest,
+    ):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            command = None
+            should_queue_macro = req.action in {"prompt", "generate_patch"} and bool(req.macro)
+            if should_queue_macro:
+                command = store.create_remote_freecad_session_command(
+                    remote_session_id=remote_session_id,
+                    op="run_macro",
+                    input={
+                        "instruction": req.prompt,
+                        "selection": req.selection,
+                        "macro": req.macro,
+                        "panel_action": req.action,
+                        "patch_id": req.patch_id,
+                    },
+                    base_version_id=remote_session.current_version_id,
+                    metadata={"source": "freecad_panel", "panel_action": req.action},
+                )
+            action_event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="panel_action_requested",
+                metadata={
+                    "action": req.action,
+                    "prompt": req.prompt,
+                    "patch_id": req.patch_id,
+                    "selection_count": len(req.selection.get("objects") or [])
+                    if isinstance(req.selection, dict)
+                    else 0,
+                    "command_id": command.id if command else None,
+                    "source": "freecad_panel",
+                    "metadata": req.metadata,
+                },
+            )
+            command_event = None
+            if command is not None:
+                command_event = store.add_remote_freecad_session_event(
+                    remote_session_id=remote_session_id,
+                    event_type="bridge_command_queued",
+                    metadata={
+                        "command_id": command.id,
+                        "op": command.op,
+                        "input": command.input,
+                        "base_version_id": command.base_version_id,
+                        "status": command.status,
+                        "source": "freecad_panel",
+                    },
+                )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD panel action failed: {exc}",
+            ) from exc
+        return {
+            "status": "queued" if command else "recorded",
+            "session": _remote_session_dict(remote_session),
+            "command": _remote_command_dict(command) if command else None,
+            "event": action_event.__dict__,
+            "command_event": command_event.__dict__ if command_event else None,
+        }
+
+    @app.get("/api/freecad/sessions/{remote_session_id}/bridge/context")
+    async def get_freecad_bridge_context(remote_session_id: str):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            bridge = dict((remote_session.metadata or {}).get("bridge") or {})
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD bridge context lookup failed: {exc}",
+            ) from exc
+        return {
+            "session": _remote_session_dict(remote_session),
+            "bridge_status": remote_session.bridge_status,
+            "bridge": bridge,
+            "workbench": bridge.get("workbench"),
+            "selection": bridge.get("selection") or {},
+            "document_tree": bridge.get("document_tree") or {},
+            "console_tail": bridge.get("console_tail") or [],
+        }
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/bridge/heartbeat")
+    async def freecad_bridge_heartbeat(
+        remote_session_id: str,
+        req: FreeCadBridgeHeartbeatRequest,
+    ):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            metadata = _remote_bridge_metadata(
+                remote_session.metadata,
+                req,
+                event="heartbeat",
+            )
+            stopped = remote_session.status == "stopped"
+            remote_session = store.update_remote_freecad_session(
+                remote_session_id=remote_session_id,
+                status="ready" if remote_session.status in {"starting", "idle"} else None,
+                current_version_id=req.current_version_id,
+                bridge_status="disconnected" if stopped else "connected",
+                metadata=metadata,
+            )
+            event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="bridge_heartbeat",
+                metadata={
+                    "bridge_id": req.bridge_id,
+                    "freecad_version": req.freecad_version,
+                    "document_name": req.document_name,
+                    "current_version_id": req.current_version_id,
+                    "workbench": req.workbench,
+                    "selection_count": len(req.selection.get("objects") or [])
+                    if isinstance(req.selection, dict)
+                    else 0,
+                    "document_object_count": len(req.document_tree.get("objects") or [])
+                    if isinstance(req.document_tree, dict)
+                    else 0,
+                },
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD bridge heartbeat failed: {exc}",
+            ) from exc
+        return {
+            "session": _remote_session_dict(remote_session),
+            "event": event.__dict__,
+        }
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/bridge/poll")
+    async def freecad_bridge_poll(
+        remote_session_id: str,
+        req: FreeCadBridgePollRequest,
+    ):
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            metadata = _remote_bridge_metadata(
+                remote_session.metadata,
+                req,
+                event="poll",
+            )
+            stopped = remote_session.status == "stopped"
+            remote_session = store.update_remote_freecad_session(
+                remote_session_id=remote_session_id,
+                status="ready" if remote_session.status in {"starting", "idle"} else None,
+                current_version_id=req.current_version_id,
+                bridge_status="disconnected" if stopped else "connected",
+                metadata=metadata,
+            )
+            commands = []
+            if not stopped:
+                commands = store.claim_pending_remote_freecad_session_commands(
+                    remote_session_id=remote_session_id,
+                    limit=req.max_commands,
+                )
+            event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="bridge_poll",
+                metadata={
+                    "bridge_id": req.bridge_id,
+                    "command_count": len(commands),
+                    "current_version_id": req.current_version_id,
+                    "workbench": req.workbench,
+                    "selection_count": len(req.selection.get("objects") or [])
+                    if isinstance(req.selection, dict)
+                    else 0,
+                },
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD bridge poll failed: {exc}",
+            ) from exc
+        return {
+            "session": _remote_session_dict(remote_session),
+            "commands": commands,
+            "event": event.__dict__,
+        }
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/bridge/commands/{command_id}/result")
+    async def freecad_bridge_command_result(
+        remote_session_id: str,
+        command_id: str,
+        req: FreeCadBridgeCommandResultRequest,
+    ):
+        store = _get_session_store(app)
+        try:
+            existing = store.get_remote_freecad_session(remote_session_id)
+            if existing is None:
+                raise KeyError(remote_session_id)
+            command = store.complete_remote_freecad_session_command(
+                remote_session_id=remote_session_id,
+                command_id=command_id,
+                status=req.status,
+                result=req.result,
+                error=req.error,
+                metadata={
+                    **req.metadata,
+                    "source": "freecad_bridge",
+                },
+            )
+            event_type = (
+                "bridge_command_completed"
+                if req.status == "completed"
+                else "bridge_command_failed"
+            )
+            remote_session = store.update_remote_freecad_session(
+                remote_session_id=remote_session_id,
+                status="ready" if existing.status in {"starting", "idle", "paused"} else None,
+                current_version_id=req.current_version_id,
+                bridge_status="disconnected" if existing.status == "stopped" else "connected",
+            )
+            event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type=event_type,
+                metadata={
+                    "command_id": command_id,
+                    "status": req.status,
+                    "error": req.error,
+                    "error_code": (req.result.get("error") or {}).get("code")
+                    if isinstance(req.result.get("error"), dict)
+                    else None,
+                    "current_version_id": req.current_version_id,
+                },
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="remote FreeCAD command not found") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD bridge command result failed: {exc}",
+            ) from exc
+        return {
+            "session": _remote_session_dict(remote_session),
+            "command": _remote_command_dict(command),
+            "event": event.__dict__,
+        }
+
+    @app.post("/api/freecad/sessions/{remote_session_id}/save")
+    async def save_freecad_remote_session(
+        remote_session_id: str,
+        req: FreeCadRemoteSessionSaveRequest,
+    ):
+        _enforce_freecad_upload_size(req.fcstd_b64, label="remote FreeCAD FCStd save")
+        store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+            if remote_session is None:
+                raise KeyError(remote_session_id)
+            workbench_session = store.get_session(remote_session.workbench_session_id)
+            if workbench_session is None:
+                raise KeyError(remote_session.workbench_session_id)
+
+            expected_base_version_id = (
+                req.base_version_id
+                or remote_session.current_version_id
+                or remote_session.base_version_id
+            )
+            active_version_id = workbench_session["session"]["active_version_id"]
+            if (
+                expected_base_version_id
+                and active_version_id
+                and expected_base_version_id != active_version_id
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=_remote_session_conflict_detail(
+                        active_version_id=active_version_id,
+                        expected_version_id=expected_base_version_id,
+                    ),
+                )
+
+            artifacts = {**req.artifacts, "fcstd": req.fcstd_b64}
+            metadata = _remote_session_config_metadata(
+                {
+                    "preview_mode": "generated",
+                    "engine": "freecad",
+                    "document_state": "fcstd_artifact",
+                    "source": "remote_freecad_session",
+                    "remote_session_id": remote_session_id,
+                    "base_version_id": expected_base_version_id,
+                    "include_derivatives": req.include_derivatives,
+                    "generated_parameters": [],
+                }
+            )
+            version = store.add_version(
+                session_id=remote_session.workbench_session_id,
+                intent="modify",
+                user_instruction=req.message or "Save remote FreeCAD session",
+                design_state=_freecad_document_state(),
+                script=(
+                    "# Saved from remote FreeCAD GUI session.\n"
+                    "# The FCStd artifact is the authoritative document state.\n"
+                    f"# Remote session: {remote_session_id}\n"
+                ),
+                geometry_summary={
+                    "engine": "freecad",
+                    "source": "remote_freecad_session",
+                    "remote_session_id": remote_session_id,
+                    "exports": sorted(name.lower() for name in artifacts),
+                },
+                patch={
+                    "op": "remote_freecad_session_save",
+                    "remote_session_id": remote_session_id,
+                    "base_version_id": expected_base_version_id,
+                },
+                metadata=metadata,
+                status="ok",
+            )
+            artifact_refs = artifact_store.save_version_artifacts(
+                session_id=remote_session.workbench_session_id,
+                version_id=version.id,
+                preview_png_b64=req.preview_png_b64,
+                exports=artifacts,
+            )
+            if artifact_refs:
+                version = store.update_version_metadata(
+                    session_id=remote_session.workbench_session_id,
+                    version_id=version.id,
+                    metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+                )
+            remote_session = store.update_remote_freecad_session(
+                remote_session_id=remote_session_id,
+                status="ready",
+                current_version_id=version.id,
+            )
+            event = store.add_remote_freecad_session_event(
+                remote_session_id=remote_session_id,
+                event_type="session_saved",
+                metadata={
+                    "version_id": version.id,
+                    "base_version_id": expected_base_version_id,
+                    "message": req.message,
+                    "artifact_refs": artifact_refs,
+                },
+            )
+        except HTTPException:
+            raise
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="session or version not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session save failed: {exc}",
+            ) from exc
+        return {
+            "revision_id": version.id,
+            "version_id": version.id,
+            "fcstd_artifact_id": "fcstd",
+            "fcstd_artifact_ref": artifact_refs.get("fcstd"),
+            "derivative_job_id": None,
+            "version": version.__dict__,
+            "session": _remote_session_dict(remote_session),
+            "event": event.__dict__,
         }
 
     @app.post("/api/freecad/import_model")

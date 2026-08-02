@@ -1,0 +1,68 @@
+# 4yi-cad Phase 1 spike image: real FreeCAD GUI over noVNC.
+#
+# This image is intentionally separate from the production FastAPI image. It is a
+# disposable interactive session workload: Xvfb + Fluxbox + x11vnc + noVNC +
+# FreeCAD GUI, with a writable workspace mounted at /workspace.
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      dbus-x11 \
+      fluxbox \
+      freecad \
+      libgl1 \
+      libgl1-mesa-dri \
+      libglu1-mesa \
+      libgomp1 \
+      libsm6 \
+      libxext6 \
+      libxrender1 \
+      novnc \
+      procps \
+      tini \
+      websockify \
+      x11vnc \
+      xauth \
+      xterm \
+      xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/freecad-gui/start-freecad-gui.sh /usr/local/bin/start-freecad-gui.sh
+COPY scripts/freecad-gui/freecad-bridge-client.py /usr/local/bin/freecad-bridge-client.py
+COPY freecad-addon/fouryi_cad_companion /tmp/fouryi_cad_companion
+RUN chmod 0755 /usr/local/bin/start-freecad-gui.sh /usr/local/bin/freecad-bridge-client.py \
+    && useradd -m -u 10001 appuser \
+    && mkdir -p /home/appuser/.local/share/FreeCAD/Mod /home/appuser/.FreeCAD/Mod \
+    && cp -R /tmp/fouryi_cad_companion /home/appuser/.local/share/FreeCAD/Mod/fouryi_cad_companion \
+    && cp -R /home/appuser/.local/share/FreeCAD/Mod/fouryi_cad_companion /home/appuser/.FreeCAD/Mod/fouryi_cad_companion \
+    && rm -rf /tmp/fouryi_cad_companion \
+    && mkdir -p /workspace /tmp/4yi-cad-freecad-gui \
+    && chown -R appuser:appuser /workspace /tmp/4yi-cad-freecad-gui /home/appuser/.local/share/FreeCAD /home/appuser/.FreeCAD
+
+USER appuser
+WORKDIR /workspace
+
+ENV CAD_SESSION_WORKSPACE=/workspace \
+    DISPLAY_NUM=99 \
+    SCREEN=0 \
+    GEOMETRY=1600x1000x24 \
+    VNC_PORT=5900 \
+    NOVNC_PORT=6080 \
+    FREECAD_BIN= \
+    SESSION_FCSTD_PATH= \
+    CAD_BRIDGE_AUTOSTART=1 \
+    CAD_BRIDGE_MODE=freecad_addon \
+    CAD_BRIDGE_ALLOW_MACRO_EXEC=1 \
+    CAD_BRIDGE_CLIENT_BIN=/usr/local/bin/freecad-bridge-client.py \
+    CAD_BRIDGE_POLL_INTERVAL_SECONDS=2
+
+EXPOSE 6080
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=6 \
+  CMD curl -fsS "http://127.0.0.1:${NOVNC_PORT:-6080}/vnc.html" >/dev/null || exit 1
+
+ENTRYPOINT ["tini", "--"]
+CMD ["start-freecad-gui.sh"]

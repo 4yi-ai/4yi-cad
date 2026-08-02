@@ -57,6 +57,47 @@ class StoredVersion:
     created_at: str
 
 
+@dataclass(frozen=True)
+class StoredRemoteFreeCadSession:
+    id: str
+    workbench_session_id: str
+    base_version_id: str | None
+    current_version_id: str | None
+    status: str
+    remote_url: str | None
+    bridge_status: str
+    created_at: str
+    started_at: str | None
+    last_active_at: str
+    stopped_at: str | None
+    metadata: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class StoredRemoteFreeCadSessionEvent:
+    id: str
+    remote_session_id: str
+    event_type: str
+    metadata: dict[str, Any]
+    occurred_at: str
+
+
+@dataclass(frozen=True)
+class StoredRemoteFreeCadCommand:
+    id: str
+    remote_session_id: str
+    op: str
+    input: dict[str, Any]
+    base_version_id: str | None
+    status: str
+    result: dict[str, Any] | None
+    error: str | None
+    created_at: str
+    dispatched_at: str | None
+    completed_at: str | None
+    metadata: dict[str, Any]
+
+
 class SessionStore:
     def create_session(self, *, title: str | None = None) -> StoredSession:
         raise NotImplementedError
@@ -93,6 +134,109 @@ class SessionStore:
         version_id: str,
         metadata: dict[str, Any],
     ) -> StoredVersion:
+        raise NotImplementedError
+
+    def create_or_reuse_remote_freecad_session(
+        self,
+        *,
+        workbench_session_id: str,
+        base_version_id: str | None = None,
+        reuse: bool = True,
+        remote_url: str | None = None,
+        status: str = "starting",
+        bridge_status: str = "pending",
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[StoredRemoteFreeCadSession, bool]:
+        raise NotImplementedError
+
+    def list_remote_freecad_sessions(
+        self,
+        *,
+        workbench_session_id: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def get_remote_freecad_session(
+        self,
+        remote_session_id: str,
+    ) -> StoredRemoteFreeCadSession | None:
+        raise NotImplementedError
+
+    def update_remote_freecad_session(
+        self,
+        *,
+        remote_session_id: str,
+        status: str | None = None,
+        current_version_id: str | None = None,
+        remote_url: str | None = None,
+        bridge_status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadSession:
+        raise NotImplementedError
+
+    def stop_remote_freecad_session(
+        self,
+        *,
+        remote_session_id: str,
+        reason: str | None = None,
+    ) -> StoredRemoteFreeCadSession:
+        raise NotImplementedError
+
+    def add_remote_freecad_session_event(
+        self,
+        *,
+        remote_session_id: str,
+        event_type: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadSessionEvent:
+        raise NotImplementedError
+
+    def create_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        op: str,
+        input: dict[str, Any] | None = None,
+        base_version_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadCommand:
+        raise NotImplementedError
+
+    def claim_pending_remote_freecad_session_commands(
+        self,
+        *,
+        remote_session_id: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def get_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        command_id: str,
+    ) -> StoredRemoteFreeCadCommand | None:
+        raise NotImplementedError
+
+    def complete_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        command_id: str,
+        status: str,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadCommand:
+        raise NotImplementedError
+
+    def list_remote_freecad_session_events(
+        self,
+        *,
+        remote_session_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
         raise NotImplementedError
 
 
@@ -370,12 +514,592 @@ class SqliteSessionStore(SessionStore):
             raise KeyError(version_id)
         return version
 
+    def create_or_reuse_remote_freecad_session(
+        self,
+        *,
+        workbench_session_id: str,
+        base_version_id: str | None = None,
+        reuse: bool = True,
+        remote_url: str | None = None,
+        status: str = "starting",
+        bridge_status: str = "pending",
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[StoredRemoteFreeCadSession, bool]:
+        now = utc_now()
+        with self._connect() as con:
+            session_row = con.execute(
+                "select active_version_id from design_sessions where id = ?",
+                (workbench_session_id,),
+            ).fetchone()
+            if session_row is None:
+                raise KeyError(workbench_session_id)
+
+            resolved_base_version_id = base_version_id or session_row["active_version_id"]
+            if resolved_base_version_id is not None:
+                version_row = con.execute(
+                    """
+                    select id from design_versions
+                    where session_id = ? and id = ?
+                    """,
+                    (workbench_session_id, resolved_base_version_id),
+                ).fetchone()
+                if version_row is None:
+                    raise KeyError(resolved_base_version_id)
+
+            if reuse:
+                reusable_row = con.execute(
+                    """
+                    select
+                        id,
+                        workbench_session_id,
+                        base_version_id,
+                        current_version_id,
+                        status,
+                        remote_url,
+                        bridge_status,
+                        created_at,
+                        started_at,
+                        last_active_at,
+                        stopped_at,
+                        metadata_json
+                    from freecad_remote_sessions
+                    where workbench_session_id = ?
+                        and coalesce(base_version_id, '') = coalesce(?, '')
+                        and status in ('starting', 'ready', 'idle', 'paused')
+                    order by last_active_at desc, created_at desc
+                    limit 1
+                    """,
+                    (workbench_session_id, resolved_base_version_id),
+                ).fetchone()
+                if reusable_row is not None:
+                    con.execute(
+                        """
+                        update freecad_remote_sessions
+                        set last_active_at = ?
+                        where id = ?
+                        """,
+                        (now, reusable_row["id"]),
+                    )
+                    updated = self._remote_session_row_by_id(con, reusable_row["id"])
+                    return _remote_session_from_row(updated), True
+
+            remote_session = StoredRemoteFreeCadSession(
+                id=uuid.uuid4().hex,
+                workbench_session_id=workbench_session_id,
+                base_version_id=resolved_base_version_id,
+                current_version_id=resolved_base_version_id,
+                status=status,
+                remote_url=remote_url,
+                bridge_status=bridge_status,
+                created_at=now,
+                started_at=now if status in {"starting", "ready"} else None,
+                last_active_at=now,
+                stopped_at=None,
+                metadata=metadata or {},
+            )
+            con.execute(
+                """
+                insert into freecad_remote_sessions
+                    (
+                        id,
+                        workbench_session_id,
+                        base_version_id,
+                        current_version_id,
+                        status,
+                        remote_url,
+                        bridge_status,
+                        created_at,
+                        started_at,
+                        last_active_at,
+                        stopped_at,
+                        metadata_json
+                    )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    remote_session.id,
+                    remote_session.workbench_session_id,
+                    remote_session.base_version_id,
+                    remote_session.current_version_id,
+                    remote_session.status,
+                    remote_session.remote_url,
+                    remote_session.bridge_status,
+                    remote_session.created_at,
+                    remote_session.started_at,
+                    remote_session.last_active_at,
+                    remote_session.stopped_at,
+                    _json_dump(remote_session.metadata),
+                ),
+            )
+        return remote_session, False
+
+    def list_remote_freecad_sessions(
+        self,
+        *,
+        workbench_session_id: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(int(limit or 20), 100))
+        where = ""
+        params: tuple[Any, ...] = (bounded_limit,)
+        if workbench_session_id:
+            where = "where workbench_session_id = ?"
+            params = (workbench_session_id, bounded_limit)
+        with self._connect() as con:
+            rows = con.execute(
+                f"""
+                select
+                    id,
+                    workbench_session_id,
+                    base_version_id,
+                    current_version_id,
+                    status,
+                    remote_url,
+                    bridge_status,
+                    created_at,
+                    started_at,
+                    last_active_at,
+                    stopped_at,
+                    metadata_json
+                from freecad_remote_sessions
+                {where}
+                order by last_active_at desc, created_at desc
+                limit ?
+                """,
+                params,
+            ).fetchall()
+        return [_remote_session_to_dict(_remote_session_from_row(row)) for row in rows]
+
+    def get_remote_freecad_session(
+        self,
+        remote_session_id: str,
+    ) -> StoredRemoteFreeCadSession | None:
+        with self._connect() as con:
+            row = self._remote_session_row_by_id(con, remote_session_id)
+        return _remote_session_from_row(row) if row is not None else None
+
+    def update_remote_freecad_session(
+        self,
+        *,
+        remote_session_id: str,
+        status: str | None = None,
+        current_version_id: str | None = None,
+        remote_url: str | None = None,
+        bridge_status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadSession:
+        now = utc_now()
+        with self._connect() as con:
+            existing = self._remote_session_row_by_id(con, remote_session_id)
+            if existing is None:
+                raise KeyError(remote_session_id)
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set
+                    status = coalesce(?, status),
+                    current_version_id = coalesce(?, current_version_id),
+                    remote_url = coalesce(?, remote_url),
+                    bridge_status = coalesce(?, bridge_status),
+                    metadata_json = coalesce(?, metadata_json),
+                    last_active_at = ?,
+                    stopped_at = case
+                        when ? in ('stopped', 'failed') then coalesce(stopped_at, ?)
+                        else stopped_at
+                    end
+                where id = ?
+                """,
+                (
+                    status,
+                    current_version_id,
+                    remote_url,
+                    bridge_status,
+                    _json_dump(metadata) if metadata is not None else None,
+                    now,
+                    status,
+                    now,
+                    remote_session_id,
+                ),
+            )
+            row = self._remote_session_row_by_id(con, remote_session_id)
+        return _remote_session_from_row(row)
+
+    def stop_remote_freecad_session(
+        self,
+        *,
+        remote_session_id: str,
+        reason: str | None = None,
+    ) -> StoredRemoteFreeCadSession:
+        now = utc_now()
+        with self._connect() as con:
+            existing = self._remote_session_row_by_id(con, remote_session_id)
+            if existing is None:
+                raise KeyError(remote_session_id)
+            metadata = _json_load(existing["metadata_json"])
+            if reason:
+                metadata["stop_reason"] = reason
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set
+                    status = 'stopped',
+                    bridge_status = 'disconnected',
+                    metadata_json = ?,
+                    last_active_at = ?,
+                    stopped_at = coalesce(stopped_at, ?)
+                where id = ?
+                """,
+                (_json_dump(metadata), now, now, remote_session_id),
+            )
+            row = self._remote_session_row_by_id(con, remote_session_id)
+        return _remote_session_from_row(row)
+
+    def add_remote_freecad_session_event(
+        self,
+        *,
+        remote_session_id: str,
+        event_type: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadSessionEvent:
+        now = utc_now()
+        event = StoredRemoteFreeCadSessionEvent(
+            id=uuid.uuid4().hex,
+            remote_session_id=remote_session_id,
+            event_type=event_type,
+            metadata=metadata or {},
+            occurred_at=now,
+        )
+        with self._connect() as con:
+            if self._remote_session_row_by_id(con, remote_session_id) is None:
+                raise KeyError(remote_session_id)
+            con.execute(
+                """
+                insert into freecad_remote_session_events
+                    (id, remote_session_id, event_type, metadata_json, occurred_at)
+                values (?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.remote_session_id,
+                    event.event_type,
+                    _json_dump(event.metadata),
+                    event.occurred_at,
+                ),
+            )
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set last_active_at = ?
+                where id = ?
+                """,
+                (now, remote_session_id),
+            )
+        return event
+
+    def create_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        op: str,
+        input: dict[str, Any] | None = None,
+        base_version_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadCommand:
+        now = utc_now()
+        command = StoredRemoteFreeCadCommand(
+            id=f"cmd_{uuid.uuid4().hex}",
+            remote_session_id=remote_session_id,
+            op=op,
+            input=input or {},
+            base_version_id=base_version_id,
+            status="pending",
+            result=None,
+            error=None,
+            created_at=now,
+            dispatched_at=None,
+            completed_at=None,
+            metadata=metadata or {},
+        )
+        with self._connect() as con:
+            if self._remote_session_row_by_id(con, remote_session_id) is None:
+                raise KeyError(remote_session_id)
+            con.execute(
+                """
+                insert into freecad_remote_session_commands
+                    (
+                        id,
+                        remote_session_id,
+                        op,
+                        input_json,
+                        base_version_id,
+                        status,
+                        result_json,
+                        error,
+                        created_at,
+                        dispatched_at,
+                        completed_at,
+                        metadata_json
+                    )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    command.id,
+                    command.remote_session_id,
+                    command.op,
+                    _json_dump(command.input),
+                    command.base_version_id,
+                    command.status,
+                    None,
+                    command.error,
+                    command.created_at,
+                    command.dispatched_at,
+                    command.completed_at,
+                    _json_dump(command.metadata),
+                ),
+            )
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set last_active_at = ?
+                where id = ?
+                """,
+                (now, remote_session_id),
+            )
+        return command
+
+    def claim_pending_remote_freecad_session_commands(
+        self,
+        *,
+        remote_session_id: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(int(limit or 10), 50))
+        now = utc_now()
+        with self._connect() as con:
+            if self._remote_session_row_by_id(con, remote_session_id) is None:
+                raise KeyError(remote_session_id)
+            rows = con.execute(
+                """
+                select
+                    id,
+                    remote_session_id,
+                    op,
+                    input_json,
+                    base_version_id,
+                    status,
+                    result_json,
+                    error,
+                    created_at,
+                    dispatched_at,
+                    completed_at,
+                    metadata_json
+                from freecad_remote_session_commands
+                where remote_session_id = ?
+                    and status = 'pending'
+                order by created_at asc, id asc
+                limit ?
+                """,
+                (remote_session_id, bounded_limit),
+            ).fetchall()
+            command_ids = [row["id"] for row in rows]
+            if command_ids:
+                placeholders = ",".join("?" for _ in command_ids)
+                con.execute(
+                    f"""
+                    update freecad_remote_session_commands
+                    set status = 'dispatched',
+                        dispatched_at = coalesce(dispatched_at, ?)
+                    where id in ({placeholders})
+                    """,
+                    (now, *command_ids),
+                )
+                rows = con.execute(
+                    f"""
+                    select
+                        id,
+                        remote_session_id,
+                        op,
+                        input_json,
+                        base_version_id,
+                        status,
+                        result_json,
+                        error,
+                        created_at,
+                        dispatched_at,
+                        completed_at,
+                        metadata_json
+                    from freecad_remote_session_commands
+                    where id in ({placeholders})
+                    order by created_at asc, id asc
+                    """,
+                    tuple(command_ids),
+                ).fetchall()
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set last_active_at = ?
+                where id = ?
+                """,
+                (now, remote_session_id),
+            )
+        return [_remote_command_to_dict(_remote_command_from_row(row)) for row in rows]
+
+    def get_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        command_id: str,
+    ) -> StoredRemoteFreeCadCommand | None:
+        with self._connect() as con:
+            if self._remote_session_row_by_id(con, remote_session_id) is None:
+                raise KeyError(remote_session_id)
+            row = self._remote_command_row_by_id(
+                con,
+                remote_session_id=remote_session_id,
+                command_id=command_id,
+            )
+        return _remote_command_from_row(row) if row is not None else None
+
+    def complete_remote_freecad_session_command(
+        self,
+        *,
+        remote_session_id: str,
+        command_id: str,
+        status: str,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> StoredRemoteFreeCadCommand:
+        now = utc_now()
+        with self._connect() as con:
+            existing = self._remote_command_row_by_id(
+                con,
+                remote_session_id=remote_session_id,
+                command_id=command_id,
+            )
+            if existing is None:
+                raise KeyError(command_id)
+            existing_metadata = _json_load(existing["metadata_json"])
+            next_metadata = {**existing_metadata, **(metadata or {})}
+            con.execute(
+                """
+                update freecad_remote_session_commands
+                set status = ?,
+                    result_json = ?,
+                    error = ?,
+                    completed_at = ?,
+                    metadata_json = ?
+                where remote_session_id = ?
+                    and id = ?
+                """,
+                (
+                    status,
+                    _json_dump(result) if result is not None else None,
+                    error,
+                    now,
+                    _json_dump(next_metadata),
+                    remote_session_id,
+                    command_id,
+                ),
+            )
+            con.execute(
+                """
+                update freecad_remote_sessions
+                set last_active_at = ?
+                where id = ?
+                """,
+                (now, remote_session_id),
+            )
+            row = self._remote_command_row_by_id(
+                con,
+                remote_session_id=remote_session_id,
+                command_id=command_id,
+            )
+        return _remote_command_from_row(row)
+
+    def list_remote_freecad_session_events(
+        self,
+        *,
+        remote_session_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(int(limit or 50), 200))
+        with self._connect() as con:
+            if self._remote_session_row_by_id(con, remote_session_id) is None:
+                raise KeyError(remote_session_id)
+            rows = con.execute(
+                """
+                select id, remote_session_id, event_type, metadata_json, occurred_at
+                from freecad_remote_session_events
+                where remote_session_id = ?
+                order by occurred_at asc, id asc
+                limit ?
+                """,
+                (remote_session_id, bounded_limit),
+            ).fetchall()
+        return [_remote_session_event_to_dict(_remote_session_event_from_row(row)) for row in rows]
+
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.db_path)
         con.row_factory = sqlite3.Row
         con.execute("pragma foreign_keys = on")
         con.execute("pragma journal_mode = wal")
         return con
+
+    def _remote_session_row_by_id(
+        self,
+        con: sqlite3.Connection,
+        remote_session_id: str,
+    ) -> sqlite3.Row | None:
+        return con.execute(
+            """
+            select
+                id,
+                workbench_session_id,
+                base_version_id,
+                current_version_id,
+                status,
+                remote_url,
+                bridge_status,
+                created_at,
+                started_at,
+                last_active_at,
+                stopped_at,
+                metadata_json
+            from freecad_remote_sessions
+            where id = ?
+            """,
+            (remote_session_id,),
+        ).fetchone()
+
+    def _remote_command_row_by_id(
+        self,
+        con: sqlite3.Connection,
+        *,
+        remote_session_id: str,
+        command_id: str,
+    ) -> sqlite3.Row | None:
+        return con.execute(
+            """
+            select
+                id,
+                remote_session_id,
+                op,
+                input_json,
+                base_version_id,
+                status,
+                result_json,
+                error,
+                created_at,
+                dispatched_at,
+                completed_at,
+                metadata_json
+            from freecad_remote_session_commands
+            where remote_session_id = ?
+                and id = ?
+            """,
+            (remote_session_id, command_id),
+        ).fetchone()
 
     def _init_db(self) -> None:
         with self._connect() as con:
@@ -409,6 +1133,56 @@ class SqliteSessionStore(SessionStore):
 
                 create index if not exists idx_design_versions_session
                     on design_versions(session_id, version_number);
+
+                create table if not exists freecad_remote_sessions (
+                    id text primary key,
+                    workbench_session_id text not null references design_sessions(id)
+                        on delete cascade,
+                    base_version_id text,
+                    current_version_id text,
+                    status text not null,
+                    remote_url text,
+                    bridge_status text not null,
+                    created_at text not null,
+                    started_at text,
+                    last_active_at text not null,
+                    stopped_at text,
+                    metadata_json text not null default '{}'
+                );
+
+                create table if not exists freecad_remote_session_events (
+                    id text primary key,
+                    remote_session_id text not null references freecad_remote_sessions(id)
+                        on delete cascade,
+                    event_type text not null,
+                    metadata_json text not null default '{}',
+                    occurred_at text not null
+                );
+
+                create table if not exists freecad_remote_session_commands (
+                    id text primary key,
+                    remote_session_id text not null references freecad_remote_sessions(id)
+                        on delete cascade,
+                    op text not null,
+                    input_json text not null default '{}',
+                    base_version_id text,
+                    status text not null,
+                    result_json text,
+                    error text,
+                    created_at text not null,
+                    dispatched_at text,
+                    completed_at text,
+                    metadata_json text not null default '{}'
+                );
+
+                create index if not exists idx_freecad_remote_sessions_workbench
+                    on freecad_remote_sessions(workbench_session_id, last_active_at);
+
+                create index if not exists idx_freecad_remote_session_events_session
+                    on freecad_remote_session_events(remote_session_id, occurred_at);
+
+                create index if not exists idx_freecad_remote_session_commands_pending
+                    on freecad_remote_session_commands(remote_session_id, status, created_at);
                 """
             )
             columns = {
@@ -514,4 +1288,95 @@ def _version_summary(version: StoredVersion) -> dict[str, Any]:
         "status": version.status,
         "error": version.error,
         "created_at": version.created_at,
+    }
+
+
+def _remote_session_from_row(row: sqlite3.Row) -> StoredRemoteFreeCadSession:
+    return StoredRemoteFreeCadSession(
+        id=row["id"],
+        workbench_session_id=row["workbench_session_id"],
+        base_version_id=row["base_version_id"],
+        current_version_id=row["current_version_id"],
+        status=row["status"],
+        remote_url=row["remote_url"],
+        bridge_status=row["bridge_status"],
+        created_at=row["created_at"],
+        started_at=row["started_at"],
+        last_active_at=row["last_active_at"],
+        stopped_at=row["stopped_at"],
+        metadata=_json_load(row["metadata_json"]),
+    )
+
+
+def _remote_session_to_dict(session: StoredRemoteFreeCadSession) -> dict[str, Any]:
+    return {
+        "id": session.id,
+        "session_id": session.id,
+        "workbench_session_id": session.workbench_session_id,
+        "base_version_id": session.base_version_id,
+        "current_version_id": session.current_version_id,
+        "status": session.status,
+        "remote_url": session.remote_url,
+        "bridge_status": session.bridge_status,
+        "created_at": session.created_at,
+        "started_at": session.started_at,
+        "last_active_at": session.last_active_at,
+        "stopped_at": session.stopped_at,
+        "metadata": session.metadata,
+    }
+
+
+def _remote_session_event_from_row(row: sqlite3.Row) -> StoredRemoteFreeCadSessionEvent:
+    return StoredRemoteFreeCadSessionEvent(
+        id=row["id"],
+        remote_session_id=row["remote_session_id"],
+        event_type=row["event_type"],
+        metadata=_json_load(row["metadata_json"]),
+        occurred_at=row["occurred_at"],
+    )
+
+
+def _remote_session_event_to_dict(event: StoredRemoteFreeCadSessionEvent) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "remote_session_id": event.remote_session_id,
+        "event_type": event.event_type,
+        "metadata": event.metadata,
+        "occurred_at": event.occurred_at,
+    }
+
+
+def _remote_command_from_row(row: sqlite3.Row) -> StoredRemoteFreeCadCommand:
+    return StoredRemoteFreeCadCommand(
+        id=row["id"],
+        remote_session_id=row["remote_session_id"],
+        op=row["op"],
+        input=_json_load(row["input_json"]),
+        base_version_id=row["base_version_id"],
+        status=row["status"],
+        result=_json_load(row["result_json"]) if row["result_json"] else None,
+        error=row["error"],
+        created_at=row["created_at"],
+        dispatched_at=row["dispatched_at"],
+        completed_at=row["completed_at"],
+        metadata=_json_load(row["metadata_json"]),
+    )
+
+
+def _remote_command_to_dict(command: StoredRemoteFreeCadCommand) -> dict[str, Any]:
+    return {
+        "id": command.id,
+        "command_id": command.id,
+        "remote_session_id": command.remote_session_id,
+        "session_id": command.remote_session_id,
+        "op": command.op,
+        "input": command.input,
+        "base_version_id": command.base_version_id,
+        "status": command.status,
+        "result": command.result,
+        "error": command.error,
+        "created_at": command.created_at,
+        "dispatched_at": command.dispatched_at,
+        "completed_at": command.completed_at,
+        "metadata": command.metadata,
     }

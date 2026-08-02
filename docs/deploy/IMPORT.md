@@ -42,6 +42,10 @@ the edited wizard proposal should match.
       FreeCADCmd path is installed and can export STEP/STL)
 - [ ] `/api/production/smoke` reports `durable_storage_configured:true` for installs
       that have a PVC/object-storage backed `CAD_DATA_DIR`
+- [ ] `/api/production/readiness` reports the intended release target as ready:
+      Private Beta requires gateway/storage/upload/smoke/observability; Public
+      Beta adds durable storage, remote GUI routing, and license acceptance; GA
+      also requires a split hardened FreeCAD worker
 - [ ] gateway calls hit the injected `${OPENAI_BASE_URL}` or `${OPENAI_API_BASE}`
       `/chat/completions` endpoint (not `/responses`, not `api.openai.com`)
 - [ ] self-correction (V1) uses multiple <290s calls, never one long call
@@ -49,3 +53,18 @@ the edited wizard proposal should match.
 - [ ] sandbox proof: generated code cannot read `OPENAI_API_KEY` or reach the network/IMDS
 - [ ] **license gate**: FreeCAD GPL components + any ported Text23D code are
       license-compatible for a public distributed image (resolve before wide release)
+
+## Phase 6 readiness env
+
+The readiness report intentionally returns booleans and check messages, not
+secret values. For a GA-ready install, the app expects the platform gateway env,
+durable `CAD_DATA_DIR`, remote GUI routing env, explicit
+`FOURYI_CAD_LICENSE_REVIEW_ACCEPTED=1`, and the hardened worker flags:
+
+```bash
+FOURYI_FREECAD_WORKER_URL=http://<freecad-worker>
+FOURYI_FREECAD_WORKER_EGRESS_BLOCKED=1
+FOURYI_FREECAD_WORKER_READ_ONLY_ROOTFS=1
+FOURYI_FREECAD_WORKER_SECCOMP_PROFILE=runtime/default
+FOURYI_FREECAD_WORKER_TMPFS=1
+```

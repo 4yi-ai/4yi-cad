@@ -77,3 +77,124 @@ def test_sqlite_session_store_persists_versions(tmp_path):
     assert sessions[0]["active_version"]["user_instruction"] == "hole_d = 6"
     assert "script" not in sessions[0]["active_version"]
     assert "design_state" not in sessions[0]["active_version"]
+
+
+def test_sqlite_session_store_tracks_remote_freecad_sessions(tmp_path):
+    store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
+    state = default_design_state()
+    session = store.create_session(title="Remote FreeCAD")
+    version = store.add_version(
+        session_id=session.id,
+        intent="create",
+        user_instruction="initial",
+        design_state=state.model_dump(),
+        script=render_cadquery_script(state),
+        geometry_summary=geometry_summary(state),
+    )
+
+    remote, reused = store.create_or_reuse_remote_freecad_session(
+        workbench_session_id=session.id,
+        base_version_id=version.id,
+        remote_url="http://desktop/session",
+        metadata={"mode": "freecad_gui"},
+    )
+
+    assert reused is False
+    assert remote.workbench_session_id == session.id
+    assert remote.base_version_id == version.id
+    assert remote.current_version_id == version.id
+    assert remote.status == "starting"
+    assert remote.bridge_status == "pending"
+    assert remote.metadata["mode"] == "freecad_gui"
+
+    reused_remote, reused = store.create_or_reuse_remote_freecad_session(
+        workbench_session_id=session.id,
+        base_version_id=version.id,
+    )
+
+    assert reused is True
+    assert reused_remote.id == remote.id
+
+    event = store.add_remote_freecad_session_event(
+        remote_session_id=remote.id,
+        event_type="bridge_command_queued",
+        metadata={"command_id": "cmd_1"},
+    )
+    events = store.list_remote_freecad_session_events(remote_session_id=remote.id)
+
+    assert events == [event.__dict__]
+
+    updated = store.update_remote_freecad_session(
+        remote_session_id=remote.id,
+        status="ready",
+        current_version_id=version.id,
+        bridge_status="connected",
+    )
+    assert updated.status == "ready"
+    assert updated.bridge_status == "connected"
+
+    listed = store.list_remote_freecad_sessions(workbench_session_id=session.id)
+    assert listed[0]["id"] == remote.id
+    assert listed[0]["session_id"] == remote.id
+
+    stopped = store.stop_remote_freecad_session(
+        remote_session_id=remote.id,
+        reason="idle_timeout",
+    )
+    assert stopped.status == "stopped"
+    assert stopped.bridge_status == "disconnected"
+    assert stopped.metadata["stop_reason"] == "idle_timeout"
+
+
+def test_sqlite_session_store_claims_and_completes_remote_freecad_commands(tmp_path):
+    store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
+    session = store.create_session(title="Remote command queue")
+    remote, _ = store.create_or_reuse_remote_freecad_session(
+        workbench_session_id=session.id,
+    )
+
+    command = store.create_remote_freecad_session_command(
+        remote_session_id=remote.id,
+        op="inspect_document",
+        input={"selection": "Box"},
+        base_version_id="version_1",
+        metadata={"source": "test"},
+    )
+
+    assert command.id.startswith("cmd_")
+    assert command.status == "pending"
+    assert command.input["selection"] == "Box"
+
+    first_claim = store.claim_pending_remote_freecad_session_commands(
+        remote_session_id=remote.id,
+    )
+    second_claim = store.claim_pending_remote_freecad_session_commands(
+        remote_session_id=remote.id,
+    )
+
+    assert len(first_claim) == 1
+    assert first_claim[0]["command_id"] == command.id
+    assert first_claim[0]["status"] == "dispatched"
+    assert first_claim[0]["dispatched_at"] is not None
+    assert second_claim == []
+
+    dispatched = store.get_remote_freecad_session_command(
+        remote_session_id=remote.id,
+        command_id=command.id,
+    )
+    assert dispatched is not None
+    assert dispatched.status == "dispatched"
+
+    completed = store.complete_remote_freecad_session_command(
+        remote_session_id=remote.id,
+        command_id=command.id,
+        status="completed",
+        result={"document": {"object_count": 1}},
+        metadata={"bridge_id": "bridge_1"},
+    )
+
+    assert completed.status == "completed"
+    assert completed.result["document"]["object_count"] == 1
+    assert completed.completed_at is not None
+    assert completed.metadata["source"] == "test"
+    assert completed.metadata["bridge_id"] == "bridge_1"

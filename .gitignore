@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.local/
 *.egg-info/
 web/dist/
 web/node_modules/

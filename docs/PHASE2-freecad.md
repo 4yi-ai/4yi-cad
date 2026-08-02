@@ -6,7 +6,11 @@
 > native Assembly container/member ops, typed Assembly joints/solve, typed
 > TechDraw page/view/projection group/section/detail/centerline/cosmetic/dimension
 > ops, SVG/DXF/PDF artifact paths, diffable typed document state, and local
-> real-FreeCAD smoke coverage are implemented. Production storage and worker
+> real-FreeCAD smoke coverage are implemented. The remote FreeCAD GUI bridge now
+> has a first HTTP/SQLite command protocol for heartbeat, poll, dispatch, and
+> command results; Phase 3 adds a local bridge client, bridge context endpoint,
+> command lookup endpoint, and Web Chat routing; Phase 4 adds the shared FreeCAD
+> addon panel and in-process addon bridge. Production storage and worker
 > isolation still require deployment work.
 
 ## Current implementation snapshot
@@ -54,6 +58,11 @@
   LCS/element selection, motion/simulation, BOM, exploded views, stronger
   geometry checks, object-store/PVC durability, a separate hardened FreeCAD
   worker service, and deeper visual controls for multi-object FreeCAD scenes.
+- Remote GUI bridge contract now persists queued commands separately from audit
+  events and exposes heartbeat/poll/result endpoints. Phase 3 adds the local
+  client and Web Chat integration in `docs/PHASE3-freecad-bridge-chat.md`.
+  Phase 4 adds the in-process addon bridge and companion panel in
+  `docs/PHASE4-freecad-workbench-integration.md`.
 
 ## Web Workbench Plan
 

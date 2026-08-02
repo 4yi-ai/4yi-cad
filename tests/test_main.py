@@ -14,6 +14,7 @@ from app.agent.loop import ExecResult, MAX_CHAT_HISTORY_MESSAGE_CHARS
 from app.artifact_store import FileArtifactStore
 from app.cad.design_state import default_design_state, render_cadquery_script
 from app.cad.runner import SandboxResult
+from app.freecad_gui_orchestrator import FreeCadGuiSessionLaunch
 from app.gateway import ChatCompletion
 from app.main import create_app, default_freecad_execute
 from app.session_store import SqliteSessionStore
@@ -82,7 +83,50 @@ def _client(*, execute=_fake_execute, freecad_execute=_fake_freecad_execute, gat
     return TestClient(app)
 
 
-def _client_with_store(tmp_path, *, execute=_fake_execute):
+class FakeFreeCadGuiOrchestrator:
+    def __init__(self):
+        self.started: list[dict] = []
+        self.stopped: list[str] = []
+
+    def enabled(self) -> bool:
+        return True
+
+    def start_session(
+        self,
+        *,
+        remote_session_id,
+        workbench_session_id,
+        base_version_id,
+        fcstd_b64=None,
+    ):
+        self.started.append(
+            {
+                "remote_session_id": remote_session_id,
+                "workbench_session_id": workbench_session_id,
+                "base_version_id": base_version_id,
+                "fcstd_b64": fcstd_b64,
+            }
+        )
+        return FreeCadGuiSessionLaunch(
+            status="ready",
+            remote_url=f"http://desktop.test/{remote_session_id}",
+            bridge_status="pending",
+            metadata={
+                "orchestrator_backend": "fake",
+                "container_name": f"fake-{remote_session_id}",
+            },
+        )
+
+    def stop_session(self, *, remote_session_id):
+        self.stopped.append(remote_session_id)
+        return {
+            "backend": "fake",
+            "container_name": f"fake-{remote_session_id}",
+            "stopped": True,
+        }
+
+
+def _client_with_store(tmp_path, *, execute=_fake_execute, freecad_gui_orchestrator=None):
     store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
     artifacts = FileArtifactStore(tmp_path / "artifacts")
     app = create_app(
@@ -90,6 +134,7 @@ def _client_with_store(tmp_path, *, execute=_fake_execute):
         execute=execute,
         session_store=store,
         artifact_store=artifacts,
+        freecad_gui_orchestrator=freecad_gui_orchestrator,
     )
     return TestClient(app)
 
@@ -167,6 +212,8 @@ def test_production_smoke_reports_storage_and_worker_boundary(tmp_path):
     assert body["freecad_worker"]["split_service_configured"] is False
     assert body["freecad_worker"]["hardened_worker_service"] is False
     assert body["freecad_worker"]["security_controls"]["egress_blocked"] is False
+    assert body["readiness"]["schema"] == "4yi-cad.production_readiness.v1"
+    assert body["readiness"]["phase"] == "phase6"
 
 
 def test_production_smoke_falls_back_when_platform_data_dir_is_unwritable(tmp_path, monkeypatch):
@@ -184,6 +231,70 @@ def test_production_smoke_falls_back_when_platform_data_dir_is_unwritable(tmp_pa
     assert body["durable_storage_configured"] is False
     assert body["storage"]["session_db"]["path"] == "/tmp/4yi-cad/sessions.sqlite3"
     assert body["storage"]["artifact_root"]["path"] == "/tmp/4yi-cad/artifacts"
+
+
+def test_production_readiness_reports_phase6_release_gates(tmp_path):
+    resp = _client_with_store(tmp_path).get("/api/production/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["schema"] == "4yi-cad.production_readiness.v1"
+    assert body["phase"] == "phase6"
+    assert body["ok"] is True
+    assert body["production_ready"] is False
+    assert set(body["release_targets"]) == {
+        "private_beta_ready",
+        "public_beta_ready",
+        "ga_ready",
+    }
+    assert body["summary"]["fail"] >= 1
+    check_keys = {check["key"] for check in body["checks"]}
+    assert {
+        "gateway_contract",
+        "storage_writable",
+        "durable_storage",
+        "freecad_upload_policy",
+        "freecad_smoke_endpoint",
+        "remote_gui_bridge",
+        "bridge_observability",
+        "worker_isolation",
+        "license_gate",
+    } <= check_keys
+    assert body["runtime"]["openai_api_key_configured"] is False
+    assert "xclaw-bsl-test" not in json.dumps(body)
+
+
+def test_production_readiness_can_pass_when_release_env_is_configured(tmp_path, monkeypatch):
+    import app.freecad_state as freecad_state
+
+    monkeypatch.setattr(freecad_state, "_is_under_tmp", lambda path: False)
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://gateway.test/api/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "xclaw-bsl-test")
+    monkeypatch.setenv("TEXT_MODEL", "test-model")
+    monkeypatch.setenv("CAD_GUI_SESSION_BACKEND", "local_docker")
+    monkeypatch.setenv("CAD_GUI_SESSION_CONTROL_PLANE_URL", "http://control.test")
+    monkeypatch.setenv("FOURYI_FREECAD_WORKER_URL", "http://worker.test")
+    monkeypatch.setenv("FOURYI_FREECAD_WORKER_EGRESS_BLOCKED", "1")
+    monkeypatch.setenv("FOURYI_FREECAD_WORKER_READ_ONLY_ROOTFS", "1")
+    monkeypatch.setenv("FOURYI_FREECAD_WORKER_SECCOMP_PROFILE", "runtime/default")
+    monkeypatch.setenv("FOURYI_FREECAD_WORKER_TMPFS", "1")
+    monkeypatch.setenv("FOURYI_CAD_LICENSE_REVIEW_ACCEPTED", "1")
+
+    resp = _client_with_store(tmp_path).get("/api/production/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["release_targets"]["private_beta_ready"] is True
+    assert body["release_targets"]["public_beta_ready"] is True
+    assert body["release_targets"]["ga_ready"] is True
+    assert body["production_ready"] is True
+    assert body["durable_storage_configured"] is True
+    assert body["runtime"]["gateway_configured"] is True
+    assert body["freecad_worker"]["hardened_worker_service"] is True
+    assert body["remote_gui"]["ready"] is True
+    assert body["license"]["review_accepted"] is True
+    assert body["summary"]["fail"] == 0
+    assert "xclaw-bsl-test" not in resp.text
 
 
 def test_freecad_upload_policy_defaults_to_100mb(tmp_path, monkeypatch):
@@ -354,6 +465,484 @@ def test_session_api_rolls_back_to_prior_version_and_copies_artifacts(tmp_path):
     loaded = client.get(f"/api/sessions/{session_id}").json()
     assert loaded["session"]["active_version_id"] == rollback["id"]
     assert client.get(rollback["metadata"]["artifact_refs"]["step"]["url"]).content == b"ONE"
+
+
+def test_freecad_remote_session_api_creates_reuses_and_queues_commands(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "CAD_REMOTE_DESKTOP_BASE_URL",
+        "https://desktop.example.test/freecad/{session_id}",
+    )
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Remote GUI"},
+    ).json()["session"]["id"]
+    version = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+        },
+    ).json()["version"]
+
+    created = client.post(
+        "/api/freecad/sessions",
+        json={
+            "session_id": workbench_session_id,
+            "version_id": version["id"],
+            "reuse": True,
+        },
+    )
+
+    assert created.status_code == 200
+    remote = created.json()
+    assert remote["status"] == "ready"
+    assert remote["bridge_status"] == "pending"
+    assert remote["remote_url"].endswith(remote["session_id"])
+    assert remote["current_version_id"] == version["id"]
+    assert remote["reused"] is False
+
+    reused = client.post(
+        "/api/freecad/sessions",
+        json={
+            "session_id": workbench_session_id,
+            "version_id": version["id"],
+            "reuse": True,
+        },
+    ).json()
+    assert reused["session_id"] == remote["session_id"]
+    assert reused["reused"] is True
+
+    command = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/commands",
+        json={
+            "op": "run_macro",
+            "base_version_id": version["id"],
+            "input": {"prompt": "change selected hole to 6mm"},
+        },
+    )
+
+    assert command.status_code == 200
+    body = command.json()
+    assert body["command_id"].startswith("cmd_")
+    assert body["status"] == "pending"
+    assert body["command"]["status"] == "pending"
+    assert body["event"]["event_type"] == "bridge_command_queued"
+    assert body["event"]["metadata"]["op"] == "run_macro"
+
+    loaded = client.get(f"/api/freecad/sessions/{remote['session_id']}").json()
+    assert [event["event_type"] for event in loaded["events"]] == [
+        "session_requested",
+        "session_reused",
+        "bridge_command_queued",
+    ]
+
+
+def test_freecad_bridge_heartbeat_poll_and_command_result(tmp_path):
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Bridge protocol"},
+    ).json()["session"]["id"]
+    version = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+        },
+    ).json()["version"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id, "version_id": version["id"]},
+    ).json()
+
+    heartbeat = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/heartbeat",
+        json={
+            "bridge_id": "bridge_1",
+            "freecad_version": "1.0.0",
+            "document_name": "model.FCStd",
+            "workbench": "PartDesignWorkbench",
+            "selection": {
+                "objects": [{"name": "Hole001", "label": "Mounting hole"}],
+                "active_object": {"name": "Hole001", "label": "Mounting hole"},
+            },
+            "document_tree": {
+                "document": {"name": "model.FCStd"},
+                "objects": [{"name": "Body", "type_id": "PartDesign::Body"}],
+            },
+            "console_tail": ["ready"],
+            "capabilities": ["inspect_document", "run_macro"],
+        },
+    )
+
+    assert heartbeat.status_code == 200
+    heartbeat_session = heartbeat.json()["session"]
+    assert heartbeat_session["bridge_status"] == "connected"
+    assert heartbeat_session["metadata"]["bridge"]["bridge_id"] == "bridge_1"
+    assert heartbeat_session["metadata"]["bridge"]["freecad_version"] == "1.0.0"
+    assert heartbeat_session["metadata"]["bridge"]["workbench"] == "PartDesignWorkbench"
+    assert heartbeat_session["metadata"]["bridge"]["selection"]["active_object"]["name"] == "Hole001"
+
+    context = client.get(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/context",
+    )
+    assert context.status_code == 200
+    assert context.json()["selection"]["active_object"]["name"] == "Hole001"
+    assert context.json()["document_tree"]["document"]["name"] == "model.FCStd"
+
+    queued = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/commands",
+        json={
+            "op": "inspect_document",
+            "base_version_id": version["id"],
+            "input": {"selection": "Box"},
+        },
+    ).json()
+
+    poll = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/poll",
+        json={"bridge_id": "bridge_1", "max_commands": 5},
+    )
+
+    assert poll.status_code == 200
+    poll_body = poll.json()
+    assert poll_body["commands"] == [
+        {
+            **queued["command"],
+            "status": "dispatched",
+            "dispatched_at": poll_body["commands"][0]["dispatched_at"],
+        }
+    ]
+    assert poll_body["commands"][0]["command_id"] == queued["command_id"]
+    assert poll_body["event"]["metadata"]["command_count"] == 1
+
+    empty_poll = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/poll",
+        json={"bridge_id": "bridge_1", "max_commands": 5},
+    ).json()
+    assert empty_poll["commands"] == []
+
+    result = client.post(
+        (
+            f"/api/freecad/sessions/{remote['session_id']}"
+            f"/bridge/commands/{queued['command_id']}/result"
+        ),
+        json={
+            "status": "completed",
+            "result": {"document_summary": {"object_count": 1}},
+            "metadata": {"bridge_id": "bridge_1"},
+        },
+    )
+
+    assert result.status_code == 200
+    result_body = result.json()
+    assert result_body["command"]["status"] == "completed"
+    assert result_body["command"]["result"]["document_summary"]["object_count"] == 1
+    assert result_body["event"]["event_type"] == "bridge_command_completed"
+
+    command_lookup = client.get(
+        f"/api/freecad/sessions/{remote['session_id']}/commands/{queued['command_id']}",
+    )
+    assert command_lookup.status_code == 200
+    assert command_lookup.json()["command"]["status"] == "completed"
+
+    loaded = client.get(f"/api/freecad/sessions/{remote['session_id']}").json()
+    assert [event["event_type"] for event in loaded["events"]] == [
+        "session_requested",
+        "bridge_heartbeat",
+        "bridge_command_queued",
+        "bridge_poll",
+        "bridge_poll",
+        "bridge_command_completed",
+    ]
+
+
+def test_freecad_panel_action_records_and_can_queue_macro_command(tmp_path):
+    client = _client_with_store(tmp_path)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "FreeCAD panel action"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+
+    explain = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "explain_object",
+            "prompt": "explain selection",
+            "selection": {"objects": [{"name": "Box"}]},
+        },
+    )
+
+    assert explain.status_code == 200
+    assert explain.json()["status"] == "recorded"
+    assert explain.json()["command"] is None
+    assert explain.json()["event"]["event_type"] == "panel_action_requested"
+
+    prompt = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "prompt",
+            "prompt": "make selected hole 6mm",
+            "selection": {"objects": [{"name": "Hole001"}]},
+            "macro": "print('change')",
+            "metadata": {"source": "freecad_panel_test"},
+        },
+    )
+
+    assert prompt.status_code == 200
+    prompt_body = prompt.json()
+    assert prompt_body["status"] == "queued"
+    assert prompt_body["command"]["op"] == "run_macro"
+    assert prompt_body["command"]["metadata"]["source"] == "freecad_panel"
+    assert prompt_body["command_event"]["event_type"] == "bridge_command_queued"
+
+    poll = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/poll",
+        json={"bridge_id": "bridge_1"},
+    )
+    assert poll.status_code == 200
+    assert poll.json()["commands"][0]["command_id"] == prompt_body["command"]["command_id"]
+
+
+def test_freecad_bridge_poll_does_not_dispatch_commands_after_stop(tmp_path):
+    client = _client_with_store(tmp_path)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Stopped bridge protocol"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+    queued = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/commands",
+        json={"op": "inspect_document", "input": {}},
+    ).json()
+
+    stopped = client.request(
+        "DELETE",
+        f"/api/freecad/sessions/{remote['session_id']}",
+        json={"reason": "test_stop"},
+    )
+    poll = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/poll",
+        json={"bridge_id": "late_bridge"},
+    )
+
+    assert stopped.status_code == 200
+    assert poll.status_code == 200
+    assert poll.json()["session"]["status"] == "stopped"
+    assert poll.json()["session"]["bridge_status"] == "disconnected"
+    assert poll.json()["commands"] == []
+
+    result = client.post(
+        (
+            f"/api/freecad/sessions/{remote['session_id']}"
+            f"/bridge/commands/{queued['command_id']}/result"
+        ),
+        json={"status": "completed", "result": {"late": True}},
+    )
+
+    assert result.status_code == 200
+    assert result.json()["session"]["status"] == "stopped"
+    assert result.json()["session"]["bridge_status"] == "disconnected"
+
+
+def test_freecad_remote_session_command_rejects_revision_conflict(tmp_path):
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Remote conflict"},
+    ).json()["session"]["id"]
+    first = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+        },
+    ).json()["version"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id, "version_id": first["id"]},
+    ).json()
+
+    resp = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/commands",
+        json={"op": "inspect_document", "base_version_id": "stale"},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "cad_session_revision_conflict"
+
+
+def test_freecad_remote_session_uses_gui_orchestrator_with_source_fcstd(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.delenv("CAD_REMOTE_DESKTOP_BASE_URL", raising=False)
+    monkeypatch.delenv("FOURYI_CAD_REMOTE_DESKTOP_BASE_URL", raising=False)
+    orchestrator = FakeFreeCadGuiOrchestrator()
+    client = _client_with_store(tmp_path, freecad_gui_orchestrator=orchestrator)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Orchestrated Remote GUI"},
+    ).json()["session"]["id"]
+    version = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+            "artifacts": {"fcstd": "RkNTdGQ="},
+        },
+    ).json()["version"]
+
+    created = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id, "version_id": version["id"]},
+    )
+
+    assert created.status_code == 200
+    remote = created.json()
+    assert remote["status"] == "ready"
+    assert remote["remote_url"] == f"http://desktop.test/{remote['session_id']}"
+    assert remote["metadata"]["orchestrator_backend"] == "fake"
+    assert remote["metadata"]["container_name"] == f"fake-{remote['session_id']}"
+    assert orchestrator.started == [
+        {
+            "remote_session_id": remote["session_id"],
+            "workbench_session_id": workbench_session_id,
+            "base_version_id": version["id"],
+            "fcstd_b64": "RkNTdGQ=",
+        }
+    ]
+
+    stopped = client.request(
+        "DELETE",
+        f"/api/freecad/sessions/{remote['session_id']}",
+        json={"reason": "done"},
+    )
+
+    assert stopped.status_code == 200
+    assert orchestrator.stopped == [remote["session_id"]]
+    stopped_body = stopped.json()
+    assert stopped_body["status"] == "stopped"
+    assert stopped_body["metadata"]["orchestrator_stop"]["stopped"] is True
+
+
+def test_freecad_remote_session_save_creates_workbench_version_and_artifacts(tmp_path):
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Remote save"},
+    ).json()["session"]["id"]
+    first = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+        },
+    ).json()["version"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id, "version_id": first["id"]},
+    ).json()
+
+    resp = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/save",
+        json={
+            "message": "manual remote edit",
+            "base_version_id": first["id"],
+            "fcstd_b64": "UkVNT1RFRkNTdGQ=",
+            "preview_png_b64": "UkVNT1RFUE5H",
+            "artifacts": {"step": "UkVNT1RFU1RFUA=="},
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    version = body["version"]
+    assert body["revision_id"] == version["id"]
+    assert version["version_number"] == 2
+    assert version["parent_version_id"] == first["id"]
+    assert version["patch"]["op"] == "remote_freecad_session_save"
+    assert version["metadata"]["source"] == "remote_freecad_session"
+    assert version["metadata"]["artifact_refs"]["fcstd"]["filename"] == "model.FCStd"
+    fcstd_url = version["metadata"]["artifact_refs"]["fcstd"]["url"]
+    preview_url = version["metadata"]["artifact_refs"]["preview"]["url"]
+    assert client.get(fcstd_url).content == b"REMOTEFCStd"
+    assert client.get(preview_url).content == b"REMOTEPNG"
+    assert body["session"]["current_version_id"] == version["id"]
+    assert body["event"]["event_type"] == "session_saved"
+
+    loaded = client.get(f"/api/sessions/{workbench_session_id}").json()
+    assert loaded["session"]["active_version_id"] == version["id"]
+
+
+def test_freecad_remote_session_save_rejects_stale_base_version(tmp_path):
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Remote save conflict"},
+    ).json()["session"]["id"]
+    first = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+        },
+    ).json()["version"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id, "version_id": first["id"]},
+    ).json()
+    second = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "modify",
+            "design_state": state.model_dump(),
+            "script": script,
+            "user_instruction": "other edit",
+        },
+    ).json()["version"]
+
+    resp = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/save",
+        json={
+            "base_version_id": first["id"],
+            "fcstd_b64": "UkVNT1RFRkNTdGQ=",
+        },
+    )
+
+    assert second["id"] != first["id"]
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "cad_session_revision_conflict"
+    assert resp.json()["detail"]["active_version_id"] == second["id"]
 
 
 def test_freecad_import_model_creates_session_version_and_artifacts(tmp_path, monkeypatch):
