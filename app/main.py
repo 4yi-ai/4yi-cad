@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import urllib.parse
 from contextlib import suppress
@@ -30,7 +31,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -958,6 +959,28 @@ def _truthy_env(*names: str) -> bool:
     return False
 
 
+def _freecad_first_entry_enabled() -> bool:
+    return _truthy_env("CAD_FREECAD_FIRST_ENTRY", "FOURYI_CAD_FREECAD_FIRST_ENTRY")
+
+
+def _freecad_first_entry_url() -> str | None:
+    raw = (
+        os.environ.get("CAD_FREECAD_FIRST_ENTRY_URL")
+        or os.environ.get("FOURYI_CAD_FREECAD_FIRST_ENTRY_URL")
+        or ""
+    ).strip()
+    if raw:
+        return raw
+    remote_url = _remote_desktop_base_url()
+    if remote_url:
+        return remote_url
+    if not _freecad_gui_upstream_url():
+        return None
+    proxy_prefix = _freecad_gui_proxy_prefix()
+    websockify_path = f"{proxy_prefix.strip('/')}/websockify"
+    return f"{proxy_prefix}/vnc.html?autoconnect=1&resize=remote&path={websockify_path}"
+
+
 def _configured_env(*names: str) -> bool:
     return any(bool(os.environ.get(name, "").strip()) for name in names)
 
@@ -1213,6 +1236,11 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
             "freecad_gui_proxy_prefix": _freecad_gui_proxy_prefix(),
             "ready": gui_ready,
         },
+        "entrypoint": {
+            "freecad_first_enabled": _freecad_first_entry_enabled(),
+            "freecad_first_url": _freecad_first_entry_url(),
+            "web_workbench_url": "/workbench",
+        },
         "license": {
             "review_accepted": license_review_accepted,
         },
@@ -1273,6 +1301,257 @@ def _remote_bridge_metadata(
         **dict(existing_metadata or {}),
         "bridge": bridge,
     }
+
+
+def _ensure_shared_remote_freecad_session(
+    store: SessionStore,
+    remote_session_id: str,
+):
+    remote_session = store.get_remote_freecad_session(remote_session_id)
+    if remote_session is not None:
+        return remote_session
+    if not (
+        _shared_freecad_service_enabled()
+        and remote_session_id == _shared_freecad_session_id()
+    ):
+        return None
+
+    workbench_session = store.create_session(title="FreeCAD GUI session")
+    remote_url = _remote_desktop_url_for(remote_session_id)
+    remote_session, reused = store.create_or_reuse_remote_freecad_session(
+        remote_session_id=remote_session_id,
+        workbench_session_id=workbench_session.id,
+        base_version_id=None,
+        reuse=True,
+        remote_url=remote_url,
+        status="ready" if remote_url else "starting",
+        bridge_status="pending",
+        metadata=_remote_session_config_metadata(
+            {
+                "source": "shared_freecad_service_autocreate",
+                "auto_created": True,
+                "workbench_session_id": workbench_session.id,
+            }
+        ),
+    )
+    store.add_remote_freecad_session_event(
+        remote_session_id=remote_session.id,
+        event_type="session_auto_created",
+        metadata={
+            "workbench_session_id": workbench_session.id,
+            "remote_url_configured": bool(remote_url),
+            "reused": reused,
+            "source": "shared_freecad_service",
+        },
+    )
+    return remote_session
+
+
+def _compact_json_for_prompt(value: Any, *, max_chars: int = 4000) -> str:
+    if not value:
+        return "{}"
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 20] + "...[truncated]"
+
+
+def _freecad_panel_agent_prompt(req: FreeCadPanelActionRequest) -> str:
+    metadata = req.metadata if isinstance(req.metadata, dict) else {}
+    document_tree = metadata.get("document_tree") if isinstance(metadata, dict) else None
+    return "\n".join(
+        [
+            "Use FreeCAD and call run_freecad with a complete script.",
+            "Create or update the remote FreeCAD document, and make sure the result exports an FCStd artifact.",
+            "User request:",
+            (req.prompt or "").strip(),
+            "",
+            "Current FreeCAD selection JSON:",
+            _compact_json_for_prompt(req.selection, max_chars=2500),
+            "",
+            "Current FreeCAD document tree JSON:",
+            _compact_json_for_prompt(document_tree, max_chars=5000),
+        ]
+    )
+
+
+async def _collect_freecad_panel_generation(app: FastAPI, req: FreeCadPanelActionRequest) -> dict[str, Any]:
+    prompt = (req.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="prompt is required")
+
+    gw = _get_gateway(app)
+    execute = _get_execute(app)
+    freecad_execute = _get_freecad_execute(app)
+    events: list[dict[str, Any]] = []
+    exports: dict[str, str] = {}
+    script = ""
+    parameters: list[dict[str, Any]] = []
+    preview_png_b64: str | None = None
+    freecad_version: str | None = None
+    diagnostics: dict[str, Any] = {}
+    error_message: str | None = None
+    ok = False
+
+    async for event in run_generation(
+        _freecad_panel_agent_prompt(req),
+        gateway=gw,
+        execute=execute,
+        execute_freecad=freecad_execute,
+        engine_hint="freecad",
+        history=[],
+    ):
+        events.append(event)
+        event_type = event.get("type")
+        if event_type == "script":
+            script = event.get("script") or script
+            parameters = event.get("parameters") or parameters
+        elif event_type == "preview":
+            preview_png_b64 = event.get("png_b64") or preview_png_b64
+            freecad_version = event.get("freecad_version") or freecad_version
+        elif event_type == "artifact":
+            artifact_format = str(event.get("format") or "").lower()
+            data_b64 = event.get("data_b64")
+            if artifact_format and isinstance(data_b64, str) and data_b64:
+                exports[artifact_format] = data_b64
+            freecad_version = event.get("freecad_version") or freecad_version
+        elif event_type == "error":
+            error_message = event.get("message") or error_message
+        elif event_type == "done":
+            ok = bool(event.get("ok"))
+            freecad_version = event.get("freecad_version") or freecad_version
+            diagnostics = event.get("diagnostics") or diagnostics
+
+    if not ok:
+        raise HTTPException(
+            status_code=502,
+            detail=error_message or "FreeCAD panel generation failed",
+        )
+    if not exports.get("fcstd"):
+        raise HTTPException(
+            status_code=502,
+            detail="FreeCAD panel generation did not produce an FCStd artifact",
+        )
+    return {
+        "script": script,
+        "parameters": parameters,
+        "preview_png_b64": preview_png_b64,
+        "exports": exports,
+        "freecad_version": freecad_version,
+        "diagnostics": diagnostics,
+        "events": [
+            {key: value for key, value in event.items() if key not in {"script", "data_b64", "png_b64"}}
+            for event in events
+        ],
+    }
+
+
+async def _queue_freecad_panel_agent_generation(
+    app: FastAPI,
+    *,
+    store: SessionStore,
+    artifact_store: ArtifactStore,
+    remote_session,
+    remote_session_id: str,
+    req: FreeCadPanelActionRequest,
+):
+    workbench_session = store.get_session(remote_session.workbench_session_id)
+    if workbench_session is None:
+        raise KeyError(remote_session.workbench_session_id)
+    active_version_id = workbench_session["session"]["active_version_id"]
+    generation = await _collect_freecad_panel_generation(app, req)
+    exports = generation["exports"]
+    inspection = await _inspect_fcstd_b64(exports.get("fcstd"))
+    result = ExecResult(
+        ok=True,
+        preview_png_b64=generation["preview_png_b64"],
+        exports=exports,
+        engine="freecad",
+        freecad_version=generation["freecad_version"],
+        diagnostics=generation["diagnostics"],
+    )
+    metadata = _remote_session_config_metadata(
+        {
+            "preview_mode": "generated",
+            "engine": "freecad",
+            "freecad_version": generation["freecad_version"],
+            "document_state": "fcstd_artifact",
+            "source": "freecad_panel_agent",
+            "remote_session_id": remote_session_id,
+            "source_version_id": active_version_id,
+            "generated_parameters": generation["parameters"],
+            "panel_selection": req.selection,
+            "panel_generation_events": generation["events"],
+        }
+    )
+    metadata = _metadata_with_freecad_diagnostics(metadata, result)
+    metadata = _metadata_with_document_summary(metadata, inspection)
+    version = store.add_version(
+        session_id=remote_session.workbench_session_id,
+        intent="modify" if active_version_id else "create",
+        user_instruction=req.prompt or "Generate from FreeCAD panel",
+        design_state=_freecad_document_state(),
+        script=generation["script"],
+        geometry_summary=_freecad_geometry_metadata(
+            exports=exports,
+            inspection=inspection,
+            extra={
+                "source": "freecad_panel_agent",
+                "remote_session_id": remote_session_id,
+                "source_version_id": active_version_id,
+            },
+        ),
+        patch={
+            "op": "freecad_panel_agent_generate",
+            "remote_session_id": remote_session_id,
+            "source_version_id": active_version_id,
+        },
+        metadata=metadata,
+        status="ok",
+    )
+    artifact_refs = artifact_store.save_version_artifacts(
+        session_id=remote_session.workbench_session_id,
+        version_id=version.id,
+        preview_png_b64=generation["preview_png_b64"],
+        exports=exports,
+    )
+    if artifact_refs:
+        version = store.update_version_metadata(
+            session_id=remote_session.workbench_session_id,
+            version_id=version.id,
+            metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
+        )
+    fcstd_ref = artifact_refs.get("fcstd") or {}
+    fcstd_url = fcstd_ref.get("url") or (
+        f"/api/sessions/{remote_session.workbench_session_id}/versions/{version.id}/artifacts/fcstd"
+    )
+    command = store.create_remote_freecad_session_command(
+        remote_session_id=remote_session_id,
+        op="load_model",
+        input={
+            "fcstd_url": fcstd_url,
+            "filename": f"4yi-cad-v{version.version_number}.FCStd",
+            "version_id": version.id,
+            "workbench_session_id": remote_session.workbench_session_id,
+            "instruction": req.prompt,
+            "source": "freecad_panel_agent",
+            "close_existing": True,
+            "recompute": True,
+        },
+        base_version_id=remote_session.current_version_id,
+        metadata={"source": "freecad_panel_agent", "panel_action": req.action},
+    )
+    event = store.add_remote_freecad_session_event(
+        remote_session_id=remote_session_id,
+        event_type="panel_agent_generation_completed",
+        metadata={
+            "version_id": version.id,
+            "command_id": command.id,
+            "artifact_refs": artifact_refs,
+            "freecad_version": generation["freecad_version"],
+        },
+    )
+    return version, command, event
 
 
 def _site_layout_audit_diagnostics(
@@ -1858,7 +2137,7 @@ def create_app(
     async def get_freecad_remote_session(remote_session_id: str):
         store = _get_session_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             events = store.list_remote_freecad_session_events(
@@ -1929,7 +2208,7 @@ def create_app(
     ):
         store = _get_session_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             if (
@@ -2014,11 +2293,14 @@ def create_app(
         req: FreeCadPanelActionRequest,
     ):
         store = _get_session_store(app)
+        artifact_store = _get_artifact_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             command = None
+            generated_version = None
+            generation_event = None
             should_queue_macro = req.action in {"prompt", "generate_patch"} and bool(req.macro)
             if should_queue_macro:
                 command = store.create_remote_freecad_session_command(
@@ -2034,6 +2316,15 @@ def create_app(
                     base_version_id=remote_session.current_version_id,
                     metadata={"source": "freecad_panel", "panel_action": req.action},
                 )
+            elif req.action == "prompt" and (req.prompt or "").strip():
+                generated_version, command, generation_event = await _queue_freecad_panel_agent_generation(
+                    app,
+                    store=store,
+                    artifact_store=artifact_store,
+                    remote_session=remote_session,
+                    remote_session_id=remote_session_id,
+                    req=req,
+                )
             action_event = store.add_remote_freecad_session_event(
                 remote_session_id=remote_session_id,
                 event_type="panel_action_requested",
@@ -2045,6 +2336,7 @@ def create_app(
                     if isinstance(req.selection, dict)
                     else 0,
                     "command_id": command.id if command else None,
+                    "generated_version_id": generated_version.id if generated_version else None,
                     "source": "freecad_panel",
                     "metadata": req.metadata,
                 },
@@ -2074,15 +2366,17 @@ def create_app(
             "status": "queued" if command else "recorded",
             "session": _remote_session_dict(remote_session),
             "command": _remote_command_dict(command) if command else None,
+            "generated_version": generated_version.__dict__ if generated_version else None,
             "event": action_event.__dict__,
             "command_event": command_event.__dict__ if command_event else None,
+            "generation_event": generation_event.__dict__ if generation_event else None,
         }
 
     @app.get("/api/freecad/sessions/{remote_session_id}/bridge/context")
     async def get_freecad_bridge_context(remote_session_id: str):
         store = _get_session_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             bridge = dict((remote_session.metadata or {}).get("bridge") or {})
@@ -2110,7 +2404,7 @@ def create_app(
     ):
         store = _get_session_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             metadata = _remote_bridge_metadata(
@@ -2162,7 +2456,7 @@ def create_app(
     ):
         store = _get_session_store(app)
         try:
-            remote_session = store.get_remote_freecad_session(remote_session_id)
+            remote_session = _ensure_shared_remote_freecad_session(store, remote_session_id)
             if remote_session is None:
                 raise KeyError(remote_session_id)
             metadata = _remote_bridge_metadata(
@@ -2852,6 +3146,16 @@ def create_app(
 
     @app.get("/")
     async def index():
+        if _freecad_first_entry_enabled():
+            url = _freecad_first_entry_url()
+            if url:
+                return RedirectResponse(url=url, status_code=307)
+        if _INDEX_HTML.is_file():
+            return FileResponse(str(_INDEX_HTML), media_type="text/html")
+        return {"status": "ok", "ui": "unavailable"}
+
+    @app.get("/workbench")
+    async def workbench():
         if _INDEX_HTML.is_file():
             return FileResponse(str(_INDEX_HTML), media_type="text/html")
         return {"status": "ok", "ui": "unavailable"}

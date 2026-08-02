@@ -33,6 +33,8 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     assert "CAD_BRIDGE_AUTOSTART=1" in dockerfile
     assert "CAD_BRIDGE_MODE=freecad_addon" in dockerfile
     assert "CAD_BRIDGE_ALLOW_MACRO_EXEC=1" in dockerfile
+    assert "CAD_BRIDGE_HTTP_TIMEOUT_SECONDS=10" in dockerfile
+    assert "CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS=300" in dockerfile
     assert "LANG=zh_CN.UTF-8" in dockerfile
     assert "CAD_COMPANION_PANEL_AUTOSTART=1" in dockerfile
 

@@ -70,6 +70,7 @@ For a personal/demo dedicated app that uses one fixed FreeCAD desktop, use:
 
 ```bash
 CAD_GUI_SESSION_BACKEND=shared_service
+CAD_FREECAD_FIRST_ENTRY=1
 CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
 CAD_REMOTE_DESKTOP_BASE_URL=https://<freecad-gui-route>/vnc.html?autoconnect=1&resize=remote
 CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
@@ -77,9 +78,12 @@ CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
 
 The matching `freecad-gui` service must poll the same
 `shared-freecad-gui` bridge endpoints and run the addon bridge with
-`CAD_BRIDGE_MODE=freecad_addon` and `CAD_BRIDGE_AUTOSTART=1`. The Web workbench
-then has an explicit **Load current session** action that queues `load_model`
-for the current FCStd artifact.
+`CAD_BRIDGE_MODE=freecad_addon` and `CAD_BRIDGE_AUTOSTART=1`. With
+`CAD_FREECAD_FIRST_ENTRY=1`, `/` redirects to the FreeCAD desktop and the Web
+workbench remains available at `/workbench`. A plain prompt from the FreeCAD
+companion panel runs the FreeCAD agent, stores a new FCStd version, and queues
+`load_model` for the bridge; the Web workbench still has **Load current session**
+for manually loading the active FCStd artifact.
 
 GA also expects the FreeCAD worker to run outside the web process:
 

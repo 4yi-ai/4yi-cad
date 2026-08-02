@@ -136,6 +136,12 @@ CAD_GUI_SESSION_HEALTH_WAIT_SECONDS=60 \
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8081
 ```
 
+For a fixed marketplace `freecad-gui` service, set `CAD_FREECAD_FIRST_ENTRY=1`
+on the web service to make `/` redirect to the same-origin noVNC desktop. The
+Web workbench remains available at `/workbench`. When the FreeCAD companion panel
+sends a plain prompt, the web control plane runs the FreeCAD agent, stores a new
+FCStd version, and queues `load_model` back to the bridge.
+
 See `docs/PHASE1-freecad-gui-spike.md` for loading an existing FCStd, API-driven
 startup, and the manual save smoke path. See
 `docs/PHASE2-freecad-gui-bridge.md` for the bridge heartbeat/poll/result

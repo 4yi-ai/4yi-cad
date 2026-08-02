@@ -71,6 +71,7 @@ Short-term fixed FreeCAD GUI service for personal/dedicated app smoke:
 ```bash
 # Web app service
 CAD_GUI_SESSION_BACKEND=shared_service
+CAD_FREECAD_FIRST_ENTRY=1
 CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
 CAD_REMOTE_DESKTOP_BASE_URL=/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify
 CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
@@ -93,12 +94,13 @@ CAD_BRIDGE_AUTOSTART=1
 CAD_BRIDGE_ALLOW_MACRO_EXEC=1
 ```
 
-The operator smoke flow is explicit: generate or import a FreeCAD-backed model
-in the Web workbench, click **Open FreeCAD**, then click **Load current session**.
-That queues `load_model` against `shared-freecad-gui`; the fixed GUI bridge
-downloads the current FCStd artifact from the web app and opens it in FreeCAD.
-Use **Pull revision** only after saving from the FreeCAD bridge back into the web
-session.
+The operator smoke flow can now be FreeCAD-first: open the app, land in noVNC,
+use the 4yi CAD companion panel in FreeCAD, and send a plain prompt. The web
+control plane creates the shared remote session on bridge heartbeat if needed,
+runs the FreeCAD agent, stores the FCStd version, and queues `load_model` back to
+`shared-freecad-gui`. The Web workbench is still available at `/workbench`; from
+there, **Load current session** also queues `load_model` for the active FCStd
+artifact.
 
 ```bash
 FOURYI_FREECAD_WORKER_URL=http://<freecad-worker>

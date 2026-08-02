@@ -83,6 +83,72 @@ def test_freecad_addon_prompt_macro_uses_selected_object_and_dimension():
     assert "doc.recompute()" in macro
 
 
+def test_freecad_addon_prompt_only_uses_macro_for_selected_numeric_edit():
+    addon = _load_addon()
+
+    assert (
+        addon.macro_for_prompt_if_selected_numeric_edit(
+            "把选中孔改成 6mm",
+            {"active_object": {"name": "Hole001"}},
+        )
+        is not None
+    )
+    assert addon.macro_for_prompt_if_selected_numeric_edit("生成一个小区", {}) is None
+
+
+def test_freecad_addon_panel_prompt_without_selection_posts_agent_prompt(monkeypatch):
+    addon = _load_addon()
+    submitted = {}
+
+    def fake_selection():
+        return {"schema": "4yi.freecad.bridge.selection.v2", "objects": []}
+
+    def fake_submit(action, payload):
+        submitted["action"] = action
+        submitted["payload"] = payload
+        return {"status": "queued"}
+
+    monkeypatch.setattr(addon, "current_selection", fake_selection)
+    monkeypatch.setattr(addon, "submit_panel_action", fake_submit)
+
+    result = addon.submit_prompt_from_panel("生成一个小区")
+
+    assert result == {"status": "queued"}
+    assert submitted["action"] == "prompt"
+    assert submitted["payload"]["prompt"] == "生成一个小区"
+    assert submitted["payload"]["macro"] is None
+
+
+def test_freecad_addon_panel_action_uses_dedicated_timeout(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_post(url, payload, timeout):
+        captured["url"] = url
+        captured["payload"] = payload
+        captured["timeout"] = timeout
+        return {"status": "recorded"}
+
+    monkeypatch.setattr(
+        addon.os,
+        "environ",
+        {
+            "CAD_PANEL_ACTION_URL": "http://control.test/panel/actions",
+            "CAD_BRIDGE_HTTP_TIMEOUT_SECONDS": "10",
+            "CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS": "300",
+        },
+    )
+    monkeypatch.setattr(addon, "post_json", fake_post)
+    monkeypatch.setattr(addon, "current_selection", lambda: {})
+    monkeypatch.setattr(addon, "current_document_tree", lambda: {})
+
+    result = addon.submit_panel_action("prompt", {"prompt": "生成一个小区"})
+
+    assert result == {"status": "recorded"}
+    assert captured["url"] == "http://control.test/panel/actions"
+    assert captured["timeout"] == 300
+
+
 def test_freecad_addon_diagnostics_redacts_endpoint_values(tmp_path):
     addon = _load_addon()
     env = {

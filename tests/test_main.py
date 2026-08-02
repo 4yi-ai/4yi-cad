@@ -131,12 +131,20 @@ class FakeFreeCadGuiOrchestrator:
         }
 
 
-def _client_with_store(tmp_path, *, execute=_fake_execute, freecad_gui_orchestrator=None):
+def _client_with_store(
+    tmp_path,
+    *,
+    execute=_fake_execute,
+    freecad_execute=_fake_freecad_execute,
+    gateway=None,
+    freecad_gui_orchestrator=None,
+):
     store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
     artifacts = FileArtifactStore(tmp_path / "artifacts")
     app = create_app(
-        gateway=FakeGateway(),
+        gateway=gateway or FakeGateway(),
         execute=execute,
+        freecad_execute=freecad_execute,
         session_store=store,
         artifact_store=artifacts,
         freecad_gui_orchestrator=freecad_gui_orchestrator,
@@ -625,6 +633,67 @@ def test_freecad_shared_service_session_uses_fixed_id_and_load_model_command(
     assert readiness["remote_gui"]["freecad_gui_proxy_configured"] is True
 
 
+def test_freecad_first_entry_redirects_root_and_keeps_workbench_route(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("CAD_FREECAD_FIRST_ENTRY", "1")
+    monkeypatch.setenv(
+        "CAD_REMOTE_DESKTOP_BASE_URL",
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
+    )
+
+    client = _client_with_store(tmp_path)
+    root = client.get("/", follow_redirects=False)
+    workbench = client.get("/workbench")
+    readiness = client.get("/api/production/readiness").json()
+
+    assert root.status_code == 307
+    assert root.headers["location"] == (
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify"
+    )
+    assert workbench.status_code == 200
+    assert workbench.headers["content-type"].startswith("text/html")
+    assert readiness["entrypoint"]["freecad_first_enabled"] is True
+    assert readiness["entrypoint"]["web_workbench_url"] == "/workbench"
+
+
+def test_shared_freecad_bridge_heartbeat_auto_creates_fixed_session(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("CAD_GUI_SESSION_BACKEND", "shared_service")
+    monkeypatch.setenv("CAD_SHARED_FREECAD_SESSION_ID", "shared-freecad-gui")
+    monkeypatch.setenv(
+        "CAD_REMOTE_DESKTOP_BASE_URL",
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
+    )
+
+    client = _client_with_store(tmp_path)
+    heartbeat = client.post(
+        "/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat",
+        json={
+            "bridge_id": "bridge_1",
+            "freecad_version": "1.1.0",
+            "workbench": "Part Design",
+        },
+    )
+
+    assert heartbeat.status_code == 200
+    body = heartbeat.json()
+    assert body["session"]["session_id"] == "shared-freecad-gui"
+    assert body["session"]["bridge_status"] == "connected"
+    assert body["session"]["metadata"]["auto_created"] is True
+    assert body["session"]["remote_url"] == (
+        "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify"
+    )
+    loaded = client.get("/api/freecad/sessions/shared-freecad-gui").json()
+    assert [event["event_type"] for event in loaded["events"]][:2] == [
+        "session_auto_created",
+        "bridge_heartbeat",
+    ]
+
+
 def test_freecad_gui_proxy_target_url_builds_http_and_websocket_urls(monkeypatch):
     monkeypatch.setenv(
         "CAD_FREECAD_GUI_UPSTREAM_URL",
@@ -862,6 +931,72 @@ def test_freecad_panel_action_records_and_can_queue_macro_command(tmp_path):
     )
     assert poll.status_code == 200
     assert poll.json()["commands"][0]["command_id"] == prompt_body["command"]["command_id"]
+
+
+def test_freecad_panel_prompt_generates_version_and_queues_load_model(
+    tmp_path,
+    monkeypatch,
+):
+    async def fake_inspect_fcstd(fcstd_b64):
+        assert fcstd_b64 == "RkNTdGQ="
+        return {
+            "ok": True,
+            "engine": "freecad",
+            "error": None,
+            "freecad_version": "1.1.0",
+            "document_summary": FREECAD_DOC_SUMMARY,
+        }
+
+    async def fake_freecad_execute(script):
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            freecad_version="1.1.0",
+            preview_png_b64="UE5H",
+            exports={"fcstd": "RkNTdGQ=", "step": "U1RFUA=="},
+        )
+
+    monkeypatch.setattr("app.main._inspect_fcstd_b64", fake_inspect_fcstd)
+    client = _client_with_store(
+        tmp_path,
+        gateway=FakeGateway(tool_name="run_freecad", script="import FreeCAD\nresult=[]\n"),
+        freecad_execute=fake_freecad_execute,
+    )
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "FreeCAD panel generate"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+
+    prompt = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "prompt",
+            "prompt": "生成一个入口门厅模型",
+            "selection": {},
+            "metadata": {"source": "freecad_panel_test", "document_tree": {"objects": []}},
+        },
+    )
+
+    assert prompt.status_code == 200
+    body = prompt.json()
+    assert body["status"] == "queued"
+    assert body["generated_version"]["metadata"]["source"] == "freecad_panel_agent"
+    assert body["generated_version"]["metadata"]["artifact_refs"]["fcstd"]["bytes"] == 5
+    assert body["generation_event"]["event_type"] == "panel_agent_generation_completed"
+    assert body["command"]["op"] == "load_model"
+    assert body["command"]["input"]["version_id"] == body["generated_version"]["id"]
+    assert body["command"]["input"]["fcstd_url"].endswith("/artifacts/fcstd")
+
+    poll = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/bridge/poll",
+        json={"bridge_id": "bridge_1"},
+    )
+    assert poll.status_code == 200
+    assert poll.json()["commands"][0]["op"] == "load_model"
 
 
 def test_freecad_bridge_poll_does_not_dispatch_commands_after_stop(tmp_path):
