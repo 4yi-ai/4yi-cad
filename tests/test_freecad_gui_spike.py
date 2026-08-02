@@ -16,6 +16,9 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
         "novnc",
         "websockify",
         "fluxbox",
+        "fonts-noto-cjk",
+        "fontconfig",
+        "locales",
         "tini",
     ]:
         assert package in dockerfile
@@ -30,6 +33,8 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     assert "CAD_BRIDGE_AUTOSTART=1" in dockerfile
     assert "CAD_BRIDGE_MODE=freecad_addon" in dockerfile
     assert "CAD_BRIDGE_ALLOW_MACRO_EXEC=1" in dockerfile
+    assert "LANG=zh_CN.UTF-8" in dockerfile
+    assert "CAD_COMPANION_PANEL_AUTOSTART=1" in dockerfile
 
 
 def test_freecad_gui_start_script_is_executable_and_valid_bash():
@@ -78,8 +83,10 @@ def test_freecad_addon_files_are_packaged_for_workbench():
     assert "FourYiCadCompanionWorkbench" in init_gui
     assert "Icon = \"\"" in init_gui
     assert "autostart_remote_bridge" in init_gui
+    assert "autostart_companion_panel" in init_gui
     assert "CompanionTaskPanel" in companion
     assert "FreeCADGui" in companion
+    assert "def autostart_companion_panel" in companion
 
 
 def test_freecad_gui_spike_doc_lists_manual_smoke_steps():
