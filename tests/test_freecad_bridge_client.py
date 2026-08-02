@@ -89,6 +89,35 @@ def test_bridge_client_run_once_inspects_and_selects(tmp_path):
     assert bridge.current_selection(env)["active_object"]["name"] == "Pocket001"
 
 
+def test_bridge_client_load_model_writes_fcstd_from_base64(tmp_path):
+    bridge = _load_bridge_client()
+    env = {
+        "CAD_SESSION_WORKSPACE": str(tmp_path),
+        "CAD_REMOTE_SESSION_ID": "shared-freecad-gui",
+    }
+
+    result = bridge.execute_command(
+        {
+            "id": "cmd_load",
+            "command_id": "cmd_load",
+            "op": "load_model",
+            "input": {
+                "fcstd_b64": base64.b64encode(b"FCStd from web").decode("ascii"),
+                "filename": "../current model.FCStd",
+                "version_id": "version_1",
+            },
+        },
+        env,
+    )
+
+    loaded_path = tmp_path / "currentmodel.FCStd"
+    assert result["status"] == "completed"
+    assert loaded_path.read_bytes() == b"FCStd from web"
+    assert env["SESSION_FCSTD_PATH"] == str(loaded_path)
+    assert env["CAD_CURRENT_VERSION_ID"] == "version_1"
+    assert result["result"]["loaded_model"]["filename"] == "currentmodel.FCStd"
+
+
 def test_bridge_client_run_macro_returns_structured_error(tmp_path):
     bridge = _load_bridge_client()
 

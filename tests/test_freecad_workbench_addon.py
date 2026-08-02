@@ -141,3 +141,73 @@ def test_freecad_addon_runtime_polls_and_posts_command_result(tmp_path):
     result_call = [call for call in calls if call["url"].endswith("/cmd_1/result")][0]
     assert result_call["payload"]["status"] == "completed"
     assert result_call["payload"]["result"]["schema"] == "4yi.freecad.bridge.command_result.v2"
+
+
+def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
+    addon = _load_addon()
+
+    class LoadedDocument:
+        def __init__(self, path):
+            self.Name = "Loaded"
+            self.Label = "Loaded"
+            self.FileName = path
+            self.Objects = [FakeObject()]
+            self.recomputed = False
+
+        def recompute(self):
+            self.recomputed = True
+
+    class FakeApp:
+        ActiveDocument = None
+        opened_paths = []
+        active_name = ""
+        closed_names = []
+
+        @staticmethod
+        def listDocuments():
+            return {"Old": object()}
+
+        @staticmethod
+        def closeDocument(name):
+            FakeApp.closed_names.append(name)
+
+        @staticmethod
+        def openDocument(path):
+            FakeApp.opened_paths.append(path)
+            FakeApp.ActiveDocument = LoadedDocument(path)
+            return FakeApp.ActiveDocument
+
+        @staticmethod
+        def setActiveDocument(name):
+            FakeApp.active_name = name
+
+    monkeypatch.setattr(addon, "App", FakeApp)
+    monkeypatch.setattr(addon, "Gui", None)
+    env = {
+        "CAD_SESSION_WORKSPACE": str(tmp_path),
+        "CAD_REMOTE_SESSION_ID": "shared-freecad-gui",
+    }
+
+    result = addon.execute_command(
+        {
+            "id": "cmd_load",
+            "command_id": "cmd_load",
+            "op": "load_model",
+            "input": {
+                "fcstd_b64": "RkNTdGQ=",
+                "filename": "current.FCStd",
+                "version_id": "version_1",
+            },
+        },
+        env,
+    )
+
+    loaded_path = tmp_path / "current.FCStd"
+    assert result["status"] == "completed"
+    assert loaded_path.read_bytes() == b"FCStd"
+    assert FakeApp.opened_paths == [str(loaded_path)]
+    assert FakeApp.active_name == "Loaded"
+    assert FakeApp.ActiveDocument.recomputed is True
+    assert FakeApp.closed_names == ["Old"]
+    assert env["CAD_CURRENT_VERSION_ID"] == "version_1"
+    assert result["result"]["document_tree"]["document"]["file_name"] == str(loaded_path)

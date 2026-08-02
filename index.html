@@ -1610,6 +1610,7 @@ const I18N = {
     syncBridgeSelection: "Sync selection",
     pushSelectionToBridge: "Send selection",
     pullBridgeRevision: "Pull revision",
+    loadCurrentSessionToFreeCad: "Load current session",
     openRemoteFreeCad: "Open FreeCAD",
     objectVisibility: "Visibility",
     visibleObjects: "Visible objects",
@@ -1858,6 +1859,9 @@ const I18N = {
       remoteFreeCadCommandQueued: "Queued FreeCAD bridge command: {op}",
       remoteFreeCadCommandCompleted: "FreeCAD bridge command {status}: {op}",
       bridgeSelectionPushed: "Sent Web selection to FreeCAD bridge: {name}",
+      bridgeModelLoadQueued: "Queued current model load into FreeCAD: {version}",
+      bridgeModelLoadCompleted: "Current model load in FreeCAD {status}: {version}",
+      bridgeModelLoadUnavailable: "Current FreeCAD document is not saved as an FCStd artifact yet.",
       bridgeRevisionPulled: "Pulled FreeCAD bridge revision: {version}",
       bridgeRevisionPullFailed: "Bridge revision pull failed: {message}",
       objectVisibilityChanged: "Updated Web object visibility: {name}",
@@ -2137,6 +2141,7 @@ const I18N = {
     syncBridgeSelection: "同步选择",
     pushSelectionToBridge: "发送选择",
     pullBridgeRevision: "拉取版本",
+    loadCurrentSessionToFreeCad: "加载当前会话",
     openRemoteFreeCad: "打开 FreeCAD",
     objectVisibility: "可见性",
     visibleObjects: "可见对象",
@@ -2385,6 +2390,9 @@ const I18N = {
       remoteFreeCadCommandQueued: "已入队 FreeCAD bridge 命令：{op}",
       remoteFreeCadCommandCompleted: "FreeCAD bridge 命令 {status}：{op}",
       bridgeSelectionPushed: "已将 Web 选择发送到 FreeCAD bridge：{name}",
+      bridgeModelLoadQueued: "已将当前模型载入 FreeCAD 的命令入队：{version}",
+      bridgeModelLoadCompleted: "当前模型载入 FreeCAD {status}：{version}",
+      bridgeModelLoadUnavailable: "当前 FreeCAD 文档还没有保存为 FCStd 产物。",
       bridgeRevisionPulled: "已拉取 FreeCAD bridge 版本：{version}",
       bridgeRevisionPullFailed: "拉取 bridge 版本失败：{message}",
       objectVisibilityChanged: "已更新 Web 对象可见性：{name}",
@@ -5709,6 +5717,69 @@ async function pullRemoteFreeCadRevisionFromBridge() {
   }
 }
 
+async function loadCurrentFreeCadModelToBridge() {
+  if (state.engine !== "freecad") return false;
+  let versionId = state.activeServerVersionId || "";
+  let fcstdRef = artifactRef("fcstd");
+  if ((!versionId || !fcstdRef?.url) && state.designState && state.script) {
+    await recordServerVersion("modify", "Load current Web session into FreeCAD");
+    versionId = state.activeServerVersionId || "";
+    fcstdRef = artifactRef("fcstd");
+  }
+  if (!versionId || !fcstdRef?.url) {
+    log(t("log.bridgeModelLoadUnavailable"));
+    setStatus("failed");
+    renderAll();
+    return false;
+  }
+  setStatus("remoteFreeCadSyncing");
+  try {
+    const remote = await openRemoteFreeCadSession({
+      openWindow: false,
+      announce: false,
+      quiet: true,
+    });
+    const sessionId = remote?.session_id || remote?.id || remoteFreeCadSessionId();
+    if (!sessionId) throw new Error(t("log.remoteFreeCadNoUrl"));
+    const queued = await fetchJson(`/api/freecad/sessions/${encodeURIComponent(sessionId)}/commands`, {
+      op: "load_model",
+      input: {
+        fcstd_url: fcstdRef.url,
+        filename: fcstdRef.filename || "model.FCStd",
+        version_id: versionId,
+        workbench_session_id: state.serverSessionId || "",
+        close_existing: true,
+        recompute: true,
+      },
+      base_version_id: versionId,
+    });
+    let command = queued.command;
+    state.remoteFreeCadLastCommand = command;
+    const bridgeStatus = String(state.remoteFreeCadSession?.bridge_status || "").toLowerCase();
+    if (bridgeStatus === "connected") {
+      try {
+        command = await waitRemoteFreeCadCommand(queued.command_id, { timeoutMs: 12000 });
+        state.remoteFreeCadLastCommand = command;
+      } catch (error) {
+        command = queued.command;
+      }
+    }
+    await refreshRemoteFreeCadContext();
+    log(t(command?.status && command.status !== "pending" ? "log.bridgeModelLoadCompleted" : "log.bridgeModelLoadQueued", {
+      status: command?.status || queued.status,
+      version: versionId.slice(0, 8) || versionId,
+    }));
+    setStatus(command?.status === "failed" ? "failed" : "ready");
+    renderAll();
+    return command?.status !== "failed";
+  } catch (error) {
+    log(t("log.remoteFreeCadFailed", { message: error.message || t("log.unknownError") }));
+    setStatus("failed");
+    renderAll();
+    return false;
+  }
+}
+
 async function submitRemoteFreeCadBridgeCommand(text) {
   const sessionId = remoteFreeCadSessionId();
   if (!sessionId || state.engine !== "freecad") return false;
@@ -5742,8 +5813,11 @@ async function submitRemoteFreeCadBridgeCommand(text) {
   return true;
 }
 
-async function openRemoteFreeCadSession() {
-  if (state.remoteFreeCadLoading) return;
+async function openRemoteFreeCadSession(options = {}) {
+  if (state.remoteFreeCadLoading) return state.remoteFreeCadSession;
+  const openWindow = options.openWindow !== false;
+  const announce = options.announce !== false;
+  const quiet = Boolean(options.quiet);
   state.remoteFreeCadLoading = true;
   setStatus("remoteFreeCadStarting");
   renderStaticText();
@@ -5762,16 +5836,18 @@ async function openRemoteFreeCadSession() {
     });
     state.remoteFreeCadSession = remote;
     if (remote.remote_url) {
-      window.open(remote.remote_url, "_blank", "noopener,noreferrer");
-      log(t("log.remoteFreeCadReady"));
-    } else {
+      if (openWindow) window.open(remote.remote_url, "_blank", "noopener,noreferrer");
+      if (!quiet) log(t("log.remoteFreeCadReady"));
+    } else if (!quiet) {
       log(t("log.remoteFreeCadNoUrl"));
     }
-    await refreshRemoteFreeCadContext({ announce: true });
+    if (announce) await refreshRemoteFreeCadContext({ announce: true });
     setStatus("ready");
+    return remote;
   } catch (error) {
     log(t("log.remoteFreeCadFailed", { message: error.message || t("log.unknownError") }));
     setStatus("failed");
+    return null;
   } finally {
     state.remoteFreeCadLoading = false;
     renderStaticText();
@@ -7349,6 +7425,7 @@ function renderFreeCadWebWorkbenchSection() {
     <div class="feature-actions">
       <label class="typed-action-toggle"><input type="checkbox" ${state.freeCadBridgeSyncEnabled ? "checked" : ""} onchange="setFreeCadBridgeSyncEnabled(this.checked)" /> ${icon("pointer")} ${escapeHtml(t("syncBridgeSelection"))}</label>
       ${remoteFreeCadSessionId() ? `<button class="typed-action-button" type="button" onclick="refreshRemoteFreeCadContext({ announce: true })">${icon("redo")} ${escapeHtml(t("bridgeSelection"))}</button>` : ""}
+      <button class="typed-action-button" type="button" onclick="loadCurrentFreeCadModelToBridge()" ${artifactRef("fcstd") ? "" : "disabled"}>${icon("box")} ${escapeHtml(t("loadCurrentSessionToFreeCad"))}</button>
       ${remoteFreeCadSessionId() ? `<button class="typed-action-button" type="button" onclick="pullRemoteFreeCadRevisionFromBridge()">${icon("download")} ${escapeHtml(t("pullBridgeRevision"))}</button>` : `<button class="typed-action-button warning" type="button" onclick="openRemoteFreeCadSession()">${icon("box")} ${escapeHtml(t("openRemoteFreeCad"))}</button>`}
       ${state.freeCadIsolatedObjectName ? `<button class="typed-action-button" type="button" onclick="clearFreeCadObjectIsolation()">${icon("undo")} ${escapeHtml(t("clearIsolation"))}</button>` : ""}
     </div>
@@ -12539,6 +12616,7 @@ window.clearFreeCadObjectIsolation = clearFreeCadObjectIsolation;
 window.setFreeCadBridgeSyncEnabled = setFreeCadBridgeSyncEnabled;
 window.syncSelectedFreeCadObjectToBridge = syncSelectedFreeCadObjectToBridge;
 window.pullRemoteFreeCadRevisionFromBridge = pullRemoteFreeCadRevisionFromBridge;
+window.loadCurrentFreeCadModelToBridge = loadCurrentFreeCadModelToBridge;
 window.refreshRemoteFreeCadContext = refreshRemoteFreeCadContext;
 window.openRemoteFreeCadSession = openRemoteFreeCadSession;
 window.loadProductionReadiness = loadProductionReadiness;

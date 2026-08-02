@@ -146,6 +146,55 @@ def test_sqlite_session_store_tracks_remote_freecad_sessions(tmp_path):
     assert stopped.metadata["stop_reason"] == "idle_timeout"
 
 
+def test_sqlite_session_store_retargets_explicit_remote_freecad_session_id(tmp_path):
+    store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
+    state = default_design_state()
+    first_session = store.create_session(title="First workbench")
+    first_version = store.add_version(
+        session_id=first_session.id,
+        intent="create",
+        design_state=state.model_dump(),
+        script=render_cadquery_script(state),
+        geometry_summary=geometry_summary(state),
+    )
+    second_session = store.create_session(title="Second workbench")
+    second_version = store.add_version(
+        session_id=second_session.id,
+        intent="create",
+        design_state=state.model_dump(),
+        script=render_cadquery_script(state),
+        geometry_summary=geometry_summary(state),
+    )
+
+    remote, reused = store.create_or_reuse_remote_freecad_session(
+        remote_session_id="shared-freecad-gui",
+        workbench_session_id=first_session.id,
+        base_version_id=first_version.id,
+        status="ready",
+        bridge_status="connected",
+        metadata={"mode": "freecad_gui", "bridge": {"bridge_id": "bridge_1"}},
+    )
+    retargeted, reused = store.create_or_reuse_remote_freecad_session(
+        remote_session_id="shared-freecad-gui",
+        workbench_session_id=second_session.id,
+        base_version_id=second_version.id,
+        status="ready",
+        bridge_status="pending",
+        metadata={"shared_service_configured": True},
+    )
+
+    assert remote.id == "shared-freecad-gui"
+    assert reused is True
+    assert retargeted.id == "shared-freecad-gui"
+    assert retargeted.workbench_session_id == second_session.id
+    assert retargeted.base_version_id == second_version.id
+    assert retargeted.current_version_id == second_version.id
+    assert retargeted.bridge_status == "connected"
+    assert retargeted.stopped_at is None
+    assert retargeted.metadata["bridge"]["bridge_id"] == "bridge_1"
+    assert retargeted.metadata["shared_service_configured"] is True
+
+
 def test_sqlite_session_store_claims_and_completes_remote_freecad_commands(tmp_path):
     store = SqliteSessionStore(tmp_path / "sessions.sqlite3")
     session = store.create_session(title="Remote command queue")

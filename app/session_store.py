@@ -139,6 +139,7 @@ class SessionStore:
     def create_or_reuse_remote_freecad_session(
         self,
         *,
+        remote_session_id: str | None = None,
         workbench_session_id: str,
         base_version_id: str | None = None,
         reuse: bool = True,
@@ -517,6 +518,7 @@ class SqliteSessionStore(SessionStore):
     def create_or_reuse_remote_freecad_session(
         self,
         *,
+        remote_session_id: str | None = None,
         workbench_session_id: str,
         base_version_id: str | None = None,
         reuse: bool = True,
@@ -545,6 +547,49 @@ class SqliteSessionStore(SessionStore):
                 ).fetchone()
                 if version_row is None:
                     raise KeyError(resolved_base_version_id)
+
+            explicit_remote_session_id = (remote_session_id or "").strip() or None
+            if explicit_remote_session_id:
+                explicit_row = self._remote_session_row_by_id(con, explicit_remote_session_id)
+                if explicit_row is not None:
+                    existing_metadata = _json_load(explicit_row["metadata_json"])
+                    next_bridge_status = bridge_status
+                    if (
+                        bridge_status == "pending"
+                        and explicit_row["bridge_status"] in {"connected", "pending"}
+                    ):
+                        next_bridge_status = explicit_row["bridge_status"]
+                    con.execute(
+                        """
+                        update freecad_remote_sessions
+                        set
+                            workbench_session_id = ?,
+                            base_version_id = ?,
+                            current_version_id = ?,
+                            status = ?,
+                            remote_url = coalesce(?, remote_url),
+                            bridge_status = ?,
+                            started_at = coalesce(started_at, ?),
+                            stopped_at = null,
+                            metadata_json = ?,
+                            last_active_at = ?
+                        where id = ?
+                        """,
+                        (
+                            workbench_session_id,
+                            resolved_base_version_id,
+                            resolved_base_version_id,
+                            status,
+                            remote_url,
+                            next_bridge_status,
+                            now if status in {"starting", "ready"} else None,
+                            _json_dump({**existing_metadata, **(metadata or {})}),
+                            now,
+                            explicit_remote_session_id,
+                        ),
+                    )
+                    updated = self._remote_session_row_by_id(con, explicit_remote_session_id)
+                    return _remote_session_from_row(updated), True
 
             if reuse:
                 reusable_row = con.execute(
@@ -584,7 +629,7 @@ class SqliteSessionStore(SessionStore):
                     return _remote_session_from_row(updated), True
 
             remote_session = StoredRemoteFreeCadSession(
-                id=uuid.uuid4().hex,
+                id=explicit_remote_session_id or uuid.uuid4().hex,
                 workbench_session_id=workbench_session_id,
                 base_version_id=resolved_base_version_id,
                 current_version_id=resolved_base_version_id,

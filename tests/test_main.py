@@ -544,6 +544,73 @@ def test_freecad_remote_session_api_creates_reuses_and_queues_commands(
     ]
 
 
+def test_freecad_shared_service_session_uses_fixed_id_and_load_model_command(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("CAD_GUI_SESSION_BACKEND", "shared_service")
+    monkeypatch.setenv("CAD_SHARED_FREECAD_SESSION_ID", "shared-freecad-gui")
+    monkeypatch.setenv(
+        "CAD_REMOTE_DESKTOP_BASE_URL",
+        "https://freecad-gui.example.test/vnc.html?autoconnect=1&resize=remote",
+    )
+    monkeypatch.setenv("CAD_GUI_SESSION_CONTROL_PLANE_URL", "http://app-4yi-cad:8080")
+    client = _client_with_store(tmp_path)
+    state = default_design_state()
+    script = render_cadquery_script(state)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "Shared FreeCAD GUI"},
+    ).json()["session"]["id"]
+    version = client.post(
+        f"/api/sessions/{workbench_session_id}/versions",
+        json={
+            "intent": "create",
+            "design_state": state.model_dump(),
+            "script": script,
+            "artifacts": {"fcstd": "RkNTdGQ="},
+        },
+    ).json()["version"]
+
+    created = client.post(
+        "/api/freecad/sessions",
+        json={
+            "session_id": workbench_session_id,
+            "version_id": version["id"],
+            "reuse": True,
+        },
+    )
+
+    assert created.status_code == 200
+    remote = created.json()
+    assert remote["session_id"] == "shared-freecad-gui"
+    assert remote["status"] == "ready"
+    assert remote["remote_url"] == "https://freecad-gui.example.test/vnc.html?autoconnect=1&resize=remote"
+    assert remote["metadata"]["gui_session_backend"] == "shared_service"
+    assert remote["metadata"]["shared_remote_session_id"] == "shared-freecad-gui"
+    assert remote["metadata"]["load_model_required"] is True
+
+    queued = client.post(
+        "/api/freecad/sessions/shared-freecad-gui/commands",
+        json={
+            "op": "load_model",
+            "base_version_id": version["id"],
+            "input": {
+                "fcstd_url": version["metadata"]["artifact_refs"]["fcstd"]["url"],
+                "filename": "model.FCStd",
+                "version_id": version["id"],
+            },
+        },
+    )
+
+    assert queued.status_code == 200
+    assert queued.json()["command"]["op"] == "load_model"
+
+    readiness = client.get("/api/production/readiness").json()
+    assert readiness["remote_gui"]["ready"] is True
+    assert readiness["remote_gui"]["shared_service_configured"] is True
+
+
 def test_freecad_bridge_heartbeat_poll_and_command_result(tmp_path):
     client = _client_with_store(tmp_path)
     state = default_design_state()

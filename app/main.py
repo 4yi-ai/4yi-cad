@@ -389,6 +389,7 @@ class FreeCadRemoteSessionSaveRequest(BaseModel):
 class FreeCadRemoteSessionCommandRequest(BaseModel):
     op: Literal[
         "inspect_document",
+        "load_model",
         "select_object",
         "run_macro",
         "save_revision",
@@ -802,25 +803,49 @@ def _session_orchestrator_url() -> str | None:
     return raw or None
 
 
+def _freecad_gui_backend() -> str:
+    return os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip().lower() or "disabled"
+
+
+def _shared_freecad_service_enabled() -> bool:
+    return _freecad_gui_backend() in {"shared_service", "fixed_service", "static_service"}
+
+
+def _shared_freecad_session_id() -> str:
+    return (
+        os.environ.get("CAD_SHARED_FREECAD_SESSION_ID")
+        or os.environ.get("CAD_FIXED_FREECAD_SESSION_ID")
+        or "shared-freecad-gui"
+    ).strip()
+
+
 def _remote_desktop_url_for(remote_session_id: str) -> str | None:
     base_url = _remote_desktop_base_url()
     if not base_url:
         return None
     if "{session_id}" in base_url:
         return base_url.format(session_id=remote_session_id)
+    if _shared_freecad_service_enabled():
+        return base_url
     return f"{base_url.rstrip('/')}/{remote_session_id}"
 
 
 def _remote_session_config_metadata(metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-    gui_backend = os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip() or "disabled"
-    return {
+    gui_backend = _freecad_gui_backend()
+    shared_service = _shared_freecad_service_enabled()
+    config_metadata = {
         **dict(metadata or {}),
         "mode": "freecad_gui",
         "orchestrator_configured": bool(_session_orchestrator_url())
-        or gui_backend.lower() == "local_docker",
+        or gui_backend == "local_docker",
         "gui_session_backend": gui_backend,
+        "shared_service_configured": shared_service,
         "remote_desktop_configured": bool(_remote_desktop_base_url()),
     }
+    if shared_service:
+        config_metadata["shared_remote_session_id"] = _shared_freecad_session_id()
+        config_metadata["load_model_required"] = True
+    return config_metadata
 
 
 def _truthy_env(*names: str) -> bool:
@@ -889,11 +914,15 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
     }
     hardened_worker = bool(worker_split and all(security_controls.values()))
 
-    gui_backend = os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip().lower() or "disabled"
+    gui_backend = _freecad_gui_backend()
     gui_orchestrator_configured = bool(_session_orchestrator_url()) or gui_backend == "local_docker"
+    gui_shared_service_configured = _shared_freecad_service_enabled() and bool(
+        _shared_freecad_session_id()
+    )
+    gui_runtime_configured = gui_orchestrator_configured or gui_shared_service_configured
     gui_control_plane_configured = _configured_env("CAD_GUI_SESSION_CONTROL_PLANE_URL")
     remote_desktop_configured = bool(_remote_desktop_base_url()) or gui_backend == "local_docker"
-    gui_ready = bool(gui_orchestrator_configured and gui_control_plane_configured and remote_desktop_configured)
+    gui_ready = bool(gui_runtime_configured and gui_control_plane_configured and remote_desktop_configured)
 
     upload_max_bytes = _freecad_upload_max_bytes()
     upload_policy_ready = upload_max_bytes >= DEFAULT_FREECAD_UPLOAD_MAX_BYTES
@@ -965,13 +994,17 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
         _release_check(
             "remote_gui_bridge",
             "pass" if gui_ready else "fail",
-            "Remote GUI session orchestration, control-plane URL, and desktop routing are configured."
+            "Remote GUI runtime, control-plane URL, and desktop routing are configured."
             if gui_ready
-            else "Remote FreeCAD GUI handoff needs session orchestration, control-plane URL, and desktop routing.",
+            else "Remote FreeCAD GUI handoff needs a runtime backend, control-plane URL, and desktop routing.",
             required_for=["public_beta", "ga"],
             details={
                 "gui_session_backend": gui_backend,
                 "orchestrator_configured": gui_orchestrator_configured,
+                "shared_service_configured": gui_shared_service_configured,
+                "shared_remote_session_id": _shared_freecad_session_id()
+                if _shared_freecad_service_enabled()
+                else None,
                 "control_plane_url_configured": gui_control_plane_configured,
                 "remote_desktop_configured": remote_desktop_configured,
             },
@@ -1051,6 +1084,10 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
         "remote_gui": {
             "gui_session_backend": gui_backend,
             "orchestrator_configured": gui_orchestrator_configured,
+            "shared_service_configured": gui_shared_service_configured,
+            "shared_remote_session_id": _shared_freecad_session_id()
+            if _shared_freecad_service_enabled()
+            else None,
             "control_plane_url_configured": gui_control_plane_configured,
             "remote_desktop_configured": remote_desktop_configured,
             "ready": gui_ready,
@@ -1470,9 +1507,13 @@ def create_app(
         workbench_session_id = _remote_session_workbench_id(req)
         orchestrator_enabled = orchestrator.enabled()
         remote_url_configured = bool(_remote_desktop_base_url())
+        shared_remote_session_id = (
+            _shared_freecad_session_id() if _shared_freecad_service_enabled() else None
+        )
         status = "starting" if orchestrator_enabled else ("ready" if remote_url_configured else "starting")
         try:
             remote_session, reused = store.create_or_reuse_remote_freecad_session(
+                remote_session_id=shared_remote_session_id,
                 workbench_session_id=workbench_session_id,
                 base_version_id=req.version_id,
                 reuse=req.reuse,
@@ -1487,6 +1528,7 @@ def create_app(
                 "base_version_id": remote_session.base_version_id,
                 "mode": req.mode,
                 "remote_url_configured": bool(remote_session.remote_url),
+                "shared_remote_session_id": shared_remote_session_id,
             }
 
             should_launch = (

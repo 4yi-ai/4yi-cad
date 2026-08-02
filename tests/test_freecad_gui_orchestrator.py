@@ -5,6 +5,7 @@ import pytest
 from app.freecad_gui_orchestrator import (
     DisabledFreeCadGuiSessionOrchestrator,
     LocalDockerFreeCadGuiSessionOrchestrator,
+    SharedServiceFreeCadGuiSessionOrchestrator,
     freecad_gui_orchestrator_from_env,
 )
 
@@ -16,6 +17,21 @@ def test_gui_orchestrator_is_disabled_by_default(monkeypatch):
 
     assert isinstance(orchestrator, DisabledFreeCadGuiSessionOrchestrator)
     assert orchestrator.enabled() is False
+
+
+def test_shared_service_orchestrator_is_external_runtime(monkeypatch):
+    monkeypatch.setenv("CAD_GUI_SESSION_BACKEND", "shared_service")
+
+    orchestrator = freecad_gui_orchestrator_from_env()
+
+    assert isinstance(orchestrator, SharedServiceFreeCadGuiSessionOrchestrator)
+    assert orchestrator.enabled() is False
+    assert orchestrator.start_session(
+        remote_session_id="shared-freecad-gui",
+        workbench_session_id="workbench_1",
+        base_version_id="version_1",
+    ) is None
+    assert orchestrator.stop_session(remote_session_id="shared-freecad-gui")["stopped"] is False
 
 
 def test_local_docker_orchestrator_builds_session_container_command(tmp_path):

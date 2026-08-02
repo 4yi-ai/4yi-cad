@@ -10,7 +10,7 @@ the edited wizard proposal should match.
    `https://github.com/4yi-ai/4yi-cad`, branch `main` (`public_git`). The wizard
    scans and generates a proposal.
 2. **Edit the proposal** to match `import-proposal.reference.json`:
-   - one **public** service, `runtime_port` **8080**, `health_path` **`/healthz`**
+   - **web** service: `runtime_port` **8080**, `health_path` **`/healthz`**
    - `auth_policy` **`platform_sso`**
    - `platform_runtime.gateway`: `apiBaseEnv:[OPENAI_BASE_URL, OPENAI_API_BASE]`, `apiKeyEnv:[OPENAI_API_KEY]`
    - `TEXT_MODEL` slot: real tool-calling model id as `defaultModel` + `allowedModels`
@@ -24,6 +24,10 @@ the edited wizard proposal should match.
      fall back to pod-local `/tmp`. Confirm the live install is PVC/object-storage
      backed and that `CAD_DATA_DIR` is writable by the app user before making
      Public Beta/GA durability claims.
+   - for a short-term personal/demo install, keep the fixed `freecad-gui` service
+     from `Dockerfile.freecad-gui` on port **6080** and set the web app to
+     `CAD_GUI_SESSION_BACKEND=shared_service`. This is one shared desktop per
+     dedicated app install, not per model tab.
 3. **Release** — CodeBuild → ECR (sets `last_image_uri`). Confirm the image builds
    from the root `Dockerfile`.
 4. **Publish** — needs a smoke pass + **tenant-isolation certification**. The
@@ -60,6 +64,38 @@ The readiness report intentionally returns booleans and check messages, not
 secret values. For a GA-ready install, the app expects the platform gateway env,
 durable `CAD_DATA_DIR`, remote GUI routing env, explicit
 `FOURYI_CAD_LICENSE_REVIEW_ACCEPTED=1`, and the hardened worker flags:
+
+Short-term fixed FreeCAD GUI service for personal/dedicated app smoke:
+
+```bash
+# Web app service
+CAD_GUI_SESSION_BACKEND=shared_service
+CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
+CAD_REMOTE_DESKTOP_BASE_URL=https://<freecad-gui-route>/vnc.html?autoconnect=1&resize=remote
+CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
+
+# freecad-gui service
+CAD_SESSION_ID=shared-freecad-gui
+CAD_REMOTE_SESSION_ID=shared-freecad-gui
+CAD_WORKBENCH_SESSION_ID=shared-freecad-gui
+CAD_CONTROL_PLANE_URL=http://app-4yi-cad:8080
+CAD_BRIDGE_HEARTBEAT_URL=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat
+CAD_BRIDGE_POLL_URL=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/poll
+CAD_BRIDGE_COMMAND_RESULT_URL_BASE=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/commands
+CAD_BRIDGE_COMMAND_QUEUE_URL=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/commands
+CAD_BRIDGE_SAVE_URL=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/save
+CAD_PANEL_ACTION_URL=http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/panel/actions
+CAD_BRIDGE_MODE=freecad_addon
+CAD_BRIDGE_AUTOSTART=1
+CAD_BRIDGE_ALLOW_MACRO_EXEC=1
+```
+
+The operator smoke flow is explicit: generate or import a FreeCAD-backed model
+in the Web workbench, click **Open FreeCAD**, then click **Load current session**.
+That queues `load_model` against `shared-freecad-gui`; the fixed GUI bridge
+downloads the current FCStd artifact from the web app and opens it in FreeCAD.
+Use **Pull revision** only after saving from the FreeCAD bridge back into the web
+session.
 
 ```bash
 FOURYI_FREECAD_WORKER_URL=http://<freecad-worker>

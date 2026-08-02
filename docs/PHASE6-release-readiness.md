@@ -35,8 +35,9 @@ The Phase 6 report currently checks:
 - Upload policy: FreeCAD imports keep at least the 100 MB Private Beta cap.
 - FreeCAD smoke: `/api/freecad/smoke` remains the built-container verification
   endpoint for the FreeCADCmd path.
-- Remote GUI bridge: session orchestration, control-plane URL, and remote
-  desktop routing are configured.
+- Remote GUI bridge: a GUI runtime backend, control-plane URL, and remote
+  desktop routing are configured. The runtime can be the local Docker spike,
+  an external orchestrator, or the short-term fixed `shared_service` desktop.
 - Bridge observability: bridge context, command queue, and command result
   surfaces exist.
 - Worker isolation: GA requires a split FreeCAD worker endpoint plus egress
@@ -64,6 +65,21 @@ CAD_GUI_SESSION_CONTROL_PLANE_URL=https://<4yi-cad-control-plane>
 CAD_REMOTE_DESKTOP_BASE_URL=https://<remote-desktop-router>
 FOURYI_CAD_LICENSE_REVIEW_ACCEPTED=1
 ```
+
+For a personal/demo dedicated app that uses one fixed FreeCAD desktop, use:
+
+```bash
+CAD_GUI_SESSION_BACKEND=shared_service
+CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
+CAD_REMOTE_DESKTOP_BASE_URL=https://<freecad-gui-route>/vnc.html?autoconnect=1&resize=remote
+CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
+```
+
+The matching `freecad-gui` service must poll the same
+`shared-freecad-gui` bridge endpoints and run the addon bridge with
+`CAD_BRIDGE_MODE=freecad_addon` and `CAD_BRIDGE_AUTOSTART=1`. The Web workbench
+then has an explicit **Load current session** action that queues `load_model`
+for the current FCStd artifact.
 
 GA also expects the FreeCAD worker to run outside the web process:
 

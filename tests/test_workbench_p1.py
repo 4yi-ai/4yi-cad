@@ -461,6 +461,7 @@ def test_phase5_web_native_workbench_routes_visibility_and_bridge_sync():
         "function applyRemoteFreeCadBridgeContext(context",
         "function syncSelectedFreeCadObjectToBridge",
         "function pullRemoteFreeCadRevisionFromBridge",
+        "function loadCurrentFreeCadModelToBridge",
         "function remoteBridgeRevisionLabel",
         "toggleFreeCadObjectVisibility",
         "isolateFreeCadObject",
@@ -474,9 +475,11 @@ def test_phase5_web_native_workbench_routes_visibility_and_bridge_sync():
         "routeWebView",
         "sectioningRemoteDetail",
         "pullBridgeRevision",
+        "loadCurrentSessionToFreeCad",
         "pushSelectionToBridge",
         "setStatus(\"remoteFreeCadSyncing\")",
         "/versions/${encodeURIComponent(versionId)}",
+        "op: \"load_model\"",
         "op: \"select_object\"",
     ):
         assert marker in html

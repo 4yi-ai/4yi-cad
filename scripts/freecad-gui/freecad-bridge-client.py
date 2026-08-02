@@ -15,6 +15,7 @@ import os
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ from typing import Any, Callable
 
 SUPPORTED_COMMANDS = [
     "inspect_document",
+    "load_model",
     "select_object",
     "run_macro",
     "save_revision",
@@ -160,6 +162,72 @@ def workspace_file_entries(env: dict[str, str]) -> list[dict[str, Any]]:
                 size = None
             entries.append({"name": path.name, "size": size})
     return entries[:200]
+
+
+def safe_workspace_filename(value: str | None, default: str) -> str:
+    raw = (value or "").strip() or default
+    name = Path(raw).name
+    safe = "".join(ch for ch in name if ch.isalnum() or ch in {"-", "_", "."})
+    safe = safe or default
+    if not safe.lower().endswith(".fcstd"):
+        safe = f"{safe}.FCStd"
+    return safe
+
+
+def resolve_control_plane_url(path_or_url: str, env: dict[str, str]) -> str:
+    value = path_or_url.strip()
+    if not value:
+        raise BridgeCommandError("fcstd_source_required", "load_model requires fcstd_url or fcstd_b64")
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return value
+    base = (
+        env.get("CAD_CONTROL_PLANE_URL")
+        or env.get("CAD_GUI_SESSION_CONTROL_PLANE_URL")
+        or ""
+    ).strip()
+    if not base:
+        raise BridgeCommandError(
+            "control_plane_url_required",
+            "relative fcstd_url requires CAD_CONTROL_PLANE_URL",
+            details={"fcstd_url": value},
+        )
+    if value.startswith("/"):
+        return urllib.parse.urljoin(base.rstrip("/") + "/", value.lstrip("/"))
+    return urllib.parse.urljoin(base.rstrip("/") + "/", value)
+
+
+def load_model_bytes(
+    payload: dict[str, Any],
+    env: dict[str, str],
+    *,
+    timeout: float,
+) -> bytes:
+    fcstd_b64 = payload.get("fcstd_b64")
+    if fcstd_b64:
+        try:
+            return base64.b64decode(str(fcstd_b64), validate=True)
+        except Exception as exc:
+            raise BridgeCommandError("invalid_fcstd_b64", "load_model fcstd_b64 is invalid") from exc
+
+    fcstd_url = payload.get("fcstd_url") or payload.get("artifact_url") or payload.get("url")
+    if not fcstd_url:
+        raise BridgeCommandError("fcstd_source_required", "load_model requires fcstd_url or fcstd_b64")
+    url = resolve_control_plane_url(str(fcstd_url), env)
+    request = urllib.request.Request(url, headers={"Accept": "application/vnd.freecad,application/octet-stream"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = response.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise BridgeCommandError(
+            "fcstd_download_failed",
+            "load_model could not download FCStd artifact",
+            details={"status": exc.code, "body": body[:1000], "url": url},
+        ) from exc
+    if not data:
+        raise BridgeCommandError("empty_fcstd", "load_model received an empty FCStd artifact")
+    return data
 
 
 def current_selection(env: dict[str, str]) -> dict[str, Any]:
@@ -333,6 +401,44 @@ def execute_inspect_document(env: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def execute_load_model(payload: dict[str, Any], env: dict[str, str], timeout: float) -> dict[str, Any]:
+    root = workspace(env)
+    root.mkdir(parents=True, exist_ok=True)
+    filename = safe_workspace_filename(
+        payload.get("filename") or payload.get("name"),
+        "current-session.FCStd",
+    )
+    path = root / filename
+    path.write_bytes(load_model_bytes(payload, env, timeout=timeout))
+    env["SESSION_FCSTD_PATH"] = str(path)
+    if payload.get("version_id"):
+        env["CAD_CURRENT_VERSION_ID"] = str(payload["version_id"])
+    write_json_file(
+        document_tree_path(env),
+        {
+            "schema": "4yi.freecad.bridge.document_tree.v1",
+            "document": {"name": path.name, "path": str(path)},
+            "objects": [],
+            "source": "bridge_client_load_model",
+            "workspace_files": workspace_file_entries(env),
+        },
+    )
+    return {
+        "document_tree": current_document_tree(env),
+        "selection": current_selection(env),
+        "active_document_path": str(path),
+        "loaded_model": {
+            "path": str(path),
+            "filename": path.name,
+            "version_id": payload.get("version_id"),
+        },
+        "changed_objects": [],
+        "console": [f"Loaded {path.name}"],
+        "recompute_status": {"status": "not_run"},
+        "undo": {"available": False, "source": "load_model"},
+    }
+
+
 def execute_select_object(payload: dict[str, Any], env: dict[str, str]) -> dict[str, Any]:
     selector = payload.get("selector") if isinstance(payload.get("selector"), dict) else {}
     object_name = (
@@ -467,6 +573,8 @@ def execute_command(
     try:
         if op == "inspect_document":
             result = execute_inspect_document(env)
+        elif op == "load_model":
+            result = execute_load_model(payload, env, timeout)
         elif op == "select_object":
             result = execute_select_object(payload, env)
         elif op == "run_macro":

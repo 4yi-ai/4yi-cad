@@ -66,6 +66,32 @@ class DisabledFreeCadGuiSessionOrchestrator(FreeCadGuiSessionOrchestrator):
         return {"backend": "disabled", "stopped": False}
 
 
+class SharedServiceFreeCadGuiSessionOrchestrator(FreeCadGuiSessionOrchestrator):
+    """Externally provisioned, fixed FreeCAD GUI service.
+
+    The web app does not create or destroy anything for this backend. The fixed
+    desktop service polls the bridge API with a shared remote session id.
+    """
+
+    def start_session(
+        self,
+        *,
+        remote_session_id: str,
+        workbench_session_id: str,
+        base_version_id: str | None,
+        fcstd_b64: str | None = None,
+    ) -> FreeCadGuiSessionLaunch | None:
+        return None
+
+    def stop_session(self, *, remote_session_id: str) -> dict:
+        return {
+            "backend": "shared_service",
+            "remote_session_id": remote_session_id,
+            "stopped": False,
+            "message": "shared FreeCAD GUI service is managed outside the web app",
+        }
+
+
 class LocalDockerFreeCadGuiSessionOrchestrator(FreeCadGuiSessionOrchestrator):
     def __init__(
         self,
@@ -246,6 +272,8 @@ def freecad_gui_orchestrator_from_env() -> FreeCadGuiSessionOrchestrator:
     backend = os.environ.get("CAD_GUI_SESSION_BACKEND", "disabled").strip().lower()
     if backend in {"", "disabled", "none", "metadata"}:
         return DisabledFreeCadGuiSessionOrchestrator()
+    if backend in {"shared_service", "fixed_service", "static_service"}:
+        return SharedServiceFreeCadGuiSessionOrchestrator()
     if backend == "local_docker":
         return LocalDockerFreeCadGuiSessionOrchestrator(
             image=os.environ.get("CAD_GUI_SESSION_IMAGE", DEFAULT_GUI_IMAGE).strip()
