@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY app ./app
 COPY index.html ./index.html
+# TODO(eval-baseline): once evals/reports/latest.json is committed, COPY evals/reports/ so the ai_quality readiness gate can read it in-container (or set CAD_EVAL_REPORT_PATH).
 
 # Non-root. Read-only rootfs is applied by the k8s securityContext; the sandbox
 # worker writes only to TMPDIR, which must be a writable tmpfs/emptyDir mount.

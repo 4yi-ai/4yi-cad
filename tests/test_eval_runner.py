@@ -82,6 +82,16 @@ async def test_run_case_survives_executor_crash(tmp_path):
     assert "worker exploded" in (record["error"] or "")
 
 
+async def test_run_case_propagates_budget_exhaustion(tmp_path):
+    metered = MeteredGateway(ScriptedGateway(usage_per_call=600), max_total_tokens=1000)
+    await metered.chat_completion([])
+    with pytest.raises(EvalBudgetExceeded):
+        await run_case(
+            CASE, gateway=metered, execute=ok_execute, execute_freecad=None,
+            run_dir=tmp_path,
+        )
+
+
 async def test_run_case_survives_scoring_crash(tmp_path, monkeypatch):
     def boom_scorer(*args, **kwargs):
         raise RuntimeError("bad scorer")

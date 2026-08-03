@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -78,14 +79,15 @@ def ingest_reviews(report_dir: Path, reports_root: Path) -> dict:
 
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     report["metrics"]["human_review_mean"] = sum(scores) / len(scores)
-    report["thresholds_met"] = evaluate_thresholds(report["metrics"])
+    report["thresholds_met"] = evaluate_thresholds(report["metrics"], report.get("thresholds"))
     (report_dir / "report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2)
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (report_dir / "report.md").write_text(render_markdown(report), encoding="utf-8")
-    (reports_root / "latest.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2)
-    )
+    latest = reports_root / "latest.json"
+    tmp = reports_root / "latest.json.tmp"
+    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, latest)
     return report
 
 

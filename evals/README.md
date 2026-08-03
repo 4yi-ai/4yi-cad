@@ -32,3 +32,4 @@ commit `evals/reports/latest.json` + `<stamp>/report.{json,md}`(不要 commit ru
 readiness 端点(`GET /api/production/readiness`)读 latest.json:
 `ai_quality_baseline`(private_beta+)看 total_runs>0,`ai_quality_thresholds`
 (public_beta/ga)看 thresholds_met。可用 `CAD_EVAL_REPORT_PATH` 覆盖路径。
+部署镜像需在 baseline 落库后给 `Dockerfile` 增加 `COPY evals/reports/ /srv/app/evals/reports/`(或用 `CAD_EVAL_REPORT_PATH` 指向挂载的报告),否则容器内 readiness 的 `ai_quality_baseline` 永远 fail。

@@ -105,6 +105,13 @@ async def run_case(
 
     try:
         await asyncio.wait_for(_consume(), timeout=case.timeout_s)
+    except asyncio.TimeoutError:
+        events.append(
+            {"type": "error", "message": f"runner: timed out after {case.timeout_s}s"}
+        )
+        events.append({"type": "done", "ok": False})
+    except EvalBudgetExceeded:
+        raise
     except Exception as exc:  # noqa: BLE001 - a crashed run is a scored failure
         events.append({"type": "error", "message": f"runner: {exc}"})
         events.append({"type": "done", "ok": False})

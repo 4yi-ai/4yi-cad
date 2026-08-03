@@ -84,8 +84,9 @@ def aggregate(records: list[dict]) -> dict:
     }
 
 
-def evaluate_thresholds(metrics: dict) -> bool:
-    for key, floor in THRESHOLDS.items():
+def evaluate_thresholds(metrics: dict, thresholds: dict[str, float] | None = None) -> bool:
+    thresholds = THRESHOLDS if thresholds is None else thresholds
+    for key, floor in thresholds.items():
         value = metrics.get(key)
         if value is None or value < floor:
             return False
@@ -117,14 +118,17 @@ def save_report(report: dict, reports_root: Path, records: list[dict]) -> Path:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out = reports_root / stamp
     out.mkdir(parents=True, exist_ok=True)
-    (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    (out / "report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     with (out / "records.jsonl").open("w", encoding="utf-8") as fh:
         for record in records:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     (out / "report.md").write_text(render_markdown(report), encoding="utf-8")
-    (reports_root / "latest.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2)
-    )
+    latest = reports_root / "latest.json"
+    tmp = reports_root / "latest.json.tmp"
+    tmp.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, latest)
     return out
 
 
