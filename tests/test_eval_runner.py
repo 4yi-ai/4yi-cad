@@ -79,3 +79,17 @@ async def test_run_case_survives_executor_crash(tmp_path):
     )
     assert record["l1_ok"] is False
     assert "worker exploded" in (record["error"] or "")
+
+
+async def test_run_case_survives_scoring_crash(tmp_path, monkeypatch):
+    def boom_scorer(*args, **kwargs):
+        raise RuntimeError("bad scorer")
+
+    monkeypatch.setattr("scripts.eval.run_eval.score_run", boom_scorer)
+
+    record = await run_case(
+        CASE, gateway=ScriptedGateway(), execute=ok_execute, execute_freecad=None,
+        run_dir=tmp_path,
+    )
+    assert record["l1_ok"] is False
+    assert "bad scorer" in (record["error"] or "")

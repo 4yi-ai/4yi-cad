@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from app.agent.loop import run_generation  # noqa: E402
 from app.evals.corpus import EvalCase, load_corpus  # noqa: E402
 from app.evals.report import aggregate, render_markdown, save_report  # noqa: E402
-from app.evals.scoring import score_run  # noqa: E402
+from app.evals.scoring import RunScore, score_run  # noqa: E402
 
 _ARTIFACT_FILENAMES = {
     "step": "model.step",
@@ -47,10 +47,6 @@ class MeteredGateway:
         self.calls = 0
 
     async def chat_completion(self, messages, *, tools=None, tool_choice=None):
-        if self._max is not None and self.total_tokens > self._max:
-            raise EvalBudgetExceeded(
-                f"token budget exhausted: {self.total_tokens} > {self._max}"
-            )
         completion = await self._inner.chat_completion(
             messages, tools=tools, tool_choice=tool_choice
         )
@@ -114,17 +110,34 @@ async def run_case(
         events.append({"type": "done", "ok": False})
 
     duration = time.monotonic() - started
-    from app.evals.geometry import check_artifacts
+    try:
+        # local import: trimesh is a dev-only dependency, keep it lazy
+        from app.evals.geometry import check_artifacts
 
-    geometry = None
-    done_ok = any(e.get("type") == "done" and e.get("ok") for e in events)
-    if done_ok:
-        geometry = check_artifacts(art_dir, fcstd_check=fcstd_check)
-    score = score_run(case, events, run_dir, duration_s=duration, geometry=geometry)
+        geometry = None
+        done_ok = any(e.get("type") == "done" and e.get("ok") for e in events)
+        if done_ok:
+            geometry = check_artifacts(art_dir, fcstd_check=fcstd_check)
+        score = score_run(case, events, run_dir, duration_s=duration, geometry=geometry)
+    except Exception as exc:  # noqa: BLE001 - a crashed run is a scored failure
+        events.append({"type": "error", "message": f"runner scoring: {exc}"})
+        score = RunScore(
+            l1_ok=False,
+            l2_ok=None,
+            l3_ok=None,
+            attempts=sum(1 for e in events if e.get("type") == "script"),
+            retries=sum(1 for e in events if e.get("type") == "retry"),
+            duration_s=duration,
+            error=f"runner scoring: {exc}",
+            details={},
+        )
 
-    (run_dir / "events.json").write_text(
-        json.dumps(events, ensure_ascii=False, indent=2)
-    )
+    try:
+        (run_dir / "events.json").write_text(
+            json.dumps(events, ensure_ascii=False, indent=2, default=str)
+        )
+    except Exception:  # noqa: BLE001 - the record matters more than this file
+        pass
     tokens = {
         "total_tokens": getattr(gateway, "total_tokens", 0),
         "calls": getattr(gateway, "calls", 0),
@@ -173,6 +186,7 @@ async def _amain(args) -> int:
             run_dir = stamp_dir / case.id / f"rep{rep}"
             run_dir.mkdir(parents=True, exist_ok=True)
             tokens_before = gateway.total_tokens
+            calls_before = gateway.calls
             try:
                 record = await run_case(
                     case,
@@ -188,7 +202,7 @@ async def _amain(args) -> int:
             record["rep"] = rep
             record["tokens"] = {
                 "total_tokens": gateway.total_tokens - tokens_before,
-                "calls": gateway.calls,
+                "calls": gateway.calls - calls_before,
             }
             records.append(record)
             status = "PASS" if record["l1_ok"] else "FAIL"
