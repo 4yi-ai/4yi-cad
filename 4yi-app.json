@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "name": "web",
+      "dockerfile": "Dockerfile.freecad-gui",
+      "context": ".",
+      "route": "public",
+      "port": 8080,
+      "healthPath": "/healthz",
+      "storage": { "sizeGb": 10, "mountPath": "/data" },
+      "resources": { "cpu": 2, "memoryMb": 4096 }
+    }
+  ]
+}
