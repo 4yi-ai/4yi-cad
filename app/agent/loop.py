@@ -93,6 +93,15 @@ _SITE_ROLE_GROUPS = {
     "amenity": {"amenity", "entrance_system"},
 }
 
+# Public aliases for eval scoring (app/evals/scoring.py) — same taxonomy the
+# in-loop site-layout quality gate uses.
+SITE_ROLE_GROUPS = _SITE_ROLE_GROUPS
+
+
+def scene_role_set(scene: dict) -> set[str]:
+    objects = scene.get("objects") if isinstance(scene.get("objects"), list) else []
+    return {_role_for_scene_object(obj) for obj in objects if isinstance(obj, dict)}
+
 
 def _first_run_call(completion):
     for call in completion.tool_calls or []:
