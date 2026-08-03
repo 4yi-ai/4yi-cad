@@ -1,0 +1,6 @@
+id: t3-015
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:体育主题社区,地块内设一处标准400米田径场及一座泳池馆建筑,周边布置10栋18层住宅,地块260m×240m"
+required_roles: [plot, building, water, play, amenity]
+min_objects: 18

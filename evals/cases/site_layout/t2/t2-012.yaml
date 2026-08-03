@@ -1,0 +1,6 @@
+id: t2-012
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋24层高层住宅行列布置,地块内设雨水花园两处及一条环形慢跑道,地块140m×170m"
+required_roles: [plot, building, water]
+min_objects: 18

@@ -1,0 +1,7 @@
+id: t3-001
+domain: site_layout
+tier: t3
+smoke: true
+prompt: "设计一个复杂总图:滨湖高档社区,10栋28-32层高层住宅沿湖岸线布置,湖岸长约300米,设一处游艇码头及会所建筑群共3栋,地块300m×250m"
+required_roles: [plot, building, water, play, amenity]
+min_objects: 18

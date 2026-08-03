@@ -1,0 +1,6 @@
+id: t2-015
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:5栋高层住宅与3栋叠拼洋房混合布置共8栋,地块中心设一处直径50米的人工湖,环湖设一条步道,地块160m×190m"
+required_roles: [plot, building, water]
+min_objects: 18

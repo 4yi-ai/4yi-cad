@@ -1,0 +1,6 @@
+id: t3-007
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:TOD社区,地块中心设一处地铁站点及公交枢纽换乘广场,周边环绕10栋28层高层住宅群,地块220m×260m"
+required_roles: [plot, building, amenity]
+min_objects: 18

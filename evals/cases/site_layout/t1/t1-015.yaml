@@ -1,0 +1,6 @@
+id: t1-015
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:联排别墅8户单排布置,每户3层,户间设2.5米宽步行巷道,地块40m×70m"
+required_roles: [plot, building]
+min_objects: 10

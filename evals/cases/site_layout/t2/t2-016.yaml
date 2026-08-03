@@ -1,0 +1,6 @@
+id: t2-016
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:8栋20层高层住宅行列布置,地块南北两端各设一处会所建筑,地块150m×200m"
+required_roles: [plot, building, amenity]
+min_objects: 18

@@ -1,0 +1,6 @@
+id: t1-020
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋6层板楼行列布置,地块角部设一处自行车棚和一处垃圾房,地块65m×80m"
+required_roles: [plot, building, amenity]
+min_objects: 10

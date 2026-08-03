@@ -1,0 +1,6 @@
+id: t1-007
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋8层板楼行列布置,地块北侧设置一处地面停车场可停60辆车,地块70m×90m"
+required_roles: [plot, building]
+min_objects: 10

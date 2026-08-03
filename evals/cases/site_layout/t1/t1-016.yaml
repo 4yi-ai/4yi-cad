@@ -1,0 +1,6 @@
+id: t1-016
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋6层板楼错列布置,一条斜向车行道贯穿地块,地块60m×90m"
+required_roles: [plot, building]
+min_objects: 10

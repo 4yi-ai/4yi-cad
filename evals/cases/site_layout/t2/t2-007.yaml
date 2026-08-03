@@ -1,0 +1,6 @@
+id: t2-007
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:8栋28层高层住宅行列布置,地块东西两侧各设一处主次出入口,地下车库设3处地库出入口,地块170m×200m"
+required_roles: [plot, building, amenity]
+min_objects: 18

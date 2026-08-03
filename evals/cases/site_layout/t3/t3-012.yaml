@@ -1,0 +1,6 @@
+id: t3-012
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:古镇风貌区,低层院落群共20个院落沿一条水街两侧布置,水街宽8米贯穿地块,地块200m×160m"
+required_roles: [plot, building, water, amenity]
+min_objects: 18

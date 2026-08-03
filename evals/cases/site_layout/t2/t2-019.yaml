@@ -1,0 +1,6 @@
+id: t2-019
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:8栋26层高层住宅行列布置,沿建筑周边设6米宽消防环路及登高操作场地,地块160m×190m"
+required_roles: [plot, building]
+min_objects: 18

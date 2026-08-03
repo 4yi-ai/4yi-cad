@@ -1,0 +1,6 @@
+id: t1-017
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:5栋7层板楼行列布置,地块中部设集中草坪并列植4排树阵,地块85m×95m"
+required_roles: [plot, building]
+min_objects: 10

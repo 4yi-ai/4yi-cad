@@ -1,0 +1,6 @@
+id: t2-006
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:7栋12层小高层住宅沿地块布置,一条宽6米的溪流水系贯穿组团,溪流两侧设木栈道,地块150m×180m"
+required_roles: [plot, building, water]
+min_objects: 18

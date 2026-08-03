@@ -1,0 +1,6 @@
+id: t3-016
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:超大型社区,16栋28层高层住宅布置,地块设东西两处商业中心及三处出入口,地块320m×300m"
+required_roles: [plot, building, amenity]
+min_objects: 18

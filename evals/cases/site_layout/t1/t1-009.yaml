@@ -1,0 +1,6 @@
+id: t1-009
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:6栋2层别墅沿地块周边布置,中心设一条环形车道连接各户车库,地块90m×90m"
+required_roles: [plot, building]
+min_objects: 10

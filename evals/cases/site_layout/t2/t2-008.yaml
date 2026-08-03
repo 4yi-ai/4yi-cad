@@ -1,0 +1,6 @@
+id: t2-008
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋22层板式高层住宅,楼栋间以风雨连廊相连,地块中心设一处会所建筑,地块140m×170m"
+required_roles: [plot, building, amenity]
+min_objects: 18

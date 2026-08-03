@@ -1,0 +1,6 @@
+id: t3-011
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:混合用地地块,6栋24层住宅、2栋180米办公塔楼与1栋酒店建筑混合布置,地块240m×260m"
+required_roles: [plot, building, amenity]
+min_objects: 18

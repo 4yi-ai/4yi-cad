@@ -1,0 +1,6 @@
+id: t1-010
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋6层板楼围合布置,中心设一处儿童活动场地含滑梯秋千组合,地块60m×80m"
+required_roles: [plot, building, play]
+min_objects: 10

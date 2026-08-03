@@ -1,0 +1,6 @@
+id: t3-005
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:学区社区,12栋18层高层住宅围绕一所九年制学校布置,学校配建一处标准运动场,地块260m×240m"
+required_roles: [plot, building, play, amenity]
+min_objects: 18

@@ -1,0 +1,6 @@
+id: t2-013
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:4栋高层住宅与3栋洋房混合布置共7栋,地块一角设宠物公园,组团内散布3处休闲亭,地块150m×180m"
+required_roles: [plot, building, play, amenity]
+min_objects: 18

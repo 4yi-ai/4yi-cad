@@ -1,0 +1,5 @@
+id: m2-001
+domain: mechanical
+tier: t2
+smoke: true
+prompt: "设计一个铰链装配体:两片铰链页各80mm×40mm、厚3mm,通过一根Φ6mm长90mm的销轴连接,可绕销轴转动"

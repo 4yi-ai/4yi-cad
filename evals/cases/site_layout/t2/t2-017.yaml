@@ -1,0 +1,6 @@
+id: t2-017
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:7栋16层住宅围合布置,组团内设0-3岁、3-6岁、6-12岁三个年龄段的儿童活动区各一处,地块140m×160m"
+required_roles: [plot, building, play]
+min_objects: 18

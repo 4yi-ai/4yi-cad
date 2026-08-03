@@ -1,0 +1,4 @@
+id: m2-002
+domain: mechanical
+tier: t2
+prompt: "设计一个液压缸简化装配体:缸体外径Φ80mm、内径Φ60mm、长300mm,活塞杆直径Φ30mm、伸出长度200mm,缸体与活塞杆两端各连接一个耳环"

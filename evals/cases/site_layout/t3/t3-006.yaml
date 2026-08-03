@@ -1,0 +1,6 @@
+id: t3-006
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:一条宽20米河道穿越地块,两岸各布置6栋高层住宅共12栋,河上设3座人行桥,两岸设滨河步道,地块300m×200m"
+required_roles: [plot, building, water]
+min_objects: 18

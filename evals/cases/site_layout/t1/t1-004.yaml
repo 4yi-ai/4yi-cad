@@ -1,0 +1,7 @@
+id: t1-004
+domain: site_layout
+tier: t1
+smoke: true
+prompt: "设计一个简单住宅组团:4栋2层合院式住宅围合布置,周边设2.2米高围墙,南侧设主入口大门及门卫室,地块60m×60m"
+required_roles: [plot, building, amenity]
+min_objects: 10

@@ -1,0 +1,4 @@
+id: m1-008
+domain: mechanical
+tier: t1
+prompt: "设计一个圆柱直齿轮:模数2mm,齿数20,齿宽15mm,简化齿形建模,中心孔直径Φ20mm,键槽宽6mm深3.5mm"

@@ -1,0 +1,6 @@
+id: t1-019
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋2层别墅分块布置,每户配一处独立私家花园,地块80m×80m"
+required_roles: [plot, building]
+min_objects: 10

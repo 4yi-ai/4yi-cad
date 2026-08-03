@@ -1,0 +1,6 @@
+id: t2-005
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:7栋16层高层住宅呈围合式布局,内庭院中心设一处水景池,主入口设门岗及落客区,地块130m×160m"
+required_roles: [plot, building, water, amenity]
+min_objects: 18

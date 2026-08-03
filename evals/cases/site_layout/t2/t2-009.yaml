@@ -1,0 +1,6 @@
+id: t2-009
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋16层高层住宅围合布置,组团中心设一处标准篮球场及一处儿童沙坑活动区,地块130m×150m"
+required_roles: [plot, building, play]
+min_objects: 18

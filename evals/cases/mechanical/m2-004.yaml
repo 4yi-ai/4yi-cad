@@ -1,0 +1,4 @@
+id: m2-004
+domain: mechanical
+tier: t2
+prompt: "设计一个曲柄滑块连杆机构装配体:曲柄长80mm,连杆长200mm,滑块尺寸40mm×30mm×20mm沿导轨方向往复运动,三部件通过销轴依次铰接"

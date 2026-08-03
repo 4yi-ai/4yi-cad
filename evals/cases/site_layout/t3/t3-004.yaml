@@ -1,0 +1,6 @@
+id: t3-004
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:两期开发地块,一期6栋11层洋房已建成,二期8栋26层高层住宅新建,两期共享一处中央公园,地块280m×260m"
+required_roles: [plot, building, play, amenity]
+min_objects: 18

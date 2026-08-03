@@ -1,0 +1,6 @@
+id: t1-022
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋点式18层住宅布置在一处三角形地块内,三边长分别为90m、100m、120m"
+required_roles: [plot, building]
+min_objects: 10

@@ -1,0 +1,6 @@
+id: t1-005
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:5栋7层板楼行列式布置,楼间距18米,宅间设条形绿化带,地块80m×100m"
+required_roles: [plot, building]
+min_objects: 10

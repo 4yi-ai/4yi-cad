@@ -1,0 +1,6 @@
+id: t1-013
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋6层板楼行列布置,组团中心设一处10m×6m小型水景池,地块70m×85m"
+required_roles: [plot, building, water]
+min_objects: 10

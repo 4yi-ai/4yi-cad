@@ -1,0 +1,4 @@
+id: m1-010
+domain: mechanical
+tier: t1
+prompt: "设计一个散热片阵列块:基座100mm×100mm、厚度5mm,基座上均布10排×10列共100片散热片,每片厚1mm、高25mm、间距8mm"

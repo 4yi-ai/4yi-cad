@@ -79,3 +79,28 @@ def test_load_corpus_rejects_duplicate_ids(tmp_path):
     _write(tmp_path, "b.yaml", 'id: dup\ndomain: mechanical\ntier: t1\nprompt: q\n')
     with pytest.raises(CorpusError):
         load_corpus(tmp_path)
+
+
+CORPUS_ROOT = Path(__file__).resolve().parents[1] / "evals" / "cases"
+
+
+def test_full_corpus_shape():
+    cases = load_corpus(CORPUS_ROOT)
+    by_tier_site = {
+        t: [c for c in cases if c.domain == "site_layout" and c.tier == t]
+        for t in ("t1", "t2", "t3")
+    }
+    mech = [c for c in cases if c.domain == "mechanical"]
+    assert len(by_tier_site["t1"]) == 24
+    assert len(by_tier_site["t2"]) == 24
+    assert len(by_tier_site["t3"]) == 16
+    assert len(mech) == 20
+    smoke = [c.id for c in cases if c.smoke]
+    assert sorted(smoke) == sorted(
+        ["t1-001", "t1-002", "t1-003", "t1-004", "t2-001", "t2-002",
+         "t3-001", "m1-001", "m1-002", "m2-001"]
+    )
+    for c in cases:
+        if c.domain == "site_layout":
+            assert "plot" in c.required_roles and "building" in c.required_roles
+            assert c.min_objects == (10 if c.tier == "t1" else 18)

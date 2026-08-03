@@ -1,0 +1,6 @@
+id: t2-018
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋18层高层住宅行列布置,建筑屋顶设屋顶花园并标注,主入口处设一处入口水景,地块140m×170m"
+required_roles: [plot, building, water, amenity]
+min_objects: 18

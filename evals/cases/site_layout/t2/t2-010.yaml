@@ -1,0 +1,6 @@
+id: t2-010
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:3栋11层洋房与5栋16层小高层混合布置,地块中央设一处集中草坪及旱喷广场,地块150m×180m"
+required_roles: [plot, building, water, play]
+min_objects: 18

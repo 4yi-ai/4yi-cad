@@ -1,0 +1,6 @@
+id: t3-008
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:山地别墅群,地块沿等高线设4级台地,每级台地布置一个别墅组团共16栋2层别墅,地块250m×220m"
+required_roles: [plot, building]
+min_objects: 18

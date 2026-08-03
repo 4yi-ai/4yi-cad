@@ -1,0 +1,6 @@
+id: t1-018
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋16层点式小高层沿一条南北向主路两侧布置,地块70m×110m"
+required_roles: [plot, building]
+min_objects: 10

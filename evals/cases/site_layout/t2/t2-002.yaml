@@ -1,0 +1,7 @@
+id: t2-002
+domain: site_layout
+tier: t2
+smoke: true
+prompt: "设计一个混合社区总图:8栋26层高层住宅,沿主入口道路设2层商业裙房总长150米,小区中心设一处直径40米的圆形中心广场,环路+人行步道系统,地块160m×200m"
+required_roles: [plot, building, amenity]
+min_objects: 18

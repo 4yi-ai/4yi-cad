@@ -1,0 +1,6 @@
+id: t1-011
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋20层高层点式住宅,南侧主入口设一处入口广场,地块65m×75m"
+required_roles: [plot, building, amenity]
+min_objects: 10

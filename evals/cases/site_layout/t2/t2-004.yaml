@@ -1,0 +1,6 @@
+id: t2-004
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋18层高层住宅围合布置,地块东南角设一所6班幼儿园,西北角设一处老年活动中心,地块140m×170m"
+required_roles: [plot, building, play, amenity]
+min_objects: 18

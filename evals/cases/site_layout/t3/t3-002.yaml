@@ -1,0 +1,6 @@
+id: t3-002
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:坡地社区,地块自南向北设三级台地,台地间以挡墙衔接高差各3米,8栋错层住宅顺应地形布置,地块200m×220m"
+required_roles: [plot, building, amenity]
+min_objects: 18

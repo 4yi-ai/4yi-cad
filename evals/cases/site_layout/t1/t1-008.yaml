@@ -1,0 +1,6 @@
+id: t1-008
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:2栋点式18层小高层与3栋6层板楼混合布置,地块75m×95m,楼栋间设步行道连接"
+required_roles: [plot, building]
+min_objects: 10

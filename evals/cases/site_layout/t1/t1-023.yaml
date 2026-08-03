@@ -1,0 +1,6 @@
+id: t1-023
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋6层板楼围合布置,中心设一处凉亭及环形步道系统,地块70m×85m"
+required_roles: [plot, building, amenity]
+min_objects: 10

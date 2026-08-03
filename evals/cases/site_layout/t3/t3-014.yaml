@@ -1,0 +1,6 @@
+id: t3-014
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:海绵城市示范区,地块内设一处人工湿地、贯穿全区的植草沟系统及3处调蓄塘,周边布置10栋住宅,地块240m×220m"
+required_roles: [plot, building, water]
+min_objects: 18

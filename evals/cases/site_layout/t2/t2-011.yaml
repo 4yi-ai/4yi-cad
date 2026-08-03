@@ -1,0 +1,6 @@
+id: t2-011
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:8栋18层高层住宅行列布置,沿地块南侧道路设一排沿街商业,道路旁设公交港湾一处,地块160m×190m"
+required_roles: [plot, building, amenity]
+min_objects: 18

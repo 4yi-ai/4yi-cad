@@ -1,0 +1,6 @@
+id: t3-009
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:康养社区,地块一侧设一栋医院建筑,周边布置8栋适老化住宅,中心设一处疗愈花园,地块220m×200m"
+required_roles: [plot, building, play, amenity]
+min_objects: 18

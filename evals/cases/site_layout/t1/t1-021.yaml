@@ -1,0 +1,6 @@
+id: t1-021
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:6栋5层多层住宅行列式布置,两条平行车行道贯穿组团,地块100m×110m"
+required_roles: [plot, building]
+min_objects: 10

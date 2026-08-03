@@ -1,0 +1,6 @@
+id: t3-013
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:12栋26层高层住宅分为三大组团,每个组团配建一处组团级会所共3处,地块280m×260m"
+required_roles: [plot, building, amenity]
+min_objects: 18

@@ -1,0 +1,6 @@
+id: t2-003
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:4栋28层高层住宅与4栋11层洋房混合布置,中心设一处25m×12m室外泳池及配套健身场地,地块150m×190m"
+required_roles: [plot, building, water, play]
+min_objects: 18

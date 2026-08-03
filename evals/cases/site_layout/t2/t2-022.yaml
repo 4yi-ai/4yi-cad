@@ -1,0 +1,6 @@
+id: t2-022
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:5栋高层住宅与3栋洋房混合布置共8栋,地块中心设集中商业街区,商业前设一处下沉式广场,地块160m×190m"
+required_roles: [plot, building, amenity]
+min_objects: 18

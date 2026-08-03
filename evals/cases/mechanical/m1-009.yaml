@@ -1,0 +1,4 @@
+id: m1-009
+domain: mechanical
+tier: t1
+prompt: "设计一个管道三通接头:主管外径Φ50mm、内径Φ40mm,支管外径Φ32mm、内径Φ26mm,三个接口均带50mm长直管段"

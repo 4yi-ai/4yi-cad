@@ -1,0 +1,6 @@
+id: t1-014
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋8层板楼行列布置,周边设围墙,东西两侧各设一处出入口,地块75m×95m"
+required_roles: [plot, building, amenity]
+min_objects: 10

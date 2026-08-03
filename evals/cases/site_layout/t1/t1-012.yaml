@@ -1,0 +1,6 @@
+id: t1-012
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:5栋7层板楼行列式布置,沿建筑长边设6米宽消防登高操作场地,地块85m×100m"
+required_roles: [plot, building]
+min_objects: 10

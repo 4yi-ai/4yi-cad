@@ -1,0 +1,7 @@
+id: t1-003
+domain: site_layout
+tier: t1
+smoke: true
+prompt: "设计一个简单住宅组团:联排别墅两排共10户,每户3层,中间为一条6米宽尽端式车行道,地块50m×80m"
+required_roles: [plot, building]
+min_objects: 10

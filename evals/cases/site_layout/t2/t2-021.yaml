@@ -1,0 +1,6 @@
+id: t2-021
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:7栋16层住宅沿一条滨河地块布置,河岸设10米宽沿河绿带及一处亲水平台,地块150m×200m"
+required_roles: [plot, building, water]
+min_objects: 18

@@ -1,0 +1,6 @@
+id: t3-003
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:2栋200米超高层办公住宅综合体与6栋28层高层住宅混合布置,裙房商业综合体沿主干道展开总长200米,地块250m×280m"
+required_roles: [plot, building, amenity]
+min_objects: 18

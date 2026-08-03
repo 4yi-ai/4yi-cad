@@ -1,0 +1,6 @@
+id: t1-006
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:4栋6层板楼呈L形布局,转角处设三角形集中绿地,地块65m×85m"
+required_roles: [plot, building]
+min_objects: 10

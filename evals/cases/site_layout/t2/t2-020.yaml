@@ -1,0 +1,6 @@
+id: t2-020
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋20层高层住宅底部设架空层活动区,地块中心设一处20m×10m室外泳池,地块140m×170m"
+required_roles: [plot, building, water, play]
+min_objects: 18

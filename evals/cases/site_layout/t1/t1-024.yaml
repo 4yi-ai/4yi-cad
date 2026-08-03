@@ -1,0 +1,6 @@
+id: t1-024
+domain: site_layout
+tier: t1
+prompt: "设计一个简单住宅组团:3栋6层板楼沿东西向道路布置,地块北侧设一条10米宽防护绿带,地块75m×90m"
+required_roles: [plot, building]
+min_objects: 10

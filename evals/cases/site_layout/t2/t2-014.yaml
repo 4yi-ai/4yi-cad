@@ -1,0 +1,6 @@
+id: t2-014
+domain: site_layout
+tier: t2
+prompt: "设计一个混合社区总图:6栋14层住宅围合成两处内院,两院之间以一座连桥相接,地块140m×160m"
+required_roles: [plot, building, amenity]
+min_objects: 18

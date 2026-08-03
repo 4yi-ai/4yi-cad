@@ -1,0 +1,7 @@
+id: t1-002
+domain: site_layout
+tier: t1
+smoke: true
+prompt: "设计一个简单住宅组团:4栋18层点式小高层围绕十字形路网布置,地块70m×70m,四角设置宅间绿地"
+required_roles: [plot, building]
+min_objects: 10

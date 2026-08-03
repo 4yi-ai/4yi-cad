@@ -1,0 +1,6 @@
+id: t3-010
+domain: site_layout
+tier: t3
+prompt: "设计一个复杂总图:10栋24层高层住宅环绕一处环形中央湖布置,湖周设五类主题园(观赏园、香草园、儿童园、老年园、运动园),地块260m×260m"
+required_roles: [plot, building, water, play]
+min_objects: 18
