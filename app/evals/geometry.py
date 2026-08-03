@@ -66,7 +66,7 @@ def _check_fcstd(path: Path, report: GeometryReport) -> None:
     script = (
         "import sys, FreeCAD\n"
         f"doc = FreeCAD.open({str(path)!r})\n"
-        "sys.exit(0 if doc and len(doc.Objects) >= 0 else 1)\n"
+        "sys.exit(0 if doc is not None else 1)\n"
     )
     try:
         proc = subprocess.run(
@@ -81,6 +81,9 @@ def _check_fcstd(path: Path, report: GeometryReport) -> None:
     except subprocess.TimeoutExpired:
         report.fcstd_loadable = False
         report.issues.append(f"{path.name}: FreeCAD.open timed out after {FCSTD_LOAD_TIMEOUT_S}s")
+    except OSError as exc:
+        report.fcstd_loadable = False
+        report.issues.append(f"{path.name}: FreeCADCmd failed to run: {exc}")
 
 
 def check_artifacts(artifacts_dir: Path, *, fcstd_check: bool = True) -> GeometryReport:
