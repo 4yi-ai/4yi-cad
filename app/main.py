@@ -64,6 +64,11 @@ from app.cad.site_layout_templates import (
     site_layout_needs_repair,
     site_layout_repair_script,
 )
+from app.evals.report import (
+    build_ai_quality_checks,
+    default_report_path,
+    load_latest_eval_report,
+)
 from app.events import HEARTBEAT_FRAME, HEARTBEAT_INTERVAL_S, format_sse
 from app.freecad_gui_orchestrator import (
     FreeCadGuiSessionOrchestrator,
@@ -1181,6 +1186,12 @@ def _production_readiness_report(app: FastAPI) -> dict[str, Any]:
             required_for=["public_beta", "ga"],
         ),
     ]
+    checks.extend(
+        build_ai_quality_checks(
+            load_latest_eval_report(),
+            report_path=str(default_report_path()),
+        )
+    )
     summary = {
         "pass": sum(1 for check in checks if check["status"] == "pass"),
         "warn": sum(1 for check in checks if check["status"] == "warn"),

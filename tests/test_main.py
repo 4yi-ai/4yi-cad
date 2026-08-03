@@ -281,6 +281,19 @@ def test_production_readiness_can_pass_when_release_env_is_configured(tmp_path, 
     import app.freecad_state as freecad_state
 
     monkeypatch.setattr(freecad_state, "_is_under_tmp", lambda path: False)
+    eval_report_path = tmp_path / "eval-latest.json"
+    eval_report_path.write_text(
+        json.dumps(
+            {
+                "schema": "4yi-cad.eval_report.v1",
+                "total_runs": 84,
+                "thresholds_met": True,
+                "metrics": {"success_rate": 0.95},
+                "thresholds": {},
+            }
+        )
+    )
+    monkeypatch.setenv("CAD_EVAL_REPORT_PATH", str(eval_report_path))
     monkeypatch.setenv("OPENAI_BASE_URL", "http://gateway.test/api/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "xclaw-bsl-test")
     monkeypatch.setenv("TEXT_MODEL", "test-model")
