@@ -8,8 +8,24 @@
       "route": "public",
       "port": 8080,
       "healthPath": "/healthz",
-      "storage": { "sizeGb": 10, "mountPath": "/data" },
-      "resources": { "cpu": 2, "memoryMb": 4096 }
+      "storage": {
+        "sizeGb": 10,
+        "mountPath": "/data"
+      },
+      "resources": {
+        "cpu": 2,
+        "memoryMb": 4096
+      }
+    }
+  ],
+  "models": [
+    {
+      "env": "TEXT_MODEL",
+      "type": "chat",
+      "default": "anthropic.claude-sonnet-4-6",
+      "allowed": [
+        "anthropic.claude-sonnet-4-6"
+      ]
     }
   ]
 }
