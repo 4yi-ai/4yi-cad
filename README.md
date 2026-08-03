@@ -111,19 +111,29 @@ curl -s localhost:8080/healthz     # {"status":"ok"}
 curl -s localhost:8080/api/freecad/smoke
 ```
 
-## FreeCAD GUI session spike
+## FreeCAD-first unified runtime
 
-Phase 1 remote GUI work uses a separate interactive image so the production
-FastAPI container stays focused on the web/control-plane path:
+`Dockerfile.freecad-gui` is the marketplace/runtime image for the FreeCAD-first
+flow. It starts the FastAPI control plane on `8080`, starts noVNC/FreeCAD on
+local `6080`, and serves the desktop through the same-origin `/freecad` proxy:
 
 ```bash
-docker build -f Dockerfile.freecad-gui -t 4yi-cad-freecad-gui:phase1-spike .
-docker run --rm -p 6080:6080 \
+docker build -f Dockerfile.freecad-gui -t 4yi-cad-freecad-gui:unified .
+docker run --rm -p 8080:8080 \
   -v "$PWD/.local/freecad-gui-workspace:/workspace" \
-  4yi-cad-freecad-gui:phase1-spike
+  4yi-cad-freecad-gui:unified
 # then open:
-# http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=remote
+# http://127.0.0.1:8080/
 ```
+
+Marketplace deployments target `x86_64`. On Apple Silicon, the default local
+Docker build produces an `arm64` image; that is useful for API/noVNC smoke tests,
+but the Debian FreeCAD GUI package can be unstable on that architecture. Use
+`docker build --platform linux/amd64 ...` when validating the real FreeCAD GUI
+locally.
+
+The legacy noVNC-only spike is still available with `CAD_UNIFIED_APP=0` and
+`-p 6080:6080`.
 
 The FastAPI control plane can also start one local GUI container per remote
 session when explicitly enabled:
@@ -136,11 +146,13 @@ CAD_GUI_SESSION_HEALTH_WAIT_SECONDS=60 \
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8081
 ```
 
-For a fixed marketplace `freecad-gui` service, set `CAD_FREECAD_FIRST_ENTRY=1`
-on the web service to make `/` redirect to the same-origin noVNC desktop. The
-Web workbench remains available at `/workbench`. When the FreeCAD companion panel
-sends a plain prompt, the web control plane runs the FreeCAD agent, stores a new
-FCStd version, and queues `load_model` back to the bridge.
+For marketplace import, `Dockerfile.freecad-gui` declares `CAD_UNIFIED_APP=1`.
+The importer should therefore generate one public service on port `8080` using
+that Dockerfile. `/` redirects to the same-origin noVNC desktop, `/workbench`
+remains available for the Web workbench, and the FreeCAD companion panel can send
+plain prompts to the in-container FastAPI control plane. The control plane runs
+the FreeCAD agent, stores a new FCStd version, and queues `load_model` back to
+the bridge.
 
 See `docs/PHASE1-freecad-gui-spike.md` for loading an existing FCStd, API-driven
 startup, and the manual save smoke path. See

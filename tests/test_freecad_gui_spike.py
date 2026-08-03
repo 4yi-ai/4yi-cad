@@ -23,13 +23,27 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     ]:
         assert package in dockerfile
 
+    assert "EXPOSE 8080" in dockerfile
     assert "EXPOSE 6080" in dockerfile
+    assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
+    assert "COPY app ./app" in dockerfile
+    assert "COPY index.html ./index.html" in dockerfile
     assert "start-freecad-gui.sh" in dockerfile
     assert "freecad-bridge-client.py" in dockerfile
     assert "freecad-addon/fouryi_cad_companion" in dockerfile
     assert ".local/share/FreeCAD/Mod/fouryi_cad_companion" in dockerfile
     assert ".FreeCAD/Mod/fouryi_cad_companion" in dockerfile
+    assert "CAD_UNIFIED_APP=1" in dockerfile
+    assert "PORT=8080" in dockerfile
+    assert "PYTHONPATH=/app" in dockerfile
+    assert "CAD_DATA_DIR=/data/4yi-cad" in dockerfile
+    assert "CAD_RUNTIME_DIR=/data/4yi-cad/runtime" in dockerfile
+    assert "/home/appuser/.fluxbox" in dockerfile
     assert "CAD_SESSION_WORKSPACE=/workspace" in dockerfile
+    assert "CAD_GUI_SESSION_BACKEND=shared_service" in dockerfile
+    assert "CAD_FREECAD_FIRST_ENTRY=1" in dockerfile
+    assert "CAD_FREECAD_GUI_UPSTREAM_URL=http://127.0.0.1:6080" in dockerfile
+    assert "CAD_PANEL_ACTION_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/panel/actions" in dockerfile
     assert "CAD_BRIDGE_AUTOSTART=1" in dockerfile
     assert "CAD_BRIDGE_MODE=freecad_addon" in dockerfile
     assert "CAD_BRIDGE_ALLOW_MACRO_EXEC=1" in dockerfile
@@ -49,9 +63,17 @@ def test_freecad_gui_start_script_is_executable_and_valid_bash():
     for token in [
         "SESSION_FCSTD_PATH",
         "CAD_SESSION_WORKSPACE",
+        "CAD_UNIFIED_APP",
+        "CAD_RUNTIME_DIR",
+        "XDG_RUNTIME_DIR",
+        "TMPDIR",
+        "uvicorn",
+        "supervise_unified_app",
         "NOVNC_PORT",
         "VNC_PORT",
         "CAD_CONTROL_PLANE_URL",
+        "CAD_FREECAD_GUI_UPSTREAM_URL",
+        "CAD_PANEL_ACTION_URL",
         "CAD_BRIDGE_AUTOSTART",
         "CAD_BRIDGE_MODE",
         "CAD_BRIDGE_POLL_URL",

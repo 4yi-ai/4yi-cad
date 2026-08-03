@@ -18,7 +18,7 @@
     "source_repo_url": "https://github.com/4yi-ai/4yi-cad",
     "source_branch": "main",
     "source_directory": ".",
-    "dockerfile_path": "Dockerfile",
+    "dockerfile_path": "Dockerfile.freecad-gui",
 
     "runtime_port": 8080,
     "health_path": "/healthz",
@@ -37,12 +37,28 @@
 
     "env_json": {
       "CAD_FREECAD_UPLOAD_MAX_BYTES": "104857600",
+      "CAD_UNIFIED_APP": "1",
+      "CAD_RUNTIME_DIR": "/data/4yi-cad/runtime",
       "CAD_GUI_SESSION_BACKEND": "shared_service",
+      "CAD_FREECAD_FIRST_ENTRY": "1",
       "CAD_SHARED_FREECAD_SESSION_ID": "shared-freecad-gui",
+      "CAD_REMOTE_SESSION_ID": "shared-freecad-gui",
+      "CAD_SESSION_ID": "shared-freecad-gui",
+      "CAD_WORKBENCH_SESSION_ID": "shared-freecad-gui",
       "CAD_REMOTE_DESKTOP_BASE_URL": "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
-      "CAD_GUI_SESSION_CONTROL_PLANE_URL": "http://app-4yi-cad:8080",
       "CAD_FREECAD_GUI_PROXY_PREFIX": "/freecad",
-      "CAD_FREECAD_GUI_UPSTREAM_URL": "http://app-4yi-cad-freecad-gui:6080"
+      "CAD_FREECAD_GUI_UPSTREAM_URL": "http://127.0.0.1:6080",
+      "CAD_CONTROL_PLANE_URL": "http://127.0.0.1:8080",
+      "CAD_GUI_SESSION_CONTROL_PLANE_URL": "http://127.0.0.1:8080",
+      "CAD_BRIDGE_HEARTBEAT_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat",
+      "CAD_BRIDGE_POLL_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/poll",
+      "CAD_BRIDGE_COMMAND_RESULT_URL_BASE": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/commands",
+      "CAD_BRIDGE_COMMAND_QUEUE_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/commands",
+      "CAD_BRIDGE_SAVE_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/save",
+      "CAD_PANEL_ACTION_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/panel/actions",
+      "CAD_BRIDGE_MODE": "freecad_addon",
+      "CAD_BRIDGE_AUTOSTART": "1",
+      "CAD_BRIDGE_ALLOW_MACRO_EXEC": "1"
     },
     "secret_env_json": {},
     "_secrets_note": "No consumer secrets. The app reads ONLY the platform-injected gateway env; it reads no native LLM keys, so none should be classified as required secrets."
@@ -55,7 +71,7 @@
         "name": "web",
         "type": "web",
         "imageSource": "build",
-        "build": { "context": ".", "dockerfile": "Dockerfile" },
+        "build": { "context": ".", "dockerfile": "Dockerfile.freecad-gui" },
         "port": 8080,
         "route": "public",
         "healthPath": "/healthz",
@@ -66,63 +82,47 @@
         },
         "env": {
           "CAD_FREECAD_UPLOAD_MAX_BYTES": "104857600",
+          "CAD_UNIFIED_APP": "1",
+          "CAD_RUNTIME_DIR": "/data/4yi-cad/runtime",
           "CAD_GUI_SESSION_BACKEND": "shared_service",
+          "CAD_FREECAD_FIRST_ENTRY": "1",
           "CAD_SHARED_FREECAD_SESSION_ID": "shared-freecad-gui",
-          "CAD_REMOTE_DESKTOP_BASE_URL": "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
-          "CAD_GUI_SESSION_CONTROL_PLANE_URL": "http://app-4yi-cad:8080",
-          "CAD_FREECAD_GUI_PROXY_PREFIX": "/freecad",
-          "CAD_FREECAD_GUI_UPSTREAM_URL": "http://app-4yi-cad-freecad-gui:6080"
-        },
-        "metadata": {
-          "k8s_name": "app",
-          "freecad_gui_proxy": {
-            "service": "freecad-gui",
-            "proxyPrefix": "/freecad",
-            "upstreamUrl": "http://app-4yi-cad-freecad-gui:6080",
-            "remoteDesktopBaseUrl": "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify"
-          }
-        },
-        "secrets": []
-      },
-      {
-        "name": "freecad-gui",
-        "type": "api",
-        "imageSource": "build",
-        "build": { "context": ".", "dockerfile": "Dockerfile.freecad-gui" },
-        "port": 6080,
-        "route": "internal",
-        "healthPath": "/vnc.html",
-        "resources": {
-          "cpu": 2,
-          "memoryMb": 4096,
-          "replicas": { "min": 1, "max": 1 }
-        },
-        "env": {
-          "CAD_SESSION_ID": "shared-freecad-gui",
           "CAD_REMOTE_SESSION_ID": "shared-freecad-gui",
-          "CAD_CONTROL_PLANE_URL": "http://app-4yi-cad:8080",
-          "CAD_GUI_SESSION_CONTROL_PLANE_URL": "http://app-4yi-cad:8080",
-          "CAD_BRIDGE_HEARTBEAT_URL": "http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat",
-          "CAD_BRIDGE_POLL_URL": "http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/poll",
-          "CAD_BRIDGE_COMMAND_RESULT_URL_BASE": "http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/bridge/commands",
-          "CAD_BRIDGE_COMMAND_QUEUE_URL": "http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/commands",
-          "CAD_BRIDGE_SAVE_URL": "http://app-4yi-cad:8080/api/freecad/sessions/shared-freecad-gui/save",
+          "CAD_SESSION_ID": "shared-freecad-gui",
+          "CAD_WORKBENCH_SESSION_ID": "shared-freecad-gui",
+          "CAD_REMOTE_DESKTOP_BASE_URL": "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify",
+          "CAD_FREECAD_GUI_PROXY_PREFIX": "/freecad",
+          "CAD_FREECAD_GUI_UPSTREAM_URL": "http://127.0.0.1:6080",
+          "CAD_CONTROL_PLANE_URL": "http://127.0.0.1:8080",
+          "CAD_GUI_SESSION_CONTROL_PLANE_URL": "http://127.0.0.1:8080",
+          "CAD_BRIDGE_HEARTBEAT_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat",
+          "CAD_BRIDGE_POLL_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/poll",
+          "CAD_BRIDGE_COMMAND_RESULT_URL_BASE": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/commands",
+          "CAD_BRIDGE_COMMAND_QUEUE_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/commands",
+          "CAD_BRIDGE_SAVE_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/save",
+          "CAD_PANEL_ACTION_URL": "http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/panel/actions",
           "CAD_BRIDGE_MODE": "freecad_addon",
           "CAD_BRIDGE_AUTOSTART": "1",
           "CAD_BRIDGE_ALLOW_MACRO_EXEC": "1"
         },
         "metadata": {
-          "runtime_role": "freecad_gui",
-          "control_plane_service": "app-4yi-cad",
+          "k8s_name": "app",
+          "runtime_role": "freecad_unified_runtime",
           "shared_remote_session_id": "shared-freecad-gui",
-          "public_proxy_path": "/freecad"
+          "public_proxy_path": "/freecad",
+          "freecad_gui_proxy": {
+            "service": "self",
+            "proxyPrefix": "/freecad",
+            "upstreamUrl": "http://127.0.0.1:6080",
+            "remoteDesktopBaseUrl": "/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify"
+          }
         },
         "secrets": []
       }
     ],
     "_manifest_note": [
-      "Short-term personal/demo deployment uses one public web service (FastAPI SPA/API) plus one internal freecad-gui service. The web service proxies noVNC over /freecad.",
-      "The fixed freecad-gui service is one shared desktop per dedicated app install. The Web workbench must queue load_model with the current FCStd artifact before the desktop reflects the selected model/session.",
+      "Short-term personal/demo deployment uses one public unified FreeCAD-first service. FastAPI listens on 8080 and proxies local noVNC over /freecad to 127.0.0.1:6080.",
+      "The fixed in-container FreeCAD GUI is one shared desktop per dedicated app install. The FreeCAD companion panel can run AI prompts through the local FastAPI control plane and receives load_model commands through the shared bridge.",
       "The app stores session metadata in SQLite and CAD artifacts on the filesystem. If the platform injects a writable CAD_DATA_DIR, storage defaults to that directory; otherwise it falls back to pod-local /tmp. Confirm PVC/object storage before Public Beta/GA durability claims.",
       "CONFIRM at deploy: /tmp must be a WRITABLE tmpfs/emptyDir mount because the sandbox worker writes there and the pod should run read-only rootfs + non-root (tenant-isolation)."
     ]
@@ -148,8 +148,8 @@
 
   "deploymentFit": {
     "single_public_service": true,
-    "short_term_fixed_gui_service": true,
+    "short_term_unified_freecad_service": true,
     "stateful": true,
-    "notes": "Stateful-lite Private Beta: server stores SQLite session/version metadata and filesystem artifacts under CAD_SESSION_DB_PATH/CAD_ARTIFACT_ROOT, or under CAD_DATA_DIR when the platform injects it and the app user can write it. The fixed freecad-gui service polls shared-freecad-gui and requires the explicit Load current session flow. Durable PVC/object storage and a per-session GUI orchestrator are required before Public Beta/GA claims beyond a personal/demo install."
+    "notes": "Stateful-lite Private Beta: server stores SQLite session/version metadata and filesystem artifacts under CAD_SESSION_DB_PATH/CAD_ARTIFACT_ROOT, or under CAD_DATA_DIR when the platform injects it and the app user can write it. The in-container FreeCAD GUI polls shared-freecad-gui through 127.0.0.1:8080 and the companion panel can run AI generation directly from FreeCAD. Durable PVC/object storage and a per-session GUI orchestrator are required before Public Beta/GA claims beyond a personal/demo install."
   }
 }

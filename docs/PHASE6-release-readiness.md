@@ -66,24 +66,29 @@ CAD_REMOTE_DESKTOP_BASE_URL=https://<remote-desktop-router>
 FOURYI_CAD_LICENSE_REVIEW_ACCEPTED=1
 ```
 
-For a personal/demo dedicated app that uses one fixed FreeCAD desktop, use:
+For a personal/demo dedicated app that uses one fixed FreeCAD desktop in the
+same public service, use:
 
 ```bash
+CAD_UNIFIED_APP=1
 CAD_GUI_SESSION_BACKEND=shared_service
 CAD_FREECAD_FIRST_ENTRY=1
 CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui
-CAD_REMOTE_DESKTOP_BASE_URL=https://<freecad-gui-route>/vnc.html?autoconnect=1&resize=remote
-CAD_GUI_SESSION_CONTROL_PLANE_URL=http://app-4yi-cad:8080
+CAD_REMOTE_DESKTOP_BASE_URL=/freecad/vnc.html?autoconnect=1&resize=remote&path=freecad/websockify
+CAD_FREECAD_GUI_PROXY_PREFIX=/freecad
+CAD_FREECAD_GUI_UPSTREAM_URL=http://127.0.0.1:6080
+CAD_CONTROL_PLANE_URL=http://127.0.0.1:8080
+CAD_GUI_SESSION_CONTROL_PLANE_URL=http://127.0.0.1:8080
 ```
 
-The matching `freecad-gui` service must poll the same
-`shared-freecad-gui` bridge endpoints and run the addon bridge with
-`CAD_BRIDGE_MODE=freecad_addon` and `CAD_BRIDGE_AUTOSTART=1`. With
-`CAD_FREECAD_FIRST_ENTRY=1`, `/` redirects to the FreeCAD desktop and the Web
-workbench remains available at `/workbench`. A plain prompt from the FreeCAD
-companion panel runs the FreeCAD agent, stores a new FCStd version, and queues
-`load_model` for the bridge; the Web workbench still has **Load current session**
-for manually loading the active FCStd artifact.
+The same container runs FastAPI on `8080` and noVNC/FreeCAD on local `6080`.
+The FreeCAD addon bridge polls `shared-freecad-gui` endpoints on
+`http://127.0.0.1:8080` with `CAD_BRIDGE_MODE=freecad_addon` and
+`CAD_BRIDGE_AUTOSTART=1`. With `CAD_FREECAD_FIRST_ENTRY=1`, `/` redirects to the
+FreeCAD desktop and the Web workbench remains available at `/workbench`. A plain
+prompt from the FreeCAD companion panel runs the FreeCAD agent, stores a new
+FCStd version, and queues `load_model` for the bridge; the Web workbench still
+has **Load current session** for manually loading the active FCStd artifact.
 
 GA also expects the FreeCAD worker to run outside the web process:
 

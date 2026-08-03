@@ -1,8 +1,9 @@
-# 4yi-cad Phase 1 spike image: real FreeCAD GUI over noVNC.
+# 4yi-cad FreeCAD-first image: FastAPI control plane + real FreeCAD GUI over noVNC.
 #
-# This image is intentionally separate from the production FastAPI image. It is a
-# disposable interactive session workload: Xvfb + Fluxbox + x11vnc + noVNC +
-# FreeCAD GUI, with a writable workspace mounted at /workspace.
+# The default runtime is a single public service on $PORT. FastAPI serves SSO/API,
+# AI generation, artifacts, and a same-origin /freecad proxy to the local noVNC
+# desktop on 127.0.0.1:$NOVNC_PORT. Set CAD_UNIFIED_APP=0 for the older
+# noVNC-only local spike mode.
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -38,6 +39,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
+COPY requirements.txt requirements-cad.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements-cad.txt
+
+COPY app ./app
+COPY index.html ./index.html
 COPY scripts/freecad-gui/start-freecad-gui.sh /usr/local/bin/start-freecad-gui.sh
 COPY scripts/freecad-gui/freecad-bridge-client.py /usr/local/bin/freecad-bridge-client.py
 COPY freecad-addon/fouryi_cad_companion /tmp/fouryi_cad_companion
@@ -47,13 +56,23 @@ RUN chmod 0755 /usr/local/bin/start-freecad-gui.sh /usr/local/bin/freecad-bridge
     && cp -R /tmp/fouryi_cad_companion /home/appuser/.local/share/FreeCAD/Mod/fouryi_cad_companion \
     && cp -R /home/appuser/.local/share/FreeCAD/Mod/fouryi_cad_companion /home/appuser/.FreeCAD/Mod/fouryi_cad_companion \
     && rm -rf /tmp/fouryi_cad_companion \
-    && mkdir -p /workspace /tmp/4yi-cad-freecad-gui \
-    && chown -R appuser:appuser /workspace /tmp/4yi-cad-freecad-gui /home/appuser/.local/share/FreeCAD /home/appuser/.FreeCAD
+    && mkdir -p /workspace /data/4yi-cad/runtime/tmp /data/4yi-cad/runtime/xdg-runtime /tmp/4yi-cad-freecad-gui /home/appuser/.fluxbox \
+    && touch /home/appuser/.fluxbox/lastwallpaper \
+    && chmod 0700 /data/4yi-cad/runtime/xdg-runtime \
+    && chown -R appuser:appuser /workspace /data /tmp/4yi-cad-freecad-gui /home/appuser/.local/share/FreeCAD /home/appuser/.FreeCAD /home/appuser/.fluxbox
 
 USER appuser
 WORKDIR /workspace
 
-ENV CAD_SESSION_WORKSPACE=/workspace \
+ENV CAD_UNIFIED_APP=1 \
+    CAD_SESSION_WORKSPACE=/workspace \
+    CAD_DATA_DIR=/data/4yi-cad \
+    CAD_RUNTIME_DIR=/data/4yi-cad/runtime \
+    PORT=8080 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    CAD_API_APP_DIR=/app \
+    CAD_API_MODULE=app.main:app \
     DISPLAY_NUM=99 \
     SCREEN=0 \
     GEOMETRY=1600x1000x24 \
@@ -65,6 +84,23 @@ ENV CAD_SESSION_WORKSPACE=/workspace \
     NOVNC_PORT=6080 \
     FREECAD_BIN= \
     SESSION_FCSTD_PATH= \
+    CAD_GUI_SESSION_BACKEND=shared_service \
+    CAD_FREECAD_FIRST_ENTRY=1 \
+    CAD_SHARED_FREECAD_SESSION_ID=shared-freecad-gui \
+    CAD_REMOTE_SESSION_ID=shared-freecad-gui \
+    CAD_SESSION_ID=shared-freecad-gui \
+    CAD_WORKBENCH_SESSION_ID=shared-freecad-gui \
+    CAD_REMOTE_DESKTOP_BASE_URL=/freecad/vnc.html?autoconnect=1\&resize=remote\&path=freecad/websockify \
+    CAD_FREECAD_GUI_PROXY_PREFIX=/freecad \
+    CAD_FREECAD_GUI_UPSTREAM_URL=http://127.0.0.1:6080 \
+    CAD_CONTROL_PLANE_URL=http://127.0.0.1:8080 \
+    CAD_GUI_SESSION_CONTROL_PLANE_URL=http://127.0.0.1:8080 \
+    CAD_BRIDGE_HEARTBEAT_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/heartbeat \
+    CAD_BRIDGE_POLL_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/poll \
+    CAD_BRIDGE_COMMAND_RESULT_URL_BASE=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/bridge/commands \
+    CAD_BRIDGE_COMMAND_QUEUE_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/commands \
+    CAD_BRIDGE_SAVE_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/save \
+    CAD_PANEL_ACTION_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/panel/actions \
     CAD_BRIDGE_AUTOSTART=1 \
     CAD_BRIDGE_MODE=freecad_addon \
     CAD_BRIDGE_ALLOW_MACRO_EXEC=1 \
@@ -75,10 +111,11 @@ ENV CAD_SESSION_WORKSPACE=/workspace \
     CAD_COMPANION_PANEL_AUTOSTART=1 \
     CAD_COMPANION_PANEL_DELAY_SECONDS=2.5
 
+EXPOSE 8080
 EXPOSE 6080
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=6 \
-  CMD curl -fsS "http://127.0.0.1:${NOVNC_PORT:-6080}/vnc.html" >/dev/null || exit 1
+  CMD if [ "${CAD_UNIFIED_APP:-1}" = "1" ]; then curl -fsS "http://127.0.0.1:${PORT:-8080}/healthz" >/dev/null; else curl -fsS "http://127.0.0.1:${NOVNC_PORT:-6080}/vnc.html" >/dev/null; fi || exit 1
 
 ENTRYPOINT ["tini", "--"]
 CMD ["start-freecad-gui.sh"]
