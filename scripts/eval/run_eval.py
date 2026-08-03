@@ -149,6 +149,7 @@ async def run_case(
         "prompt": case.prompt,
         "smoke": case.smoke,
         "rep": None,  # filled by main()
+        "run_dir": str(run_dir),
         "tokens": tokens,
         **asdict(score),
     }

@@ -7,7 +7,7 @@ import pytest
 from scripts.eval.review_sheet import generate_review_sheet, ingest_reviews
 
 
-def _report_dir(tmp_path: Path) -> Path:
+def _report_dir(tmp_path: Path, with_run_dir: bool = True) -> Path:
     d = tmp_path / "20260803-120000"
     d.mkdir(parents=True)
     report = {
@@ -24,12 +24,18 @@ def _report_dir(tmp_path: Path) -> Path:
     (d / "report.json").write_text(json.dumps(report))
     (d / "report.md").write_text("x")
     with (d / "records.jsonl").open("w") as fh:
-        for cid, tier in (("t1-001", "t1"), ("t2-001", "t2")):
-            fh.write(json.dumps({
+        for idx, (cid, tier) in enumerate((("t1-001", "t1"), ("t2-001", "t2"))):
+            record = {
                 "case_id": cid, "tier": tier, "rep": 1, "l1_ok": True,
                 "domain": "site_layout", "error": None,
                 "details": {}, "prompt": "p",
-            }) + "\n")
+            }
+            # First record without run_dir (testing fallback), second with run_dir
+            if idx == 1 and with_run_dir:
+                record["run_dir"] = str(tmp_path / "runs" / "20260803-120000" / cid / "rep1")
+            elif idx == 0:
+                record["run_dir"] = ""
+            fh.write(json.dumps(record) + "\n")
     return d
 
 
@@ -38,6 +44,13 @@ def test_generate_then_ingest_updates_thresholds(tmp_path):
     sheet = generate_review_sheet(d, tmp_path, sample_size=2)
     rows = list(csv.DictReader(sheet.open()))
     assert {r["case_id"] for r in rows} == {"t1-001", "t2-001"}
+
+    # Verify artifacts_dir: one with * (no run_dir), one with real path (has run_dir)
+    by_case = {r["case_id"]: r for r in rows}
+    assert "*" in by_case["t1-001"]["artifacts_dir"], "fallback should contain *"
+    assert "/" in by_case["t2-001"]["artifacts_dir"] and "*" not in by_case["t2-001"]["artifacts_dir"], \
+        "run_dir record should have resolvable path without *"
+    assert by_case["t2-001"]["artifacts_dir"].endswith("/artifacts")
 
     for row in rows:
         row["score"] = "5"

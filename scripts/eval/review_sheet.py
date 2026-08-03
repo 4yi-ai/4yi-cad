@@ -41,15 +41,21 @@ def generate_review_sheet(report_dir: Path, runs_root: Path, sample_size: int = 
         writer = csv.DictWriter(fh, fieldnames=SHEET_FIELDS)
         writer.writeheader()
         for record in sample:
+            run_dir = record.get("run_dir", "")
+            if run_dir:
+                artifacts_dir = str(Path(run_dir) / "artifacts")
+            else:
+                # Fallback for old records without run_dir
+                artifacts_dir = str(
+                    runs_root / "runs" / "*" / str(record.get("case_id"))
+                    / f"rep{record.get('rep')}" / "artifacts"
+                )
             writer.writerow({
                 "case_id": record.get("case_id"),
                 "rep": record.get("rep"),
                 "tier": record.get("tier"),
                 "prompt": record.get("prompt", ""),
-                "artifacts_dir": str(
-                    runs_root / "runs" / "*" / str(record.get("case_id"))
-                    / f"rep{record.get('rep')}" / "artifacts"
-                ),
+                "artifacts_dir": artifacts_dir,
                 "score": "",
                 "notes": "",
             })

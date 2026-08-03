@@ -56,6 +56,7 @@ async def test_run_case_success_writes_artifacts_and_record(tmp_path):
     assert record["prompt"] == "一个法兰"
     assert record["l1_ok"] is True
     assert record["l2_ok"] is True
+    assert record["run_dir"] == str(tmp_path)
     assert (tmp_path / "artifacts" / "model.stl").exists()
     assert (tmp_path / "artifacts" / "model.step").exists()
     assert record["tokens"]["total_tokens"] == 0  # plain gateway: no meter attached
