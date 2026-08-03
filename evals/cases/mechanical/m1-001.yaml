@@ -1,0 +1,5 @@
+id: m1-001
+domain: mechanical
+tier: t1
+smoke: true
+prompt: "生成一个法兰盘:外径120mm,内孔直径40mm,厚度15mm,6个M10螺栓孔均布在直径90mm的圆周上"

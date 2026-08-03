@@ -1,0 +1,7 @@
+id: t1-001
+domain: site_layout
+tier: t1
+smoke: true
+prompt: "设计一个简单住宅组团:3栋6层板楼平行布置,一条环形车行道,中心集中绿地,场地地块60m×90m"
+required_roles: [plot, building]
+min_objects: 10

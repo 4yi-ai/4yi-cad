@@ -1,0 +1,7 @@
+id: t2-001
+domain: site_layout
+tier: t2
+smoke: true
+prompt: "设计一个混合社区总图:6栋18层高层住宅、南入口带门岗和落客区、中心人工湖水景、儿童游乐场、会所,环路+步道系统,地块140m×180m"
+required_roles: [plot, building, water, play, amenity]
+min_objects: 18
