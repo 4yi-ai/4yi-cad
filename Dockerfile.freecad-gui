@@ -50,6 +50,10 @@ COPY index.html ./index.html
 COPY scripts/freecad-gui/start-freecad-gui.sh /usr/local/bin/start-freecad-gui.sh
 COPY scripts/freecad-gui/freecad-bridge-client.py /usr/local/bin/freecad-bridge-client.py
 COPY freecad-addon/fouryi_cad_companion /tmp/fouryi_cad_companion
+COPY scripts/freecad-gui/fluxbox-init /home/appuser/.fluxbox/init
+COPY scripts/freecad-gui/fluxbox-apps /home/appuser/.fluxbox/apps
+COPY scripts/freecad-gui/freecad-user.cfg /usr/local/share/4yi-cad/freecad-user.cfg
+COPY scripts/freecad-gui/kiosk.html /usr/share/novnc/kiosk.html
 RUN chmod 0755 /usr/local/bin/start-freecad-gui.sh /usr/local/bin/freecad-bridge-client.py \
     && useradd -m -u 10001 appuser \
     && mkdir -p /home/appuser/.local/share/FreeCAD/Mod /home/appuser/.FreeCAD/Mod \
@@ -90,7 +94,7 @@ ENV CAD_UNIFIED_APP=1 \
     CAD_REMOTE_SESSION_ID=shared-freecad-gui \
     CAD_SESSION_ID=shared-freecad-gui \
     CAD_WORKBENCH_SESSION_ID=shared-freecad-gui \
-    CAD_REMOTE_DESKTOP_BASE_URL=/freecad/vnc.html?autoconnect=1\&resize=remote\&path=freecad/websockify \
+    CAD_REMOTE_DESKTOP_BASE_URL=/freecad/kiosk.html?path=freecad/websockify \
     CAD_FREECAD_GUI_PROXY_PREFIX=/freecad \
     CAD_FREECAD_GUI_UPSTREAM_URL=http://127.0.0.1:6080 \
     CAD_CONTROL_PLANE_URL=http://127.0.0.1:8080 \

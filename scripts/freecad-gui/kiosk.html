@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>4yi CAD</title>
+<style>html,body,#screen{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#1a1a1a}</style>
+</head>
+<body>
+<div id="screen"></div>
+<script type="module">
+  import RFB from './core/rfb.js';
+  const params = new URLSearchParams(window.location.search);
+  const path = params.get('path') || '';
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${window.location.host}/${path}`;
+  let rfb;
+  function connect() {
+    rfb = new RFB(document.getElementById('screen'), url);
+    rfb.resizeSession = true;
+    rfb.scaleViewport = true;
+    rfb.addEventListener('disconnect', () => setTimeout(connect, 2000));
+  }
+  connect();
+</script>
+</body>
+</html>

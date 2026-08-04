@@ -1,0 +1,8 @@
+[app] (class=FreeCAD.*)
+  [Maximized]	{yes}
+  [Deco]	{NONE}
+[end]
+[app] (name=freecad.*)
+  [Maximized]	{yes}
+  [Deco]	{NONE}
+[end]

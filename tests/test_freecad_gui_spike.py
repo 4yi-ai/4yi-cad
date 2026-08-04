@@ -52,6 +52,27 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     assert "LANG=zh_CN.UTF-8" in dockerfile
     assert "CAD_COMPANION_PANEL_AUTOSTART=1" in dockerfile
 
+    assert "fluxbox-init" in dockerfile
+    assert "fluxbox-apps" in dockerfile
+    assert "freecad-user.cfg" in dockerfile
+    assert "kiosk.html" in dockerfile
+    assert "CAD_REMOTE_DESKTOP_BASE_URL=/freecad/kiosk.html?path=freecad/websockify" in dockerfile
+
+
+def test_kiosk_assets_present_and_configured():
+    root = Path(__file__).resolve().parents[1] / "scripts" / "freecad-gui"
+    init = (root / "fluxbox-init").read_text()
+    assert "session.screen0.toolbar.visible" in init and "false" in init
+    apps = (root / "fluxbox-apps").read_text()
+    assert "[Maximized]" in apps and "{yes}" in apps
+    assert "[Deco]" in apps and "{NONE}" in apps
+    cfg = (root / "freecad-user.cfg").read_text()
+    assert "FCParameters" in cfg
+    assert 'Name="ShowOnStartup" Value="0"' in cfg
+    kiosk = (root / "kiosk.html").read_text()
+    assert "RFB" in kiosk and "websockify" not in kiosk  # path comes from query param, not hardcoded
+    assert "resizeSession" in kiosk
+
 
 def test_freecad_gui_start_script_is_executable_and_valid_bash():
     script = ROOT / "scripts/freecad-gui/start-freecad-gui.sh"

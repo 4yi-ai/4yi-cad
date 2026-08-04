@@ -58,6 +58,16 @@ require_command() {
   fi
 }
 
+seed_freecad_user_cfg() {
+  local template="/usr/local/share/4yi-cad/freecad-user.cfg"
+  [ -f "$template" ] || return 0
+  local dir
+  for dir in "$HOME/.config/FreeCAD" "$HOME/.FreeCAD"; do
+    mkdir -p "$dir"
+    [ -f "$dir/user.cfg" ] || cp "$template" "$dir/user.cfg"
+  done
+}
+
 resolve_freecad_bin() {
   if [ -n "${FREECAD_BIN:-}" ]; then
     printf '%s\n' "$FREECAD_BIN"
@@ -164,6 +174,7 @@ supervise_unified_app() {
 configure_unified_app_defaults
 mkdir -p "${CAD_SESSION_WORKSPACE}" "${CAD_DATA_DIR}" "${CAD_RUNTIME_DIR}" "${TMPDIR:-/tmp}" "${XDG_RUNTIME_DIR:-/tmp/runtime-appuser}" /tmp/4yi-cad-freecad-gui
 chmod 700 "${XDG_RUNTIME_DIR:-/tmp/runtime-appuser}" >/dev/null 2>&1 || true
+seed_freecad_user_cfg
 cd "${CAD_SESSION_WORKSPACE}"
 
 FREECAD_RESOLVED_BIN="$(resolve_freecad_bin)"
