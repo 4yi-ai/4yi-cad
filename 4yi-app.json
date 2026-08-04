@@ -13,7 +13,7 @@
         "mountPath": "/data"
       },
       "resources": {
-        "cpu": 2,
+        "cpu": 1.5,
         "memoryMb": 4096
       }
     }
