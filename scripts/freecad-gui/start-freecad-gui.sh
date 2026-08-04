@@ -211,6 +211,11 @@ log "starting noVNC on ${NOVNC_PORT}"
 start_novnc
 
 FREECAD_ARGS=()
+# Explicit user config: bypasses FreeCAD's legacy-vs-XDG config dir priority
+# (~/.FreeCAD exists for the addon, which would otherwise shadow ~/.config).
+if [ -f "$HOME/.config/FreeCAD/user.cfg" ]; then
+  FREECAD_ARGS+=("-u" "$HOME/.config/FreeCAD/user.cfg")
+fi
 if [ -n "${SESSION_FCSTD_PATH}" ]; then
   if [ ! -f "${SESSION_FCSTD_PATH}" ]; then
     log "SESSION_FCSTD_PATH does not exist: ${SESSION_FCSTD_PATH}"

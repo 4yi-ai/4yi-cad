@@ -92,6 +92,7 @@ def test_freecad_gui_start_script_is_executable_and_valid_bash():
         "TMPDIR",
         "uvicorn",
         "supervise_unified_app",
+        "-u",
         "NOVNC_PORT",
         "VNC_PORT",
         "CAD_CONTROL_PLANE_URL",
