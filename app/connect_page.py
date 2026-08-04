@@ -182,7 +182,10 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
       <li>在 FreeCAD 菜单栏打开「编辑」→「首选项」→「Addon Manager」;</li>
       <li>找到「Custom repositories」,点击「添加」;</li>
       <li>填入仓库地址:
-        <pre id="repo-url">https://github.com/4yi-ai/cad-addon</pre>
+        <div class="row">
+          <pre id="repo-url" style="flex:1 1 auto; margin:0;">https://github.com/4yi-ai/cad-addon</pre>
+          <button type="button" id="copy-repo-btn">复制</button>
+        </div>
       </li>
       <li>保存后回到 Addon Manager,点击「刷新」;</li>
       <li>搜索「4yi CAD Companion」并安装,按提示重启 FreeCAD。</li>
@@ -342,7 +345,7 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
         method: "DELETE",
         credentials: "same-origin",
       });
-      if (!resp.ok && resp.status !== 204) {
+      if (!resp.ok) {
         throw new Error("吊销 token 失败(HTTP " + resp.status + ")");
       }
       await fetchTokens();
@@ -351,12 +354,41 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
     }
   }
 
+  function copyToClipboard(text, button) {
+    function feedback(ok) {
+      var original = "复制";
+      button.textContent = ok ? "已复制" : "复制失败,请手动选择";
+      setTimeout(function () { button.textContent = original; }, 2000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { feedback(true); },
+        function () { feedback(false); }
+      );
+      return;
+    }
+    // 非安全上下文(如内网 http)没有 navigator.clipboard,退回 execCommand。
+    try {
+      var scratch = document.createElement("textarea");
+      scratch.value = text;
+      scratch.style.position = "fixed";
+      scratch.style.opacity = "0";
+      document.body.appendChild(scratch);
+      scratch.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(scratch);
+      feedback(ok);
+    } catch (err) {
+      feedback(false);
+    }
+  }
+
   document.getElementById("create-token-btn").addEventListener("click", createToken);
   document.getElementById("copy-token-btn").addEventListener("click", function () {
-    var text = document.getElementById("token-value").textContent;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).catch(function () {});
-    }
+    copyToClipboard(document.getElementById("token-value").textContent, this);
+  });
+  document.getElementById("copy-repo-btn").addEventListener("click", function () {
+    copyToClipboard(document.getElementById("repo-url").textContent, this);
   });
 
   fetchTokens();
