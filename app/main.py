@@ -31,7 +31,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -93,6 +93,15 @@ FREECAD_SMOKE_TIMEOUT_S = 120
 FREECAD_SMOKE_CPU_SECONDS = 90
 FREECAD_GUI_PROXY_DEFAULT_PREFIX = "/freecad"
 FREECAD_GUI_PROXY_HTTP_TIMEOUT_S = 20.0
+# Bearer token guard: only these path prefixes require an API token. Requests
+# from inside the container/loopback (or the ASGI TestClient's synthetic
+# default) are exempt so local orchestration and existing tests never need a
+# token; everything else must present a valid `Authorization: Bearer <token>`
+# header (see app/session_store.py's create_api_token/verify_api_token).
+GUARDED_PREFIXES = ("/api/freecad/sessions", "/api/generate")
+BEARER_GUARD_EXEMPT_HOSTS = {"127.0.0.1", "::1", "testclient"}
+API_TOKEN_REQUIRED_DETAIL = "api_token_required"
+API_TOKEN_INVALID_DETAIL = "api_token_invalid"
 HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -166,6 +175,10 @@ class ScriptPatchRequest(BaseModel):
     script: str = Field(..., min_length=1)
     engine: Literal["cadquery", "freecad"] = "cadquery"
     patches: list[ScriptPatchItem] = Field(default_factory=list)
+
+
+class CreateApiTokenRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=160)
 
 
 class CreateSessionRequest(BaseModel):
@@ -506,6 +519,19 @@ def _get_session_store(app: FastAPI) -> SessionStore:
         store = SqliteSessionStore()
         app.state.session_store = store
     return store
+
+
+def _bearer_guard_exempt(request: Request) -> bool:
+    client = request.client
+    return client is None or client.host in BEARER_GUARD_EXEMPT_HOSTS
+
+
+def _bearer_guard_token_from_header(request: Request) -> str | None:
+    auth_header = request.headers.get("authorization") or ""
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header[len("Bearer "):].strip()
+    return token or None
 
 
 def _get_artifact_store(app: FastAPI) -> ArtifactStore:
@@ -1716,6 +1742,35 @@ def create_app(
     if _STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    @app.middleware("http")
+    async def bearer_token_guard(request: Request, call_next):
+        if not request.url.path.startswith(GUARDED_PREFIXES):
+            return await call_next(request)
+        if _bearer_guard_exempt(request):
+            return await call_next(request)
+
+        # Fail closed: an unusable/unconfigured token store must never be
+        # treated as "no auth required" for a non-exempt request.
+        try:
+            store = _get_session_store(app)
+        except Exception:  # noqa: BLE001 - store construction is env/volume dependent
+            store = None
+        if store is None:
+            return JSONResponse(status_code=401, content={"detail": API_TOKEN_REQUIRED_DETAIL})
+
+        token = _bearer_guard_token_from_header(request)
+        if token is None:
+            return JSONResponse(status_code=401, content={"detail": API_TOKEN_REQUIRED_DETAIL})
+
+        try:
+            valid = store.verify_api_token(token)
+        except Exception:  # noqa: BLE001 - verification must not 500 the guard
+            valid = False
+        if not valid:
+            return JSONResponse(status_code=401, content={"detail": API_TOKEN_INVALID_DETAIL})
+
+        return await call_next(request)
+
     @app.api_route("/freecad", methods=["GET", "HEAD", "OPTIONS"])
     @app.api_route("/freecad/{path:path}", methods=["GET", "HEAD", "OPTIONS"])
     async def proxy_freecad_gui_http(request: Request, path: str = ""):
@@ -1809,6 +1864,38 @@ def create_app(
     @app.get("/healthz")
     async def healthz():
         return {"status": "ok"}
+
+    # Token management endpoints are deliberately NOT under GUARDED_PREFIXES:
+    # the SSO edge in front of this app protects /api/tokens/*, so the bearer
+    # guard only needs to cover the bridge/generate surface the desktop
+    # FreeCAD client and CLI callers hit directly.
+    @app.post("/api/tokens", status_code=201)
+    async def create_api_token(req: CreateApiTokenRequest | None = None):
+        store = _get_session_store(app)
+        try:
+            return store.create_api_token(label=req.label if req else None)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+
+    @app.get("/api/tokens")
+    async def list_api_tokens():
+        store = _get_session_store(app)
+        try:
+            tokens = store.list_api_tokens()
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        return {"tokens": tokens}
+
+    @app.delete("/api/tokens/{token_id}", status_code=204)
+    async def revoke_api_token(token_id: str):
+        store = _get_session_store(app)
+        try:
+            revoked = store.revoke_api_token(token_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=503, detail=f"session storage unavailable: {exc}") from exc
+        if not revoked:
+            raise HTTPException(status_code=404, detail="token not found")
+        return Response(status_code=204)
 
     @app.get("/api/production/smoke")
     async def production_smoke():
