@@ -33,6 +33,8 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     assert "freecad-addon/fouryi_cad_companion" in dockerfile
     assert ".local/share/FreeCAD/Mod/fouryi_cad_companion" in dockerfile
     assert ".FreeCAD/Mod/fouryi_cad_companion" in dockerfile
+    # COPY pre-creates /home/appuser as root before useradd -m; chown must cover the whole home
+    assert "chown -R appuser:appuser /workspace /data /tmp/4yi-cad-freecad-gui /home/appuser" in dockerfile
     assert "CAD_UNIFIED_APP=1" in dockerfile
     assert "PORT=8080" in dockerfile
     assert "PYTHONPATH=/app" in dockerfile

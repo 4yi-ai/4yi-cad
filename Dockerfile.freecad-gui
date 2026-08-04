@@ -63,7 +63,7 @@ RUN chmod 0755 /usr/local/bin/start-freecad-gui.sh /usr/local/bin/freecad-bridge
     && mkdir -p /workspace /data/4yi-cad/runtime/tmp /data/4yi-cad/runtime/xdg-runtime /tmp/4yi-cad-freecad-gui /home/appuser/.fluxbox \
     && touch /home/appuser/.fluxbox/lastwallpaper \
     && chmod 0700 /data/4yi-cad/runtime/xdg-runtime \
-    && chown -R appuser:appuser /workspace /data /tmp/4yi-cad-freecad-gui /home/appuser/.local/share/FreeCAD /home/appuser/.FreeCAD /home/appuser/.fluxbox
+    && chown -R appuser:appuser /workspace /data /tmp/4yi-cad-freecad-gui /home/appuser
 
 USER appuser
 WORKDIR /workspace
