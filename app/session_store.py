@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -14,6 +17,8 @@ from typing import Any
 from app.storage_paths import writable_platform_data_dir
 
 DEFAULT_DB_PATH = "/tmp/4yi-cad/sessions.sqlite3"
+
+API_TOKEN_PREFIX = "4yi-cad-tok-"
 
 
 def utc_now() -> str:
@@ -238,6 +243,18 @@ class SessionStore:
         remote_session_id: str,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def create_api_token(self, label: str | None = None) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def list_api_tokens(self) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def revoke_api_token(self, token_id: str) -> bool:
+        raise NotImplementedError
+
+    def verify_api_token(self, token: str) -> bool:
         raise NotImplementedError
 
 
@@ -1084,6 +1101,99 @@ class SqliteSessionStore(SessionStore):
             ).fetchall()
         return [_remote_session_event_to_dict(_remote_session_event_from_row(row)) for row in rows]
 
+    def create_api_token(self, label: str | None = None) -> dict[str, Any]:
+        now = utc_now()
+        token = API_TOKEN_PREFIX + secrets.token_hex(24)
+        token_id = uuid.uuid4().hex
+        with self._connect() as con:
+            con.execute(
+                """
+                insert into api_tokens
+                    (id, token_hash, label, created_at, last_used_at, revoked_at)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    token_id,
+                    _hash_token(token),
+                    label,
+                    now,
+                    None,
+                    None,
+                ),
+            )
+        return {
+            "id": token_id,
+            "token": token,
+            "label": label,
+            "created_at": now,
+        }
+
+    def list_api_tokens(self) -> list[dict[str, Any]]:
+        with self._connect() as con:
+            rows = con.execute(
+                """
+                select id, label, created_at, last_used_at, revoked_at
+                from api_tokens
+                order by created_at desc, id desc
+                """
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "label": row["label"],
+                "created_at": row["created_at"],
+                "last_used_at": row["last_used_at"],
+                "revoked_at": row["revoked_at"],
+            }
+            for row in rows
+        ]
+
+    def revoke_api_token(self, token_id: str) -> bool:
+        now = utc_now()
+        with self._connect() as con:
+            row = con.execute(
+                "select revoked_at from api_tokens where id = ?",
+                (token_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            if row["revoked_at"] is None:
+                con.execute(
+                    """
+                    update api_tokens
+                    set revoked_at = ?
+                    where id = ?
+                    """,
+                    (now, token_id),
+                )
+        return True
+
+    def verify_api_token(self, token: str) -> bool:
+        if not token or not token.startswith(API_TOKEN_PREFIX):
+            return False
+        token_hash = _hash_token(token)
+        now = utc_now()
+        with self._connect() as con:
+            rows = con.execute(
+                "select id, token_hash, revoked_at from api_tokens where revoked_at is null"
+            ).fetchall()
+            matched_id = None
+            for row in rows:
+                if hmac.compare_digest(row["token_hash"], token_hash):
+                    matched_id = row["id"]
+                    break
+            if matched_id is None:
+                return False
+            con.execute(
+                """
+                update api_tokens
+                set last_used_at = ?
+                where id = ?
+                """,
+                (now, matched_id),
+            )
+        return True
+
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.db_path)
         con.row_factory = sqlite3.Row
@@ -1228,6 +1338,15 @@ class SqliteSessionStore(SessionStore):
 
                 create index if not exists idx_freecad_remote_session_commands_pending
                     on freecad_remote_session_commands(remote_session_id, status, created_at);
+
+                create table if not exists api_tokens (
+                    id text primary key,
+                    token_hash text not null unique,
+                    label text,
+                    created_at text not null,
+                    last_used_at text,
+                    revoked_at text
+                );
                 """
             )
             columns = {
@@ -1238,6 +1357,10 @@ class SqliteSessionStore(SessionStore):
                 con.execute(
                     "alter table design_versions add column metadata_json text not null default '{}'"
                 )
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _json_dump(value: dict[str, Any]) -> str:
