@@ -10,7 +10,8 @@
       "healthPath": "/healthz",
       "storage": {
         "sizeGb": 10,
-        "mountPath": "/data"
+        "mountPath": "/data",
+        "fsGroup": 10001
       },
       "resources": {
         "cpu": 1.5,
