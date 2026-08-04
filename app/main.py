@@ -112,7 +112,7 @@ BEARER_GUARD_EXEMPT_HOSTS = {"127.0.0.1", "::1", "testclient"}
 # on first bridge contact the same way the shared kiosk session id is, so the
 # addon's first heartbeat creates its session instead of 404ing. Independent
 # of the shared/GUI backend config (see _ensure_shared_remote_freecad_session).
-_LOCAL_SESSION_ID_RE = re.compile(r"^local-[A-Za-z0-9][A-Za-z0-9_.-]{2,62}$")
+_LOCAL_SESSION_ID_RE = re.compile(r"^local-[A-Za-z0-9][A-Za-z0-9_.-]{2,62}\Z")
 API_TOKEN_REQUIRED_DETAIL = "api_token_required"
 API_TOKEN_INVALID_DETAIL = "api_token_invalid"
 HOP_BY_HOP_HEADERS = {
