@@ -215,17 +215,37 @@ def test_localhost_client_is_exempt_from_guard(tmp_path):
     assert resp.status_code != 401
 
 
-def test_guard_fails_closed_when_store_missing(tmp_path):
+def test_guard_fails_closed_when_store_missing(tmp_path, monkeypatch):
+    # Mock _get_session_store to raise an exception (simulating store unavailable).
+    # This exercises the fail-closed exception handling in the bearer_token_guard middleware.
+    import app.main
+
+    def mock_get_store(app_arg):
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr(app.main, "_get_session_store", mock_get_store)
+
     app = create_app(session_store=None)
     client = TestClient(app, client=("203.0.113.9", 12345))
 
-    resp = client.post("/api/generate", json={"prompt": "a box"})
-
-    # No store was ever injected. Regardless of whether the guard reaches
-    # into _get_session_store's lazy default construction, an external
-    # request with no Authorization header must never slip through.
+    # Send a request WITH a Bearer token. The middleware must:
+    # 1. Try to get the store
+    # 2. Catch the exception and set store = None
+    # 3. Return 401 api_token_required (not try to parse the token)
+    # This proves the store-missing fail-closed branch fires, not the missing-header branch.
+    resp = client.post(
+        "/api/generate",
+        json={"prompt": "a box"},
+        headers={"Authorization": "Bearer whatever-token"},
+    )
     assert resp.status_code == 401
     assert resp.json() == {"detail": "api_token_required"}
+
+    # Also verify that requests without an Authorization header also yield 401.
+    # Either branch (store-missing or missing-header) may fire; that's fine.
+    resp_no_auth = client.post("/api/generate", json={"prompt": "a box"})
+    assert resp_no_auth.status_code == 401
+    assert resp_no_auth.json() == {"detail": "api_token_required"}
 
 
 # --- Token management endpoints ----------------------------------------
