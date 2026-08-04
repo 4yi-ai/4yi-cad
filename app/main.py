@@ -31,7 +31,13 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -64,6 +70,7 @@ from app.cad.site_layout_templates import (
     site_layout_needs_repair,
     site_layout_repair_script,
 )
+from app.connect_page import CONNECT_PAGE_HTML
 from app.evals.report import (
     build_ai_quality_checks,
     default_report_path,
@@ -3257,6 +3264,15 @@ def create_app(
         if _INDEX_HTML.is_file():
             return FileResponse(str(_INDEX_HTML), media_type="text/html")
         return {"status": "ok", "ui": "unavailable"}
+
+    # Not under GUARDED_PREFIXES by design (mirrors /api/tokens/*): this is a
+    # same-origin, SSO-protected browser page for issuing/managing tokens and
+    # installing the local FreeCAD addon (P3a, see docs/superpowers/specs/
+    # 2026-08-04-plugin-mode-v2-design.md §1-2). It must stay reachable
+    # without a bearer token from any client, including non-localhost ones.
+    @app.get("/connect")
+    async def connect():
+        return HTMLResponse(content=CONNECT_PAGE_HTML)
 
     return app
 
