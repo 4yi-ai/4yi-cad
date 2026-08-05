@@ -16,6 +16,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import urllib.parse
 from contextlib import suppress
 from pathlib import Path
@@ -107,6 +108,11 @@ FREECAD_GUI_PROXY_HTTP_TIMEOUT_S = 20.0
 # header (see app/session_store.py's create_api_token/verify_api_token).
 GUARDED_PREFIXES = ("/api/freecad/sessions", "/api/generate")
 BEARER_GUARD_EXEMPT_HOSTS = {"127.0.0.1", "::1", "testclient"}
+# Native local FreeCAD addon (Plugin V2 P2) remote session ids: auto-registered
+# on first bridge contact the same way the shared kiosk session id is, so the
+# addon's first heartbeat creates its session instead of 404ing. Independent
+# of the shared/GUI backend config (see _ensure_shared_remote_freecad_session).
+_LOCAL_SESSION_ID_RE = re.compile(r"^local-[A-Za-z0-9][A-Za-z0-9_.-]{2,62}\Z")
 API_TOKEN_REQUIRED_DETAIL = "api_token_required"
 API_TOKEN_INVALID_DETAIL = "api_token_invalid"
 HOP_BY_HOP_HEADERS = {
@@ -1354,41 +1360,73 @@ def _ensure_shared_remote_freecad_session(
     remote_session = store.get_remote_freecad_session(remote_session_id)
     if remote_session is not None:
         return remote_session
-    if not (
+    if (
         _shared_freecad_service_enabled()
         and remote_session_id == _shared_freecad_session_id()
     ):
-        return None
+        workbench_session = store.create_session(title="FreeCAD GUI session")
+        remote_url = _remote_desktop_url_for(remote_session_id)
+        remote_session, reused = store.create_or_reuse_remote_freecad_session(
+            remote_session_id=remote_session_id,
+            workbench_session_id=workbench_session.id,
+            base_version_id=None,
+            reuse=True,
+            remote_url=remote_url,
+            status="ready" if remote_url else "starting",
+            bridge_status="pending",
+            metadata=_remote_session_config_metadata(
+                {
+                    "source": "shared_freecad_service_autocreate",
+                    "auto_created": True,
+                    "workbench_session_id": workbench_session.id,
+                }
+            ),
+        )
+        store.add_remote_freecad_session_event(
+            remote_session_id=remote_session.id,
+            event_type="session_auto_created",
+            metadata={
+                "workbench_session_id": workbench_session.id,
+                "remote_url_configured": bool(remote_url),
+                "reused": reused,
+                "source": "shared_freecad_service",
+            },
+        )
+        return remote_session
 
-    workbench_session = store.create_session(title="FreeCAD GUI session")
-    remote_url = _remote_desktop_url_for(remote_session_id)
-    remote_session, reused = store.create_or_reuse_remote_freecad_session(
-        remote_session_id=remote_session_id,
-        workbench_session_id=workbench_session.id,
-        base_version_id=None,
-        reuse=True,
-        remote_url=remote_url,
-        status="ready" if remote_url else "starting",
-        bridge_status="pending",
-        metadata=_remote_session_config_metadata(
-            {
-                "source": "shared_freecad_service_autocreate",
+    if _LOCAL_SESSION_ID_RE.match(remote_session_id):
+        # Native local FreeCAD addon (Plugin V2 P2): auto-register on first
+        # bridge contact, independent of the shared/GUI backend config.
+        workbench_session = store.create_session(
+            title=f"Local FreeCAD session {remote_session_id}"
+        )
+        remote_session, reused = store.create_or_reuse_remote_freecad_session(
+            remote_session_id=remote_session_id,
+            workbench_session_id=workbench_session.id,
+            base_version_id=None,
+            reuse=True,
+            remote_url=None,
+            status="ready",
+            bridge_status="pending",
+            metadata={
+                "source": "local_addon_autocreate",
                 "auto_created": True,
                 "workbench_session_id": workbench_session.id,
-            }
-        ),
-    )
-    store.add_remote_freecad_session_event(
-        remote_session_id=remote_session.id,
-        event_type="session_auto_created",
-        metadata={
-            "workbench_session_id": workbench_session.id,
-            "remote_url_configured": bool(remote_url),
-            "reused": reused,
-            "source": "shared_freecad_service",
-        },
-    )
-    return remote_session
+            },
+        )
+        store.add_remote_freecad_session_event(
+            remote_session_id=remote_session.id,
+            event_type="session_auto_created",
+            metadata={
+                "workbench_session_id": workbench_session.id,
+                "remote_url_configured": False,
+                "reused": reused,
+                "source": "local_addon",
+            },
+        )
+        return remote_session
+
+    return None
 
 
 def _compact_json_for_prompt(value: Any, *, max_chars: int = 4000) -> str:
@@ -1565,9 +1603,15 @@ async def _queue_freecad_panel_agent_generation(
             version_id=version.id,
             metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
         )
-    fcstd_ref = artifact_refs.get("fcstd") or {}
-    fcstd_url = fcstd_ref.get("url") or (
-        f"/api/sessions/{remote_session.workbench_session_id}/versions/{version.id}/artifacts/fcstd"
+    # The queued load_model command is consumed only by the FreeCAD bridge
+    # addon, which always reaches this control plane through a guarded prefix:
+    # kiosk mode via in-pod localhost (bearer-exempt), remote mode via the
+    # router's Bearer passthrough on /api/freecad/sessions. The unguarded
+    # /api/sessions/* artifact URL that artifact_refs carries is served to the
+    # browser SPA over its SSO session and is NOT router-reachable for a remote
+    # addon, so the command must point at the guarded alias unconditionally.
+    fcstd_url = (
+        f"/api/freecad/sessions/{remote_session.id}/versions/{version.id}/artifacts/fcstd"
     )
     command = store.create_remote_freecad_session_command(
         remote_session_id=remote_session_id,
@@ -2257,6 +2301,44 @@ def create_app(
                 detail=f"remote FreeCAD session storage unavailable: {exc}",
             ) from exc
         return {**_remote_session_dict(remote_session), "events": events}
+
+    @app.get(
+        "/api/freecad/sessions/{remote_session_id}/versions/{version_id}/artifacts/{artifact_name}"
+    )
+    async def get_freecad_remote_session_artifact(
+        remote_session_id: str, version_id: str, artifact_name: str
+    ):
+        # Guarded alias of get_session_artifact (/api/sessions/...), keyed by
+        # remote session id so the native addon — which only ever sees remote
+        # session ids and authenticates with a bearer token — can download
+        # generated FCStd artifacts through a GUARDED_PREFIXES-protected path
+        # instead of the unauthenticated browser-facing /api/sessions/* route.
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        if remote_session is None:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found")
+        artifact_store = _get_artifact_store(app)
+        try:
+            artifact = artifact_store.get_artifact(
+                session_id=remote_session.workbench_session_id,
+                version_id=version_id,
+                artifact_name=artifact_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        return FileResponse(
+            str(artifact.path),
+            media_type=artifact.media_type,
+            filename=artifact.filename,
+        )
 
     @app.delete("/api/freecad/sessions/{remote_session_id}")
     async def stop_freecad_remote_session(

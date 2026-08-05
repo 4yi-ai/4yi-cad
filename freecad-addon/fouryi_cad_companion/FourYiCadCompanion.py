@@ -6,6 +6,7 @@ import io
 import json
 import os
 import platform
+import secrets
 import time
 import traceback
 import urllib.error
@@ -41,10 +42,12 @@ except Exception:
 
 ADDON_VERSION = "0.4.0"
 USER_AGENT = "4yi-freecad-companion/0.4.0"
+PARAM_GROUP_PATH = "User parameter:BaseApp/Preferences/Mod/FourYiCad"
 COMMAND_OPEN_PANEL = "FourYi_OpenPanel"
 COMMAND_START_BRIDGE = "FourYi_StartBridge"
 COMMAND_STOP_BRIDGE = "FourYi_StopBridge"
 COMMAND_EXPORT_SUPPORT_BUNDLE = "FourYi_ExportSupportBundle"
+COMMAND_CONNECTION_SETTINGS = "FourYi_ConnectionSettings"
 SUPPORTED_COMMANDS = [
     "inspect_document",
     "load_model",
@@ -89,6 +92,7 @@ def commands() -> list[str]:
         COMMAND_START_BRIDGE,
         COMMAND_STOP_BRIDGE,
         COMMAND_EXPORT_SUPPORT_BUNDLE,
+        COMMAND_CONNECTION_SETTINGS,
     ]
 
 
@@ -125,6 +129,125 @@ def env_int(env: dict[str, str], name: str, default: int) -> int:
 def workspace(env: dict[str, str] | None = None) -> Path:
     env = env or os.environ
     return Path(env.get("CAD_SESSION_WORKSPACE") or "/workspace")
+
+
+def addon_params():
+    """FreeCAD.ParamGet(PARAM_GROUP_PATH), or None when FreeCAD is unavailable."""
+    if App is None:
+        return None
+    try:
+        return App.ParamGet(PARAM_GROUP_PATH)
+    except Exception:
+        return None
+
+
+def local_session_id(params=None) -> str:
+    """Read the persisted local remote-session id, generating+persisting one on first use."""
+    params = params if params is not None else addon_params()
+    if params is not None:
+        existing = (params.GetString("LocalSessionId", "") or "").strip()
+        if existing:
+            return existing
+    session_id = "local-%s" % secrets.token_hex(6)
+    if params is not None:
+        try:
+            params.SetString("LocalSessionId", session_id)
+        except Exception:
+            pass
+    return session_id
+
+
+def remote_overlay_env(
+    base_env: dict[str, str] | None = None,
+    params=None,
+) -> dict[str, str]:
+    """Derive the effective process env for remote (user-machine) workbench mode.
+
+    Container/kiosk mode (base_env already carries CAD_BRIDGE_POLL_URL) is left
+    entirely untouched -- the FreeCAD ParamGet param layer must not participate.
+    Otherwise, when a non-empty ServerUrl param is configured, synthesize the
+    bridge/control-plane URLs (and bearer token, if any) from it.
+    """
+    base_env = base_env if base_env is not None else os.environ
+    if (base_env.get("CAD_BRIDGE_POLL_URL") or "").strip():
+        return dict(base_env)
+
+    params = params if params is not None else addon_params()
+    server_url = ""
+    api_token = ""
+    if params is not None:
+        server_url = (params.GetString("ServerUrl", "") or "").strip()
+        api_token = (params.GetString("ApiToken", "") or "").strip()
+    if not server_url:
+        return dict(base_env)
+
+    base = server_url.rstrip("/")
+    session_id = local_session_id(params)
+    overlay = {
+        "CAD_BRIDGE_MODE": "workbench",
+        "CAD_BRIDGE_AUTOSTART": "1",
+        "CAD_REMOTE_SESSION_ID": session_id,
+        "CAD_BRIDGE_POLL_URL": "%s/api/freecad/sessions/%s/bridge/poll" % (base, session_id),
+        "CAD_BRIDGE_HEARTBEAT_URL": "%s/api/freecad/sessions/%s/bridge/heartbeat" % (base, session_id),
+        "CAD_BRIDGE_SAVE_URL": "%s/api/freecad/sessions/%s/save" % (base, session_id),
+        "CAD_CONTROL_PLANE_URL": base,
+    }
+    if api_token:
+        overlay["CAD_API_TOKEN"] = api_token
+    merged = dict(base_env)
+    merged.update(overlay)
+    return merged
+
+
+def auth_headers(env: dict[str, str]) -> dict[str, str]:
+    token = ((env or {}).get("CAD_API_TOKEN") or "").strip()
+    if not token:
+        return {}
+    return {"Authorization": "Bearer %s" % token}
+
+
+def test_connection(server_url: str, timeout: float = 5.0) -> tuple[bool, str]:
+    """GET {server_url}/healthz (no auth). Returns (ok, short message)."""
+    url = "%s/healthz" % (server_url or "").rstrip("/")
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                status = response.getcode()
+    except urllib.error.HTTPError as exc:
+        return False, "HTTP %s: %s" % (exc.code, exc.reason)
+    except urllib.error.URLError as exc:
+        return False, str(exc.reason)
+    except Exception as exc:  # pragma: no cover - defensive catch-all
+        return False, str(exc)
+    if 200 <= status < 300:
+        return True, "OK (HTTP %s)" % status
+    return False, "HTTP %s" % status
+
+
+def save_connection_params(server_url: str, api_token: str, params=None) -> None:
+    """Persist ServerUrl (stripped) and, only if non-empty, ApiToken.
+
+    An empty api_token must NOT overwrite an existing stored token -- this is
+    what lets a user re-save just the ServerUrl without re-entering (or
+    accidentally clearing) a previously-configured token.
+    """
+    params = params if params is not None else addon_params()
+    if params is None:
+        return
+    params.SetString("ServerUrl", (server_url or "").strip())
+    token = (api_token or "").strip()
+    if token:
+        params.SetString("ApiToken", token)
+
+
+# Computed once at import time: in container/kiosk mode (CAD_BRIDGE_POLL_URL
+# already set) this is exactly os.environ, unchanged. In remote (user-machine)
+# mode with a configured ServerUrl param, it carries the synthesized bridge
+# URLs + bearer token. All URL/session/token-derivation call sites below read
+# from this instead of os.environ directly.
+EFFECTIVE_ENV: dict[str, str] = remote_overlay_env()
 
 
 def append_event(event_type: str, payload: dict[str, Any] | None = None) -> None:
@@ -364,16 +487,23 @@ def build_bridge_payload(env: dict[str, str], *, event: str = "heartbeat") -> di
     }
 
 
-def post_json(url: str, payload: dict[str, Any], timeout: float = 10.0) -> dict[str, Any]:
+def post_json(
+    url: str,
+    payload: dict[str, Any],
+    timeout: float = 10.0,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
+    }
+    headers.update(auth_headers(env or {}))
     request = urllib.request.Request(
         url,
         data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": USER_AGENT,
-        },
+        headers=headers,
         method="POST",
     )
     try:
@@ -492,6 +622,29 @@ def resolve_control_plane_url(path_or_url: str, env: dict[str, str]) -> str:
     return urllib.parse.urljoin(base.rstrip("/") + "/", value)
 
 
+def _url_is_control_plane(url: str, env: dict[str, str]) -> bool:
+    """True iff `url`'s host matches the configured control-plane host.
+
+    The Bearer token is only for our control plane. A load_model command may
+    carry an already-absolute artifact URL (e.g. a presigned S3/CDN link);
+    attaching the token to such a third-party host would leak it into that
+    host's access logs. Only attach auth when the resolved host is ours.
+    """
+    base = (
+        env.get("CAD_CONTROL_PLANE_URL")
+        or env.get("CAD_GUI_SESSION_CONTROL_PLANE_URL")
+        or ""
+    ).strip()
+    if not base:
+        return False
+    try:
+        base_host = urllib.parse.urlparse(base).netloc.lower()
+        target_host = urllib.parse.urlparse(url).netloc.lower()
+    except ValueError:
+        return False
+    return bool(base_host) and base_host == target_host
+
+
 def load_model_bytes(payload: dict[str, Any], env: dict[str, str], timeout: float) -> bytes:
     fcstd_b64 = payload.get("fcstd_b64")
     if fcstd_b64:
@@ -504,10 +657,10 @@ def load_model_bytes(payload: dict[str, Any], env: dict[str, str], timeout: floa
     if not fcstd_url:
         raise BridgeCommandError("fcstd_source_required", "load_model requires fcstd_url or fcstd_b64")
     url = resolve_control_plane_url(str(fcstd_url), env)
-    request = urllib.request.Request(
-        url,
-        headers={"Accept": "application/vnd.freecad,application/octet-stream"},
-    )
+    headers = {"Accept": "application/vnd.freecad,application/octet-stream"}
+    if _url_is_control_plane(url, env):
+        headers.update(auth_headers(env))
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             data = response.read()
@@ -948,10 +1101,24 @@ class InProcessBridgeRuntime:
     def __init__(
         self,
         env: dict[str, str] | None = None,
-        http_post: JsonPost = post_json,
+        http_post: JsonPost | None = None,
     ) -> None:
-        self.env = env if env is not None else os.environ
-        self.http_post = http_post
+        self.env = env if env is not None else EFFECTIVE_ENV
+        # The bridge endpoints (heartbeat/poll/command-result/save) are under
+        # the server's guarded prefix, so in remote mode every call must carry
+        # the Bearer token. The JsonPost seam is 3-arg (url, payload, timeout)
+        # and the two loop test fixtures inject 3-arg fakes, so rather than
+        # widen the alias we bind self.env into the default post_json here —
+        # an injected http_post passes through unchanged, and in container/kiosk
+        # mode env carries no CAD_API_TOKEN so this is a no-op (auth_headers
+        # stays empty). Default is None (not post_json) so the wrapper resolves
+        # the module-level post_json at call time, honoring monkeypatching.
+        if http_post is None:
+            self.http_post = lambda url, payload, timeout: post_json(
+                url, payload, timeout, self.env
+            )
+        else:
+            self.http_post = http_post
         self.timer = None
         self.running = False
         self.busy = False
@@ -1051,12 +1218,12 @@ def stop_remote_bridge() -> None:
 
 
 def autostart_remote_bridge() -> None:
-    mode = (os.environ.get("CAD_BRIDGE_MODE") or "").strip().lower()
-    if mode not in {"freecad_addon", "addon", "in_process"}:
+    mode = (EFFECTIVE_ENV.get("CAD_BRIDGE_MODE") or "").strip().lower()
+    if mode not in {"freecad_addon", "addon", "in_process", "workbench"}:
         return
-    if not truthy(os.environ.get("CAD_BRIDGE_AUTOSTART")):
+    if not truthy(EFFECTIVE_ENV.get("CAD_BRIDGE_AUTOSTART")):
         return
-    if not (os.environ.get("CAD_BRIDGE_POLL_URL") or "").strip():
+    if not (EFFECTIVE_ENV.get("CAD_BRIDGE_POLL_URL") or "").strip():
         return
     if QtCore is not None:
         QtCore.QTimer.singleShot(1500, start_remote_bridge)
@@ -1065,6 +1232,8 @@ def autostart_remote_bridge() -> None:
 
 
 def autostart_companion_panel() -> None:
+    # Local on/off switch only -- not derived from URL/session/token, so it
+    # deliberately keeps reading the raw process environment.
     if not truthy(os.environ.get("CAD_COMPANION_PANEL_AUTOSTART")):
         return
     global _PANEL_AUTOSTARTED
@@ -1147,7 +1316,7 @@ def macro_for_prompt_if_selected_numeric_edit(
 
 def submit_panel_action(action: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    env = os.environ
+    env = EFFECTIVE_ENV
     return post_json(
         panel_action_url(env),
         {
@@ -1163,11 +1332,12 @@ def submit_panel_action(action: str, payload: dict[str, Any] | None = None) -> d
             },
         },
         panel_action_timeout(env),
+        env,
     )
 
 
 def queue_bridge_command(op: str, payload: dict[str, Any]) -> dict[str, Any]:
-    env = os.environ
+    env = EFFECTIVE_ENV
     return post_json(
         command_queue_url(env),
         {
@@ -1176,6 +1346,7 @@ def queue_bridge_command(op: str, payload: dict[str, Any]) -> dict[str, Any]:
             "base_version_id": env.get("CAD_CURRENT_VERSION_ID") or None,
         },
         env_float(env, "CAD_BRIDGE_HTTP_TIMEOUT_SECONDS", 10.0),
+        env,
     )
 
 
@@ -1192,7 +1363,7 @@ def submit_prompt_from_panel(prompt: str) -> dict[str, Any]:
 
 
 def redacted_environment(env: dict[str, str] | None = None) -> dict[str, Any]:
-    env = env or os.environ
+    env = env or EFFECTIVE_ENV
     keys = [
         "CAD_BRIDGE_MODE",
         "CAD_REMOTE_SESSION_ID",
@@ -1215,7 +1386,7 @@ def redacted_environment(env: dict[str, str] | None = None) -> dict[str, Any]:
 
 
 def collect_diagnostics(env: dict[str, str] | None = None) -> dict[str, Any]:
-    env = env or os.environ
+    env = env or EFFECTIVE_ENV
     return {
         "schema": "4yi.freecad.support_bundle.v1",
         "created_at": utc_now(),
@@ -1246,7 +1417,7 @@ def collect_diagnostics(env: dict[str, str] | None = None) -> dict[str, Any]:
 
 
 def export_support_bundle(env: dict[str, str] | None = None) -> Path:
-    env = env or os.environ
+    env = env or EFFECTIVE_ENV
     root = workspace(env)
     root.mkdir(parents=True, exist_ok=True)
     path = root / ("4yi-freecad-support-bundle-%s.json" % datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
@@ -1322,8 +1493,8 @@ class CompanionTaskPanel:
         self.status_label.setText(
             "Project %s | Revision %s | Bridge %s"
             % (
-                os.environ.get("CAD_PROJECT_ID") or os.environ.get("CAD_WORKBENCH_SESSION_ID") or "not configured",
-                os.environ.get("CAD_CURRENT_VERSION_ID") or "not configured",
+                EFFECTIVE_ENV.get("CAD_PROJECT_ID") or EFFECTIVE_ENV.get("CAD_WORKBENCH_SESSION_ID") or "not configured",
+                EFFECTIVE_ENV.get("CAD_CURRENT_VERSION_ID") or "not configured",
                 "running" if diagnostics["bridge"]["running"] else "stopped",
             )
         )
@@ -1451,6 +1622,102 @@ class ExportSupportBundleCommand:
         return App is not None
 
 
+class ConnectionSettingsDialog:
+    """「4yi: 连接设置…」dialog: ServerUrl + ApiToken, test-connection, save.
+
+    Pure Qt assembly around test_connection()/save_connection_params(); no
+    logic lives here (both functions are unit-tested without Qt/FreeCAD).
+    The API token is only ever passed to save_connection_params() -- it is
+    never logged, appended to RECENT_EVENTS, or written into a support
+    bundle.
+    """
+
+    def __init__(self) -> None:
+        if QtWidgets is None:
+            raise RuntimeError("Qt widgets are not available")
+        params = addon_params()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("4yi CAD - 连接设置")
+        layout = QtWidgets.QVBoxLayout(self.form)
+
+        layout.addWidget(QtWidgets.QLabel("Server URL"))
+        self.server_url_input = QtWidgets.QLineEdit()
+        self.server_url_input.setPlaceholderText("https://cad.example.com")
+        if params is not None:
+            self.server_url_input.setText(params.GetString("ServerUrl", "") or "")
+        layout.addWidget(self.server_url_input)
+
+        layout.addWidget(QtWidgets.QLabel("API Token"))
+        self.api_token_input = QtWidgets.QLineEdit()
+        self.api_token_input.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.api_token_input.setPlaceholderText("留空则保留已保存的 Token")
+        layout.addWidget(self.api_token_input)
+
+        buttons = QtWidgets.QHBoxLayout()
+        self.test_button = QtWidgets.QPushButton("测试连接")
+        self.save_button = QtWidgets.QPushButton("保存")
+        buttons.addWidget(self.test_button)
+        buttons.addWidget(self.save_button)
+        layout.addLayout(buttons)
+
+        self.result_label = QtWidgets.QLabel("")
+        self.result_label.setWordWrap(True)
+        layout.addWidget(self.result_label)
+
+        self.test_button.clicked.connect(self.on_test_connection)
+        self.save_button.clicked.connect(self.on_save)
+
+    def on_test_connection(self) -> None:
+        server_url = self.server_url_input.text().strip()
+        if not server_url:
+            self.result_label.setText("请先填写 Server URL")
+            return
+        ok, message = test_connection(server_url)
+        self.result_label.setText(("✓ " + message) if ok else ("✗ " + message))
+
+    def on_save(self) -> None:
+        server_url = self.server_url_input.text()
+        api_token = self.api_token_input.text()
+        save_connection_params(server_url, api_token)
+        self.api_token_input.clear()
+        self.result_label.setText("已保存,重启 FreeCAD 生效")
+
+    def accept(self) -> bool:
+        return True
+
+    def reject(self) -> bool:
+        return True
+
+
+_CONNECTION_SETTINGS_DIALOG = None
+
+
+def show_connection_settings() -> None:
+    if QtWidgets is None:
+        raise RuntimeError("Qt widgets are not available")
+    global _CONNECTION_SETTINGS_DIALOG
+    dialog = ConnectionSettingsDialog()
+    _CONNECTION_SETTINGS_DIALOG = dialog
+    if Gui is not None and hasattr(Gui, "Control"):
+        Gui.Control.showDialog(dialog)
+    else:
+        dialog.form.show()
+
+
+class ConnectionSettingsCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "4yi: 连接设置...",
+            "ToolTip": "配置 4yi CAD Server URL / API Token,并测试连接。",
+        }
+
+    def Activated(self):
+        show_connection_settings()
+
+    def IsActive(self):
+        return App is not None
+
+
 def register_commands() -> None:
     global _COMMANDS_REGISTERED
     if _COMMANDS_REGISTERED or Gui is None:
@@ -1460,6 +1727,7 @@ def register_commands() -> None:
         COMMAND_START_BRIDGE: StartBridgeCommand(),
         COMMAND_STOP_BRIDGE: StopBridgeCommand(),
         COMMAND_EXPORT_SUPPORT_BUNDLE: ExportSupportBundleCommand(),
+        COMMAND_CONNECTION_SETTINGS: ConnectionSettingsCommand(),
     }
     for name, command in mapping.items():
         try:
