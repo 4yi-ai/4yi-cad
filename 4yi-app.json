@@ -28,5 +28,11 @@
         "anthropic.claude-sonnet-4-6"
       ]
     }
-  ]
+  ],
+  "auth": {
+    "bearerPassthroughPrefixes": [
+      "/api/freecad/sessions",
+      "/api/generate"
+    ]
+  }
 }
