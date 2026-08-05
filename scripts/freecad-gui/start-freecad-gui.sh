@@ -8,6 +8,13 @@ VNC_PORT="${VNC_PORT:-5900}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 PORT="${PORT:-8080}"
 CAD_UNIFIED_APP="${CAD_UNIFIED_APP:-0}"
+# Online CAD = the in-browser noVNC FreeCAD kiosk. Retired by default: the
+# product path is the local FreeCAD add-on (plugin mode). When off, we run only
+# the FastAPI control plane (headless FreeCADCmd generation is unaffected — it
+# runs on demand and needs no persistent display); the whole GUI stack (Xvfb /
+# x11vnc / noVNC / window manager / FreeCAD GUI window) is skipped, saving the
+# per-pod GUI footprint. Set CAD_ONLINE_CAD=1 to restore the kiosk.
+CAD_ONLINE_CAD="${CAD_ONLINE_CAD:-0}"
 CAD_API_HOST="${CAD_API_HOST:-0.0.0.0}"
 CAD_API_APP_DIR="${CAD_API_APP_DIR:-/app}"
 CAD_API_MODULE="${CAD_API_MODULE:-app.main:app}"
@@ -111,6 +118,15 @@ configure_unified_app_defaults() {
   export CAD_DATA_DIR
   export TMPDIR="${TMPDIR:-${CAD_RUNTIME_DIR}/tmp}"
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-${CAD_RUNTIME_DIR}/xdg-runtime}"
+
+  if [ "${CAD_ONLINE_CAD}" != "1" ]; then
+    # Online CAD retired: control plane only. No kiosk entry, no in-pod GUI
+    # session backend, no in-pod bridge env (the GUI stack below is skipped).
+    export CAD_GUI_SESSION_BACKEND="${CAD_GUI_SESSION_BACKEND:-disabled}"
+    export CAD_FREECAD_FIRST_ENTRY="${CAD_FREECAD_FIRST_ENTRY:-0}"
+    return
+  fi
+
   export CAD_GUI_SESSION_BACKEND="${CAD_GUI_SESSION_BACKEND:-shared_service}"
   export CAD_FREECAD_FIRST_ENTRY="${CAD_FREECAD_FIRST_ENTRY:-1}"
   export CAD_SHARED_FREECAD_SESSION_ID="${CAD_SHARED_FREECAD_SESSION_ID:-${remote_session_id}}"
@@ -177,11 +193,25 @@ chmod 700 "${XDG_RUNTIME_DIR:-/tmp/runtime-appuser}" >/dev/null 2>&1 || true
 seed_freecad_user_cfg
 cd "${CAD_SESSION_WORKSPACE}"
 
+start_unified_app_control_plane
+
+if [ "${CAD_ONLINE_CAD}" != "1" ]; then
+  # Online CAD retired: only the FastAPI control plane runs. Headless
+  # FreeCADCmd generation (and xvfb-run preview) are invoked on demand by the
+  # API and need no persistent display, so the whole GUI stack below is skipped.
+  log "online CAD disabled (CAD_ONLINE_CAD=0); running control plane only"
+  touch /tmp/4yi-cad-freecad-gui/ready
+  if [ -n "${CAD_API_PID}" ]; then
+    wait "${CAD_API_PID}" || exit "$?"
+    exit 0
+  fi
+  log "control plane did not start (CAD_UNIFIED_APP=${CAD_UNIFIED_APP})"
+  exit 1
+fi
+
 FREECAD_RESOLVED_BIN="$(resolve_freecad_bin)"
 require_command Xvfb
 require_command x11vnc
-
-start_unified_app_control_plane
 
 log "starting Xvfb on ${DISPLAY} with ${GEOMETRY}"
 start_background Xvfb "${DISPLAY}" -screen "${SCREEN}" "${GEOMETRY}" -ac +extension GLX +render -noreset

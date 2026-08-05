@@ -3333,13 +3333,15 @@ def create_app(
 
     @app.get("/")
     async def index():
+        # Plugin-first entry. The in-browser online-CAD kiosk is opt-in via
+        # CAD_FREECAD_FIRST_ENTRY (set only when CAD_ONLINE_CAD=1); when it's
+        # retired (default), the app's front door is the connect page — issue a
+        # token and install the local FreeCAD add-on.
         if _freecad_first_entry_enabled():
             url = _freecad_first_entry_url()
             if url:
                 return RedirectResponse(url=url, status_code=307)
-        if _INDEX_HTML.is_file():
-            return FileResponse(str(_INDEX_HTML), media_type="text/html")
-        return {"status": "ok", "ui": "unavailable"}
+        return RedirectResponse(url="/connect", status_code=307)
 
     @app.get("/workbench")
     async def workbench():
