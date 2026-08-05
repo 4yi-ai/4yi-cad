@@ -302,9 +302,26 @@ def test_remote_overlay_bridge_urls_match_real_server_routes(tmp_path):
 
     import urllib.parse
 
-    for key in ("CAD_BRIDGE_POLL_URL", "CAD_BRIDGE_HEARTBEAT_URL", "CAD_BRIDGE_SAVE_URL"):
-        path = urllib.parse.urlparse(overlay[key]).path
-        templated = path.replace(sid, "{remote_session_id}")
-        assert templated in route_templates, (
-            f"{key} -> {path} has no matching server route ({templated})"
+    def _assert_matches(label, url, replacements):
+        path = urllib.parse.urlparse(url).path
+        for concrete, template in replacements:
+            path = path.replace(concrete, template)
+        assert path in route_templates, (
+            f"{label} -> {urllib.parse.urlparse(url).path} has no matching "
+            f"server route ({path})"
         )
+
+    sid_sub = [(sid, "{remote_session_id}")]
+    # URLs carried directly in the overlay dict.
+    for key in ("CAD_BRIDGE_POLL_URL", "CAD_BRIDGE_HEARTBEAT_URL", "CAD_BRIDGE_SAVE_URL"):
+        _assert_matches(key, overlay[key], sid_sub)
+
+    # URLs the addon derives at call time from the poll URL — exercise them too
+    # so the seam guard is exhaustive over every bridge route the addon hits.
+    _assert_matches(
+        "command_result_url",
+        addon.command_result_url(overlay, "c1"),
+        sid_sub + [("c1", "{command_id}")],
+    )
+    _assert_matches("command_queue_url", addon.command_queue_url(overlay), sid_sub)
+    _assert_matches("panel_action_url", addon.panel_action_url(overlay), sid_sub)
