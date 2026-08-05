@@ -2624,12 +2624,19 @@ def test_script_patch_rejects_non_editable_parameter():
     assert "unknown or non-editable" in resp.json()["detail"]
 
 
-def test_root_serves_the_spa():
-    # The single container serves the SPA same-origin (fullstack service).
-    resp = _client().get("/")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    assert "<!doctype html>" in resp.text.lower()
+def test_root_redirects_to_connect_when_online_cad_disabled():
+    # Plugin-first: with the online-CAD kiosk retired (first-entry off), the
+    # app's front door is the connect page. The SPA stays reachable at
+    # /workbench for anyone who wants the in-browser viewer.
+    client = _client()
+    root = client.get("/", follow_redirects=False)
+    assert root.status_code == 307
+    assert root.headers["location"] == "/connect"
+
+    workbench = client.get("/workbench")
+    assert workbench.status_code == 200
+    assert workbench.headers["content-type"].startswith("text/html")
+    assert "<!doctype html>" in workbench.text.lower()
 
 
 def test_static_route_serves_local_three_viewer_assets():

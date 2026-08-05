@@ -42,8 +42,13 @@ def test_freecad_gui_spike_dockerfile_contains_remote_desktop_stack():
     assert "CAD_RUNTIME_DIR=/data/4yi-cad/runtime" in dockerfile
     assert "/home/appuser/.fluxbox" in dockerfile
     assert "CAD_SESSION_WORKSPACE=/workspace" in dockerfile
-    assert "CAD_GUI_SESSION_BACKEND=shared_service" in dockerfile
-    assert "CAD_FREECAD_FIRST_ENTRY=1" in dockerfile
+    # Online CAD (in-browser kiosk) is retired by default: the GUI stack stays
+    # installed for opt-in (CAD_ONLINE_CAD=1), but the container runs the
+    # control plane only, so the session-backend and kiosk-entry flags are no
+    # longer hardcoded on — the start script derives them from CAD_ONLINE_CAD.
+    assert "CAD_ONLINE_CAD=0" in dockerfile
+    assert "CAD_FREECAD_FIRST_ENTRY=1" not in dockerfile
+    assert "CAD_GUI_SESSION_BACKEND=shared_service" not in dockerfile
     assert "CAD_FREECAD_GUI_UPSTREAM_URL=http://127.0.0.1:6080" in dockerfile
     assert "CAD_PANEL_ACTION_URL=http://127.0.0.1:8080/api/freecad/sessions/shared-freecad-gui/panel/actions" in dockerfile
     assert "CAD_BRIDGE_AUTOSTART=1" in dockerfile
@@ -87,6 +92,7 @@ def test_freecad_gui_start_script_is_executable_and_valid_bash():
         "SESSION_FCSTD_PATH",
         "CAD_SESSION_WORKSPACE",
         "CAD_UNIFIED_APP",
+        "CAD_ONLINE_CAD",
         "CAD_RUNTIME_DIR",
         "XDG_RUNTIME_DIR",
         "TMPDIR",
