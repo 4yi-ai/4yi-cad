@@ -365,3 +365,117 @@ def test_bridge_runtime_default_wrapper_resolves_post_json_at_call_time(monkeypa
 
     assert calls, "default-constructed runtime should route through patched post_json"
     assert all(env == runtime.env for _, env in calls)
+
+
+# ---------------------------------------------------------------------------
+# test_connection / save_connection_params (connection settings dialog logic)
+# ---------------------------------------------------------------------------
+
+
+class FakeHealthResponse:
+    """Context-manager stand-in for urlopen()'s response, GET /healthz shape."""
+
+    def __init__(self, status: int = 200):
+        self.status = status
+
+    def getcode(self):
+        return self.status
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def test_connection_ok_on_2xx(monkeypatch):
+    addon = _load_addon()
+
+    def fake_urlopen(request, timeout=None):
+        assert timeout == 5.0
+        return FakeHealthResponse(200)
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    ok, message = addon.test_connection("https://cad.example.com")
+
+    assert ok is True
+    assert isinstance(message, str) and message
+
+
+def test_connection_strips_trailing_slash_and_hits_healthz(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["method"] = request.get_method()
+        return FakeHealthResponse(200)
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    addon.test_connection("https://cad.example.com/", timeout=5.0)
+
+    assert captured["url"] == "https://cad.example.com/healthz"
+    assert captured["method"] == "GET"
+
+
+def test_connection_url_error_returns_false_with_reason(monkeypatch):
+    addon = _load_addon()
+
+    def fake_urlopen(request, timeout=None):
+        raise addon.urllib.error.URLError("boom")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    ok, message = addon.test_connection("https://cad.example.com")
+
+    assert ok is False
+    assert "boom" in message
+
+
+def test_connection_http_error_returns_false_with_reason(monkeypatch):
+    addon = _load_addon()
+
+    def fake_urlopen(request, timeout=None):
+        raise addon.urllib.error.HTTPError(
+            "https://cad.example.com/healthz", 503, "Service Unavailable", None, None
+        )
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    ok, message = addon.test_connection("https://cad.example.com")
+
+    assert ok is False
+    assert "503" in message
+
+
+def test_save_connection_params_writes_server_url_and_token():
+    addon = _load_addon()
+    params = FakeParams({})
+
+    addon.save_connection_params("https://cad.example.com/ ", "tok-abc", params=params)
+
+    assert params.GetString("ServerUrl", "") == "https://cad.example.com/"
+    assert params.GetString("ApiToken", "") == "tok-abc"
+
+
+def test_save_connection_params_empty_token_does_not_overwrite_existing():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://old.example.com", "ApiToken": "existing-tok"})
+
+    addon.save_connection_params("https://cad.example.com", "", params=params)
+
+    assert params.GetString("ServerUrl", "") == "https://cad.example.com"
+    assert params.GetString("ApiToken", "") == "existing-tok"
+
+
+def test_save_connection_params_uses_addon_params_when_none_given(monkeypatch):
+    addon = _load_addon()
+    params = FakeParams({})
+    monkeypatch.setattr(addon, "addon_params", lambda: params)
+
+    addon.save_connection_params("https://cad.example.com", "tok-xyz")
+
+    assert params.GetString("ServerUrl", "") == "https://cad.example.com"
+    assert params.GetString("ApiToken", "") == "tok-xyz"
