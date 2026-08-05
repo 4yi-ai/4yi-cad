@@ -82,7 +82,7 @@ def remote_overlay_env(base_env=None, params=None) -> dict[str, str]
     #   CAD_BRIDGE_MODE="workbench", CAD_BRIDGE_AUTOSTART="1", CAD_REMOTE_SESSION_ID=sid,
     #   CAD_BRIDGE_POLL_URL=f"{base}/api/freecad/sessions/{sid}/bridge/poll",
     #   CAD_BRIDGE_HEARTBEAT_URL=f"{base}/api/freecad/sessions/{sid}/bridge/heartbeat",
-    #   CAD_BRIDGE_SAVE_URL=f"{base}/api/freecad/sessions/{sid}/bridge/save",
+    #   CAD_BRIDGE_SAVE_URL=f"{base}/api/freecad/sessions/{sid}/save",
     #   CAD_CONTROL_PLANE_URL=base, CAD_API_TOKEN=<ApiToken>(为空则不设),
     #   并保留 base_env 其余键(overlay 覆盖上述键)
 def auth_headers(env: dict[str, str]) -> dict[str, str]  # env 有非空 CAD_API_TOKEN → {"Authorization": "Bearer <tok>"};否则 {}

@@ -82,7 +82,7 @@ def test_remote_mode_synthesizes_bridge_urls_and_session_id():
         f"https://cad.example.com/api/freecad/sessions/{sid}/bridge/heartbeat"
     )
     assert overlay["CAD_BRIDGE_SAVE_URL"] == (
-        f"https://cad.example.com/api/freecad/sessions/{sid}/bridge/save"
+        f"https://cad.example.com/api/freecad/sessions/{sid}/save"
     )
     assert overlay["CAD_CONTROL_PLANE_URL"] == "https://cad.example.com"
     assert overlay["CAD_API_TOKEN"] == "4yi-cad-tok-xyz"

@@ -259,3 +259,52 @@ def test_queued_load_model_command_fcstd_url_uses_guarded_alias(
         f"/api/freecad/sessions/{remote['session_id']}"
         f"/versions/{body['generated_version']['id']}/artifacts/fcstd"
     )
+
+
+def _load_addon_module():
+    import importlib.util
+    from pathlib import Path
+
+    addon_path = (
+        Path(__file__).resolve().parents[1]
+        / "freecad-addon/fouryi_cad_companion/FourYiCadCompanion.py"
+    )
+    spec = importlib.util.spec_from_file_location("FourYiCadCompanion", addon_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakeParams:
+    def __init__(self, values):
+        self._values = dict(values)
+
+    def GetString(self, name, default=""):
+        return self._values.get(name, default)
+
+    def SetString(self, name, value):
+        self._values[name] = value
+
+
+def test_remote_overlay_bridge_urls_match_real_server_routes(tmp_path):
+    # Seam guard: every bridge URL the addon synthesizes in remote mode must
+    # correspond to a route the FastAPI app actually exposes. This catches path
+    # typos like /bridge/save vs /save that a unit test asserting the addon's
+    # own output cannot see (it would just encode the bug).
+    addon = _load_addon_module()
+    params = _FakeParams({"ServerUrl": "https://cad.example.com", "ApiToken": "tok"})
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+    sid = overlay["CAD_REMOTE_SESSION_ID"]
+
+    app = create_app(session_store=_make_store(tmp_path))
+    route_templates = {getattr(r, "path", None) for r in app.routes}
+
+    import urllib.parse
+
+    for key in ("CAD_BRIDGE_POLL_URL", "CAD_BRIDGE_HEARTBEAT_URL", "CAD_BRIDGE_SAVE_URL"):
+        path = urllib.parse.urlparse(overlay[key]).path
+        templated = path.replace(sid, "{remote_session_id}")
+        assert templated in route_templates, (
+            f"{key} -> {path} has no matching server route ({templated})"
+        )
