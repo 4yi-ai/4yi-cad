@@ -98,7 +98,7 @@ def test_package_xml_repository_url_points_at_cad_addon_repo():
     assert 'type="repository"' in package_xml
 
 
-def test_package_xml_version_unchanged():
+def test_package_xml_version():
     package_xml = (ROOT / "freecad-addon" / "fouryi_cad_companion" / "package.xml").read_text()
 
-    assert "<version>0.4.0</version>" in package_xml
+    assert "<version>0.4.1</version>" in package_xml
