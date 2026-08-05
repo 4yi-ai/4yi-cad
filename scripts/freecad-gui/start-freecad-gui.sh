@@ -120,10 +120,11 @@ configure_unified_app_defaults() {
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-${CAD_RUNTIME_DIR}/xdg-runtime}"
 
   if [ "${CAD_ONLINE_CAD}" != "1" ]; then
-    # Online CAD retired: control plane only. No kiosk entry, no in-pod GUI
-    # session backend, no in-pod bridge env (the GUI stack below is skipped).
-    export CAD_GUI_SESSION_BACKEND="${CAD_GUI_SESSION_BACKEND:-disabled}"
-    export CAD_FREECAD_FIRST_ENTRY="${CAD_FREECAD_FIRST_ENTRY:-0}"
+    # Online CAD retired: control plane only. Force (not default) these off — with
+    # no GUI running, the front door must never redirect to a dead kiosk even if a
+    # stale external override left CAD_FREECAD_FIRST_ENTRY=1.
+    export CAD_GUI_SESSION_BACKEND=disabled
+    export CAD_FREECAD_FIRST_ENTRY=0
     return
   fi
 
@@ -195,7 +196,10 @@ cd "${CAD_SESSION_WORKSPACE}"
 
 start_unified_app_control_plane
 
-if [ "${CAD_ONLINE_CAD}" != "1" ]; then
+# The retire-online-CAD gate only applies to the unified image (which has a
+# control plane to fall back to). The legacy CAD_UNIFIED_APP=0 spike mode has no
+# API and wants the bare GUI, so it skips this gate and falls through below.
+if [ "${CAD_UNIFIED_APP}" = "1" ] && [ "${CAD_ONLINE_CAD}" != "1" ]; then
   # Online CAD retired: only the FastAPI control plane runs. Headless
   # FreeCADCmd generation (and xvfb-run preview) are invoked on demand by the
   # API and need no persistent display, so the whole GUI stack below is skipped.

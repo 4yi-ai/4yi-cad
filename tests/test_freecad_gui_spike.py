@@ -92,6 +92,7 @@ def test_freecad_gui_start_script_is_executable_and_valid_bash():
         "SESSION_FCSTD_PATH",
         "CAD_SESSION_WORKSPACE",
         "CAD_UNIFIED_APP",
+        "CAD_ONLINE_CAD",
         "CAD_RUNTIME_DIR",
         "XDG_RUNTIME_DIR",
         "TMPDIR",
