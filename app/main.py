@@ -1605,7 +1605,7 @@ async def _queue_freecad_panel_agent_generation(
         )
     fcstd_ref = artifact_refs.get("fcstd") or {}
     fcstd_url = fcstd_ref.get("url") or (
-        f"/api/sessions/{remote_session.workbench_session_id}/versions/{version.id}/artifacts/fcstd"
+        f"/api/freecad/sessions/{remote_session.id}/versions/{version.id}/artifacts/fcstd"
     )
     command = store.create_remote_freecad_session_command(
         remote_session_id=remote_session_id,
@@ -2295,6 +2295,44 @@ def create_app(
                 detail=f"remote FreeCAD session storage unavailable: {exc}",
             ) from exc
         return {**_remote_session_dict(remote_session), "events": events}
+
+    @app.get(
+        "/api/freecad/sessions/{remote_session_id}/versions/{version_id}/artifacts/{artifact_name}"
+    )
+    async def get_freecad_remote_session_artifact(
+        remote_session_id: str, version_id: str, artifact_name: str
+    ):
+        # Guarded alias of get_session_artifact (/api/sessions/...), keyed by
+        # remote session id so the native addon — which only ever sees remote
+        # session ids and authenticates with a bearer token — can download
+        # generated FCStd artifacts through a GUARDED_PREFIXES-protected path
+        # instead of the unauthenticated browser-facing /api/sessions/* route.
+        store = _get_session_store(app)
+        try:
+            remote_session = store.get_remote_freecad_session(remote_session_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"remote FreeCAD session storage unavailable: {exc}",
+            ) from exc
+        if remote_session is None:
+            raise HTTPException(status_code=404, detail="remote FreeCAD session not found")
+        artifact_store = _get_artifact_store(app)
+        try:
+            artifact = artifact_store.get_artifact(
+                session_id=remote_session.workbench_session_id,
+                version_id=version_id,
+                artifact_name=artifact_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        return FileResponse(
+            str(artifact.path),
+            media_type=artifact.media_type,
+            filename=artifact.filename,
+        )
 
     @app.delete("/api/freecad/sessions/{remote_session_id}")
     async def stop_freecad_remote_session(
