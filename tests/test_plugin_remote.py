@@ -189,22 +189,15 @@ def test_alias_route_unknown_remote_session_id_gets_404(tmp_path):
     assert resp.status_code == 404
 
 
-class _FcstdlessArtifactStore(FileArtifactStore):
-    """Drops the "fcstd" ref from save_version_artifacts' return value even
-    though the fcstd export was written, forcing
-    `_queue_freecad_panel_agent_generation`'s `fcstd_ref.get("url")` preferred
-    branch to be empty so the fallback URL construction fires.
-    """
-
-    def save_version_artifacts(self, **kwargs):
-        refs = super().save_version_artifacts(**kwargs)
-        refs.pop("fcstd", None)
-        return refs
-
-
-def test_queued_load_model_command_fcstd_url_uses_guarded_alias_on_fallback(
+def test_queued_load_model_command_fcstd_url_uses_guarded_alias(
     tmp_path, monkeypatch
 ):
+    # Uses the REAL FileArtifactStore: artifact_refs["fcstd"] is populated with
+    # its unguarded /api/sessions/* url, yet the queued load_model command must
+    # still point the bridge addon at the guarded /api/freecad/sessions alias —
+    # the only path a remote addon can reach through the router. This is the
+    # security-relevant case (an artificially fcstd-less store would not prove
+    # it, since the real path always populates the ref).
     async def fake_inspect_fcstd(fcstd_b64):
         return {
             "ok": False,
@@ -228,7 +221,7 @@ def test_queued_load_model_command_fcstd_url_uses_guarded_alias_on_fallback(
     store = _make_store(tmp_path)
     app = create_app(
         session_store=store,
-        artifact_store=_FcstdlessArtifactStore(tmp_path / "artifacts"),
+        artifact_store=FileArtifactStore(tmp_path / "artifacts"),
         gateway=FakeGateway(tool_name="run_freecad", script="import FreeCAD\nresult=[]\n"),
         freecad_execute=fake_freecad_execute,
     )

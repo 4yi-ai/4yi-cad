@@ -1603,8 +1603,14 @@ async def _queue_freecad_panel_agent_generation(
             version_id=version.id,
             metadata=_metadata_with_artifact_refs(version.metadata, artifact_refs),
         )
-    fcstd_ref = artifact_refs.get("fcstd") or {}
-    fcstd_url = fcstd_ref.get("url") or (
+    # The queued load_model command is consumed only by the FreeCAD bridge
+    # addon, which always reaches this control plane through a guarded prefix:
+    # kiosk mode via in-pod localhost (bearer-exempt), remote mode via the
+    # router's Bearer passthrough on /api/freecad/sessions. The unguarded
+    # /api/sessions/* artifact URL that artifact_refs carries is served to the
+    # browser SPA over its SSO session and is NOT router-reachable for a remote
+    # addon, so the command must point at the guarded alias unconditionally.
+    fcstd_url = (
         f"/api/freecad/sessions/{remote_session.id}/versions/{version.id}/artifacts/fcstd"
     )
     command = store.create_remote_freecad_session_command(
