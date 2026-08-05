@@ -479,3 +479,71 @@ def test_save_connection_params_uses_addon_params_when_none_given(monkeypatch):
 
     assert params.GetString("ServerUrl", "") == "https://cad.example.com"
     assert params.GetString("ApiToken", "") == "tok-xyz"
+
+
+# ---------------------------------------------------------------------------
+# i18n: _ui_language / t
+# ---------------------------------------------------------------------------
+
+
+class FakeLanguageParams:
+    """dict-backed stand-in for App.ParamGet(...).GetString(name, default)."""
+
+    def __init__(self, language: str):
+        self._language = language
+
+    def GetString(self, name, default=""):
+        if name == "Language":
+            return self._language
+        return default
+
+
+class FakeAppForLanguage:
+    def __init__(self, language: str):
+        self._params = FakeLanguageParams(language)
+
+    def ParamGet(self, path):
+        return self._params
+
+
+def test_ui_language_chinese_simplified_returns_zh(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "App", FakeAppForLanguage("Chinese Simplified"))
+
+    assert addon._ui_language() == "zh"
+
+
+def test_ui_language_english_returns_en(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "App", FakeAppForLanguage("English"))
+
+    assert addon._ui_language() == "en"
+
+
+def test_ui_language_empty_with_no_zh_locale_returns_en(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "App", FakeAppForLanguage(""))
+    monkeypatch.setattr(addon.locale, "getdefaultlocale", lambda: ("en_US", "UTF-8"))
+
+    assert addon._ui_language() == "en"
+
+
+def test_ui_language_app_none_returns_en(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "App", None)
+
+    assert addon._ui_language() == "en"
+
+
+def test_t_returns_zh_when_ui_language_is_zh(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "_ui_language", lambda: "zh")
+
+    assert addon.t("中文", "English") == "中文"
+
+
+def test_t_returns_en_when_ui_language_is_en(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "_ui_language", lambda: "en")
+
+    assert addon.t("中文", "English") == "English"
