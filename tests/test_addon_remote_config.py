@@ -1,0 +1,278 @@
+"""Tests for the FreeCAD addon's remote-mode config/overlay/auth layer.
+
+The addon module (freecad-addon/fouryi_cad_companion/FourYiCadCompanion.py)
+is loaded by file path (mirrors tests/test_freecad_workbench_addon.py) so it
+can be imported without FreeCAD installed: App/Gui are None-guarded.
+"""
+
+import importlib.util
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ADDON_PATH = ROOT / "freecad-addon/fouryi_cad_companion/FourYiCadCompanion.py"
+
+
+def _load_addon():
+    spec = importlib.util.spec_from_file_location("FourYiCadCompanion", ADDON_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class FakeParams:
+    """dict-backed stand-in for FreeCAD.ParamGet(...)."""
+
+    def __init__(self, values=None):
+        self._values = dict(values or {})
+
+    def GetString(self, name, default=""):
+        return self._values.get(name, default)
+
+    def SetString(self, name, value):
+        self._values[name] = value
+
+
+class FakeResponse:
+    def __init__(self, data: bytes):
+        self._data = data
+
+    def read(self):
+        return self._data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# remote_overlay_env
+# ---------------------------------------------------------------------------
+
+
+def test_container_mode_ignores_param_layer_entirely():
+    addon = _load_addon()
+    base_env = {"CAD_BRIDGE_POLL_URL": "http://127.0.0.1:9000/api/freecad/sessions/x/bridge/poll"}
+    params = FakeParams({"ServerUrl": "https://cad.example.com/", "ApiToken": "should-not-leak"})
+
+    overlay = addon.remote_overlay_env(base_env=base_env, params=params)
+
+    assert overlay == base_env
+    assert overlay is not base_env
+    assert "CAD_API_TOKEN" not in overlay
+
+
+def test_remote_mode_synthesizes_bridge_urls_and_session_id():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com/", "ApiToken": "4yi-cad-tok-xyz"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    sid = overlay["CAD_REMOTE_SESSION_ID"]
+    assert sid.startswith("local-")
+    assert overlay["CAD_BRIDGE_MODE"] == "workbench"
+    assert overlay["CAD_BRIDGE_AUTOSTART"] == "1"
+    assert overlay["CAD_BRIDGE_POLL_URL"] == (
+        f"https://cad.example.com/api/freecad/sessions/{sid}/bridge/poll"
+    )
+    assert overlay["CAD_BRIDGE_HEARTBEAT_URL"] == (
+        f"https://cad.example.com/api/freecad/sessions/{sid}/bridge/heartbeat"
+    )
+    assert overlay["CAD_BRIDGE_SAVE_URL"] == (
+        f"https://cad.example.com/api/freecad/sessions/{sid}/bridge/save"
+    )
+    assert overlay["CAD_CONTROL_PLANE_URL"] == "https://cad.example.com"
+    assert overlay["CAD_API_TOKEN"] == "4yi-cad-tok-xyz"
+
+    # LocalSessionId is persisted on the param object; a second call is stable.
+    assert params.GetString("LocalSessionId", "") == sid
+    overlay_again = addon.remote_overlay_env(base_env={}, params=params)
+    assert overlay_again["CAD_REMOTE_SESSION_ID"] == sid
+
+
+def test_remote_mode_without_token_omits_api_token_key():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    assert "CAD_API_TOKEN" not in overlay
+
+
+def test_remote_mode_preserves_other_base_env_keys():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+    base_env = {"UNRELATED_KEY": "kept"}
+
+    overlay = addon.remote_overlay_env(base_env=base_env, params=params)
+
+    assert overlay["UNRELATED_KEY"] == "kept"
+
+
+def test_unconfigured_returns_base_env_unchanged():
+    addon = _load_addon()
+    base_env = {"SOME_OTHER_VAR": "1"}
+    params = FakeParams({})
+
+    overlay = addon.remote_overlay_env(base_env=base_env, params=params)
+
+    assert overlay == base_env
+
+
+def test_unconfigured_with_no_params_object_returns_base_env_unchanged():
+    addon = _load_addon()
+    base_env = {"SOME_OTHER_VAR": "1"}
+
+    # App is None in this test environment, so addon_params() -> None; the
+    # module must not blow up when params is unavailable.
+    overlay = addon.remote_overlay_env(base_env=base_env, params=None)
+
+    assert overlay == base_env
+
+
+# ---------------------------------------------------------------------------
+# local_session_id
+# ---------------------------------------------------------------------------
+
+
+def test_local_session_id_generates_and_persists():
+    addon = _load_addon()
+    params = FakeParams({})
+
+    sid = addon.local_session_id(params)
+
+    assert sid.startswith("local-")
+    assert params.GetString("LocalSessionId", "") == sid
+    assert addon.local_session_id(params) == sid
+
+
+def test_local_session_id_reuses_existing_value():
+    addon = _load_addon()
+    params = FakeParams({"LocalSessionId": "local-abcdef123456"})
+
+    assert addon.local_session_id(params) == "local-abcdef123456"
+
+
+# ---------------------------------------------------------------------------
+# auth_headers
+# ---------------------------------------------------------------------------
+
+
+def test_auth_headers_with_token():
+    addon = _load_addon()
+
+    assert addon.auth_headers({"CAD_API_TOKEN": "tok-123"}) == {
+        "Authorization": "Bearer tok-123"
+    }
+
+
+def test_auth_headers_without_token():
+    addon = _load_addon()
+
+    assert addon.auth_headers({}) == {}
+    assert addon.auth_headers({"CAD_API_TOKEN": ""}) == {}
+
+
+# ---------------------------------------------------------------------------
+# post_json bearer injection
+# ---------------------------------------------------------------------------
+
+
+def test_post_json_injects_bearer_header_from_env(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    result = addon.post_json(
+        "http://control.test/api/freecad/sessions/local-1/bridge/poll",
+        {"a": 1},
+        timeout=5.0,
+        env={"CAD_API_TOKEN": "tok-123"},
+    )
+
+    assert result == {"ok": True}
+    assert captured["request"].get_header("Authorization") == "Bearer tok-123"
+
+
+def test_post_json_without_env_token_has_no_authorization_header(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b"{}")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    addon.post_json("http://control.test/poll", {"a": 1}, timeout=5.0, env={})
+
+    assert captured["request"].get_header("Authorization") is None
+
+
+def test_post_json_default_env_is_none_no_authorization_header(monkeypatch):
+    # Container mode: callers that don't pass env (unchanged default) must
+    # continue to produce zero-header-change behaviour.
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b"{}")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    addon.post_json("http://control.test/poll", {"a": 1}, timeout=5.0)
+
+    assert captured["request"].get_header("Authorization") is None
+
+
+# ---------------------------------------------------------------------------
+# load_model_bytes bearer injection
+# ---------------------------------------------------------------------------
+
+
+def test_load_model_bytes_download_injects_bearer_header(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b"FCSTDBYTES")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    data = addon.load_model_bytes(
+        {"fcstd_url": "http://control.test/api/freecad/sessions/x/versions/v1/artifacts/fcstd"},
+        {"CAD_API_TOKEN": "tok-abc"},
+        5.0,
+    )
+
+    assert data == b"FCSTDBYTES"
+    assert captured["request"].get_header("Authorization") == "Bearer tok-abc"
+
+
+def test_load_model_bytes_download_without_token_has_no_authorization_header(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b"FCSTDBYTES")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    addon.load_model_bytes(
+        {"fcstd_url": "http://control.test/api/freecad/sessions/x/versions/v1/artifacts/fcstd"},
+        {},
+        5.0,
+    )
+
+    assert captured["request"].get_header("Authorization") is None

@@ -123,15 +123,18 @@ def test_freecad_addon_panel_action_uses_dedicated_timeout(monkeypatch):
     addon = _load_addon()
     captured = {}
 
-    def fake_post(url, payload, timeout):
+    def fake_post(url, payload, timeout, env=None):
         captured["url"] = url
         captured["payload"] = payload
         captured["timeout"] = timeout
         return {"status": "recorded"}
 
+    # submit_panel_action reads the module-level EFFECTIVE_ENV (derived from
+    # os.environ at import time / ParamGet remote overlay), not os.environ
+    # directly -- patch that instead.
     monkeypatch.setattr(
-        addon.os,
-        "environ",
+        addon,
+        "EFFECTIVE_ENV",
         {
             "CAD_PANEL_ACTION_URL": "http://control.test/panel/actions",
             "CAD_BRIDGE_HTTP_TIMEOUT_SECONDS": "10",
