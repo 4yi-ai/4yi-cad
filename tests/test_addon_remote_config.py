@@ -251,12 +251,33 @@ def test_load_model_bytes_download_injects_bearer_header(monkeypatch):
 
     data = addon.load_model_bytes(
         {"fcstd_url": "http://control.test/api/freecad/sessions/x/versions/v1/artifacts/fcstd"},
-        {"CAD_API_TOKEN": "tok-abc"},
+        {"CAD_API_TOKEN": "tok-abc", "CAD_CONTROL_PLANE_URL": "http://control.test"},
         5.0,
     )
 
     assert data == b"FCSTDBYTES"
     assert captured["request"].get_header("Authorization") == "Bearer tok-abc"
+
+
+def test_load_model_bytes_does_not_leak_token_to_foreign_host(monkeypatch):
+    # An absolute artifact URL on a different host (e.g. a presigned S3/CDN
+    # link) must NOT receive the platform Bearer token.
+    addon = _load_addon()
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["request"] = request
+        return FakeResponse(b"FCSTDBYTES")
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    addon.load_model_bytes(
+        {"fcstd_url": "https://presigned.s3.amazonaws.com/bucket/model.FCStd?sig=abc"},
+        {"CAD_API_TOKEN": "tok-secret", "CAD_CONTROL_PLANE_URL": "http://control.test"},
+        5.0,
+    )
+
+    assert captured["request"].get_header("Authorization") is None
 
 
 def test_load_model_bytes_download_without_token_has_no_authorization_header(monkeypatch):
@@ -322,3 +343,25 @@ def test_bridge_runtime_injected_post_is_left_untouched():
     runtime = addon.InProcessBridgeRuntime(env={}, http_post=fake_post)
 
     assert runtime.http_post is fake_post
+
+
+def test_bridge_runtime_default_wrapper_resolves_post_json_at_call_time(monkeypatch):
+    # The default wrapper must resolve the module-level post_json at CALL time,
+    # so monkeypatching addon.post_json is honored by a default-constructed
+    # runtime (avoids the default-arg identity footgun).
+    addon = _load_addon()
+    calls = []
+
+    def fake_post_json(url, payload, timeout, env=None):
+        calls.append((url, env))
+        return {"commands": []}
+
+    monkeypatch.setattr(addon, "post_json", fake_post_json)
+
+    runtime = addon.InProcessBridgeRuntime(
+        env={"CAD_BRIDGE_POLL_URL": "http://control.test/poll"},
+    )
+    runtime.run_once()
+
+    assert calls, "default-constructed runtime should route through patched post_json"
+    assert all(env == runtime.env for _, env in calls)
