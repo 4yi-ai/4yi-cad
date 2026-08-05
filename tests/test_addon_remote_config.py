@@ -276,3 +276,49 @@ def test_load_model_bytes_download_without_token_has_no_authorization_header(mon
     )
 
     assert captured["request"].get_header("Authorization") is None
+
+
+# ---------------------------------------------------------------------------
+# Bridge runtime loop carries the bearer header (default post_json path)
+# ---------------------------------------------------------------------------
+
+
+def test_bridge_runtime_default_post_carries_bearer_header_in_remote_mode(monkeypatch):
+    # The heartbeat/poll/command-result/save endpoints are under the server's
+    # guarded prefix, so the bridge loop's own HTTP calls must carry the token
+    # in remote mode. The runtime constructed with the DEFAULT post_json (no
+    # injected fake) must bind its env so every loop request is authorized.
+    addon = _load_addon()
+    requests = []
+
+    def fake_urlopen(request, timeout=None):
+        requests.append(request)
+        return FakeResponse(b'{"commands": []}')
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    runtime = addon.InProcessBridgeRuntime(
+        env={
+            "CAD_API_TOKEN": "tok-loop",
+            "CAD_BRIDGE_HEARTBEAT_URL": "http://control.test/api/freecad/sessions/local-1/bridge/heartbeat",
+            "CAD_BRIDGE_POLL_URL": "http://control.test/api/freecad/sessions/local-1/bridge/poll",
+        },
+    )
+    runtime.run_once()
+
+    assert requests, "expected the bridge loop to issue heartbeat/poll requests"
+    for request in requests:
+        assert request.get_header("Authorization") == "Bearer tok-loop"
+
+
+def test_bridge_runtime_injected_post_is_left_untouched():
+    # Injected 3-arg fakes (tests, alternate transports) must pass through the
+    # constructor unchanged — the env-binding wrap applies only to the default.
+    addon = _load_addon()
+
+    def fake_post(url, payload, timeout):
+        return {"commands": []}
+
+    runtime = addon.InProcessBridgeRuntime(env={}, http_post=fake_post)
+
+    assert runtime.http_post is fake_post
