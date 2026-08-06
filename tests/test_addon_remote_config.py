@@ -102,6 +102,28 @@ def test_remote_mode_without_token_omits_api_token_key():
     assert "CAD_API_TOKEN" not in overlay
 
 
+def test_remote_mode_sets_slower_poll_interval_default():
+    # Remote polling runs on the GUI thread over the internet; default to a
+    # slower interval than kiosk's 2s to avoid stuttering the UI.
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    assert overlay["CAD_BRIDGE_POLL_INTERVAL_SECONDS"] == "10"
+
+
+def test_remote_mode_poll_interval_env_override_wins():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(
+        base_env={"CAD_BRIDGE_POLL_INTERVAL_SECONDS": "3"}, params=params
+    )
+
+    assert overlay["CAD_BRIDGE_POLL_INTERVAL_SECONDS"] == "3"
+
+
 def test_remote_mode_preserves_other_base_env_keys():
     addon = _load_addon()
     params = FakeParams({"ServerUrl": "https://cad.example.com"})
