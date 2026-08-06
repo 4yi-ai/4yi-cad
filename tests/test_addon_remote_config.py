@@ -569,3 +569,69 @@ def test_t_returns_en_when_ui_language_is_en(monkeypatch):
     monkeypatch.setattr(addon, "_ui_language", lambda: "en")
 
     assert addon.t("中文", "English") == "English"
+
+
+# ---------------------------------------------------------------------------
+# main-thread pump + background runner (non-blocking panel actions)
+# ---------------------------------------------------------------------------
+
+
+def test_main_thread_pump_runs_queued_tasks_in_order():
+    addon = _load_addon()
+    seen = []
+    addon.post_to_main_thread(lambda: seen.append(1))
+    addon.post_to_main_thread(lambda: seen.append(2))
+
+    ran = addon.drain_main_thread_tasks()
+
+    assert ran == 2
+    assert seen == [1, 2]
+    # queue is now empty
+    assert addon.drain_main_thread_tasks() == 0
+
+
+def test_main_thread_pump_isolates_failing_task():
+    addon = _load_addon()
+    seen = []
+
+    def boom():
+        raise RuntimeError("boom")
+
+    addon.post_to_main_thread(boom)
+    addon.post_to_main_thread(lambda: seen.append("after"))
+
+    ran = addon.drain_main_thread_tasks()
+
+    assert ran == 2
+    assert seen == ["after"]  # failure of the first task didn't stop the second
+
+
+def test_run_in_background_delivers_result_without_qt():
+    # QtCore is None in this test env, so run_in_background falls back to
+    # synchronous execution and delivers the result via on_done.
+    addon = _load_addon()
+    delivered = {}
+
+    addon.run_in_background(
+        lambda: {"ok": True},
+        lambda result, error: delivered.update({"result": result, "error": error}),
+    )
+
+    assert delivered["result"] == {"ok": True}
+    assert delivered["error"] is None
+
+
+def test_run_in_background_delivers_error_without_qt():
+    addon = _load_addon()
+    delivered = {}
+
+    def boom():
+        raise ValueError("nope")
+
+    addon.run_in_background(
+        boom,
+        lambda result, error: delivered.update({"result": result, "error": error}),
+    )
+
+    assert delivered["result"] is None
+    assert isinstance(delivered["error"], ValueError)
