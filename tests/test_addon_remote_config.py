@@ -657,3 +657,67 @@ def test_run_in_background_delivers_error_without_qt():
 
     assert delivered["result"] is None
     assert isinstance(delivered["error"], ValueError)
+
+
+# ---------------------------------------------------------------------------
+# panel actions must be pure HTTP when selection/document_tree are pre-gathered
+# (so they can run off the GUI thread without touching FreeCAD Gui/App)
+# ---------------------------------------------------------------------------
+
+
+def _raise_gui_read():
+    raise AssertionError("a FreeCAD Gui/App read happened off the main thread")
+
+
+def test_submit_panel_action_pure_when_selection_and_tree_provided(monkeypatch):
+    addon = _load_addon()
+    # If these live GUI/document reads fire, they'd be running on a background
+    # thread (unsafe). Prove they are NOT called when the caller passes data.
+    monkeypatch.setattr(addon, "current_selection", _raise_gui_read)
+    monkeypatch.setattr(addon, "current_document_tree", _raise_gui_read)
+    monkeypatch.setattr(
+        addon,
+        "EFFECTIVE_ENV",
+        {"CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions"},
+    )
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["body"] = request.data
+        return FakeResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    result = addon.submit_panel_action(
+        "prompt",
+        {"prompt": "p", "selection": {"s": 1}, "document_tree": {"d": 2}},
+    )
+
+    assert result == {"ok": True}
+    import json as _json
+
+    body = _json.loads(captured["body"].decode("utf-8"))
+    assert body["selection"] == {"s": 1}
+    assert body["metadata"]["document_tree"] == {"d": 2}
+
+
+def test_submit_prompt_from_panel_pure_when_data_provided(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "current_selection", _raise_gui_read)
+    monkeypatch.setattr(addon, "current_document_tree", _raise_gui_read)
+    monkeypatch.setattr(
+        addon,
+        "EFFECTIVE_ENV",
+        {"CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions"},
+    )
+    monkeypatch.setattr(
+        addon.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: FakeResponse(b'{"ok": true}'),
+    )
+
+    result = addon.submit_prompt_from_panel(
+        "p", selection={"objects": []}, document_tree={"d": 1}
+    )
+
+    assert result == {"ok": True}
