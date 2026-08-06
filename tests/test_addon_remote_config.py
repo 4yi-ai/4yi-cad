@@ -721,3 +721,27 @@ def test_submit_prompt_from_panel_pure_when_data_provided(monkeypatch):
     )
 
     assert result == {"ok": True}
+
+
+def test_remote_mode_sets_writable_local_workspace():
+    # The container /workspace default is read-only on a user's machine;
+    # remote mode must point at a writable per-user dir or load_model fails.
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    ws = overlay["CAD_SESSION_WORKSPACE"]
+    assert ws != "/workspace"
+    assert ws.endswith("/.4yi-cad/workspace")
+
+
+def test_remote_mode_workspace_env_override_wins():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(
+        base_env={"CAD_SESSION_WORKSPACE": "/tmp/my-ws"}, params=params
+    )
+
+    assert overlay["CAD_SESSION_WORKSPACE"] == "/tmp/my-ws"
