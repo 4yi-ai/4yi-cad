@@ -7,7 +7,9 @@ import json
 import locale
 import os
 import platform
+import queue
 import secrets
+import threading
 import time
 import traceback
 import urllib.error
@@ -71,8 +73,8 @@ def t(zh: str, en: str) -> str:
     return zh if _ui_language() == "zh" else en
 
 
-ADDON_VERSION = "0.4.1"
-USER_AGENT = "4yi-freecad-companion/0.4.1"
+ADDON_VERSION = "0.4.2"
+USER_AGENT = "4yi-freecad-companion/0.4.2"
 PARAM_GROUP_PATH = "User parameter:BaseApp/Preferences/Mod/FourYiCad"
 COMMAND_OPEN_PANEL = "FourYi_OpenPanel"
 COMMAND_START_BRIDGE = "FourYi_StartBridge"
@@ -222,6 +224,20 @@ def remote_overlay_env(
         "CAD_BRIDGE_HEARTBEAT_URL": "%s/api/freecad/sessions/%s/bridge/heartbeat" % (base, session_id),
         "CAD_BRIDGE_SAVE_URL": "%s/api/freecad/sessions/%s/save" % (base, session_id),
         "CAD_CONTROL_PLANE_URL": base,
+        # Remote mode polls the cloud over the internet on the GUI thread, so a
+        # tight interval visibly stutters the UI (kiosk mode talks to localhost
+        # and stays at its 2s default). Poll less often here until the bridge
+        # HTTP is moved off the GUI thread. An explicit env value still wins.
+        "CAD_BRIDGE_POLL_INTERVAL_SECONDS": (
+            base_env.get("CAD_BRIDGE_POLL_INTERVAL_SECONDS") or "10"
+        ),
+        # A panel prompt runs the full cloud agent loop (LLM + FreeCADCmd), which
+        # takes tens of seconds. The kiosk image sets this to 300 in its env, but
+        # the remote overlay must carry it too or "Send Prompt" reads-time-out at
+        # the 10s default. An explicit env value still wins.
+        "CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS": (
+            base_env.get("CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS") or "300"
+        ),
     }
     if api_token:
         overlay["CAD_API_TOKEN"] = api_token
@@ -310,6 +326,70 @@ def app_console(level: str, message: str) -> None:
         console.PrintMessage(text)
     else:
         print(text)
+
+
+# --- Main-thread task pump -------------------------------------------------
+# FreeCAD's document/Qt objects are not thread-safe, so any work that touches
+# them must run on the GUI (main) thread. Background workers enqueue callables
+# here; a QTimer on the main thread drains and runs them. This lets slow HTTP
+# (panel prompts, generation) run off the GUI thread without freezing the UI,
+# while the results are applied back on the main thread.
+_MAIN_THREAD_TASKS: "queue.Queue" = queue.Queue()
+_MAIN_THREAD_PUMP = None
+
+
+def post_to_main_thread(fn) -> None:
+    """Queue a zero-arg callable to run on the GUI (main) thread."""
+    _MAIN_THREAD_TASKS.put(fn)
+
+
+def drain_main_thread_tasks() -> int:
+    """Run all queued main-thread tasks. Returns how many ran. Safe to call on
+    the main thread only (that is where the pump QTimer invokes it)."""
+    ran = 0
+    while True:
+        try:
+            fn = _MAIN_THREAD_TASKS.get_nowait()
+        except queue.Empty:
+            break
+        ran += 1
+        try:
+            fn()
+        except Exception as exc:
+            app_console("warning", "main-thread task failed: %s" % exc)
+    return ran
+
+
+def ensure_main_thread_pump() -> None:
+    global _MAIN_THREAD_PUMP
+    if QtCore is None or _MAIN_THREAD_PUMP is not None:
+        return
+    _MAIN_THREAD_PUMP = QtCore.QTimer()
+    _MAIN_THREAD_PUMP.setInterval(150)
+    _MAIN_THREAD_PUMP.timeout.connect(drain_main_thread_tasks)
+    _MAIN_THREAD_PUMP.start()
+
+
+def run_in_background(work, on_done) -> None:
+    """Run blocking `work()` off the GUI thread; deliver its result to
+    `on_done(result, error)` back on the main thread via the pump. Exactly one
+    of (result, error) is set. Falls back to synchronous when Qt is absent."""
+    if QtCore is None:
+        try:
+            on_done(work(), None)
+        except Exception as exc:
+            on_done(None, exc)
+        return
+    ensure_main_thread_pump()
+
+    def _runner() -> None:
+        try:
+            res = work()
+            post_to_main_thread(lambda: on_done(res, None))
+        except Exception as exc:
+            post_to_main_thread(lambda: on_done(None, exc))
+
+    threading.Thread(target=_runner, daemon=True).start()
 
 
 def active_document():
@@ -1299,7 +1379,10 @@ def parse_measurement_value(text: str) -> float | None:
 
 
 def macro_for_selected_numeric_edit(text: str, selection: dict[str, Any] | None = None) -> str:
-    selection = selection or current_selection()
+    # `is None` (not `or`): a pre-gathered selection must never fall through to a
+    # live GUI read, which would run off the main thread from a background action.
+    if selection is None:
+        selection = current_selection()
     active = selection.get("active_object") or {}
     object_name_value = active.get("name") or active.get("label") or ""
     value = parse_measurement_value(text)
@@ -1337,7 +1420,10 @@ def macro_for_prompt_if_selected_numeric_edit(
     text: str,
     selection: dict[str, Any] | None = None,
 ) -> str | None:
-    selection = selection or current_selection()
+    # `is None` (not `or`): a pre-gathered selection must never fall through to a
+    # live GUI read, which would run off the main thread from a background action.
+    if selection is None:
+        selection = current_selection()
     active = selection.get("active_object") or {}
     object_name_value = active.get("name") or active.get("label") or ""
     if not object_name_value or parse_measurement_value(text) is None:
@@ -1348,18 +1434,27 @@ def macro_for_prompt_if_selected_numeric_edit(
 def submit_panel_action(action: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     env = EFFECTIVE_ENV
+    # GUI/document reads must happen on the main thread. When the caller runs
+    # this off the GUI thread (non-blocking panel actions) it pre-gathers these
+    # and passes them in; only fall back to a live read for main-thread callers.
+    selection = payload.get("selection")
+    if selection is None:
+        selection = current_selection()
+    document_tree = payload.get("document_tree")
+    if document_tree is None:
+        document_tree = current_document_tree()
     return post_json(
         panel_action_url(env),
         {
             "action": action,
             "prompt": payload.get("prompt"),
-            "selection": payload.get("selection") or current_selection(),
+            "selection": selection,
             "macro": payload.get("macro"),
             "patch_id": payload.get("patch_id"),
             "metadata": {
                 "source": "freecad_panel",
                 "addon_version": ADDON_VERSION,
-                "document_tree": current_document_tree(),
+                "document_tree": document_tree,
             },
         },
         panel_action_timeout(env),
@@ -1381,10 +1476,23 @@ def queue_bridge_command(op: str, payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def submit_prompt_from_panel(prompt: str) -> dict[str, Any]:
-    selection = current_selection()
+def submit_prompt_from_panel(
+    prompt: str,
+    selection: dict[str, Any] | None = None,
+    document_tree: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    # selection/document_tree are pre-gathered on the main thread by the panel
+    # so this whole function can run on a background thread (pure HTTP). Only
+    # read live GUI state when called directly on the main thread.
+    if selection is None:
+        selection = current_selection()
     macro = macro_for_prompt_if_selected_numeric_edit(prompt, selection)
-    payload = {"prompt": prompt, "selection": selection, "macro": macro}
+    payload = {
+        "prompt": prompt,
+        "selection": selection,
+        "macro": macro,
+        "document_tree": document_tree,
+    }
     try:
         return submit_panel_action("prompt", payload)
     except Exception:
@@ -1558,25 +1666,50 @@ class CompanionTaskPanel:
         except Exception:
             self.output.setPlainText(json.dumps(current_selection(), ensure_ascii=False, indent=2))
 
+    def _run_action_async(self, work, pending_text: str) -> None:
+        # A panel action drives the cloud agent loop (tens of seconds). `work`
+        # must be PURE HTTP — all GUI/document reads are gathered on the main
+        # thread by the caller and passed in as data. Run the HTTP off the GUI
+        # thread so the UI stays responsive; show the result back on the main
+        # thread. The generated model itself is loaded by the bridge poll's
+        # load_model command. A busy guard prevents overlapping requests from
+        # double-clicks (which would race and land out of order).
+        if getattr(self, "_action_busy", False):
+            return
+        self._action_busy = True
+        self.output.setPlainText(pending_text)
+
+        def done(result, error) -> None:
+            self._action_busy = False
+            if error is not None:
+                self.output.setPlainText(str(error))
+            else:
+                self.output.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
+
+        run_in_background(work, done)
+
     def send_prompt(self) -> None:
-        try:
-            result = submit_prompt_from_panel(self.prompt_input.text())
-            self.output.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
-        except Exception as exc:
-            self.output.setPlainText(str(exc))
+        prompt = self.prompt_input.text()
+        selection = current_selection()          # main thread
+        document_tree = current_document_tree()  # main thread
+        self._run_action_async(
+            lambda: submit_prompt_from_panel(
+                prompt, selection=selection, document_tree=document_tree
+            ),
+            t("已发送,云端生成中…(模型就绪后会自动载入)", "Sent — generating in the cloud… (the model loads when ready)"),
+        )
 
     def panel_action(self, action: str) -> None:
-        try:
-            result = submit_panel_action(
-                action,
-                {
-                    "prompt": self.prompt_input.text(),
-                    "patch_id": self.patch_id_input.text(),
-                },
-            )
-            self.output.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
-        except Exception as exc:
-            self.output.setPlainText(str(exc))
+        payload = {
+            "prompt": self.prompt_input.text(),
+            "patch_id": self.patch_id_input.text(),
+            "selection": current_selection(),          # main thread
+            "document_tree": current_document_tree(),   # main thread
+        }
+        self._run_action_async(
+            lambda: submit_panel_action(action, payload),
+            t("处理中…", "Working…"),
+        )
 
     def export_bundle(self) -> None:
         path = export_support_bundle()
@@ -1595,10 +1728,12 @@ def show_panel() -> None:
     global _PANEL_DIALOG
     panel = CompanionTaskPanel()
     _PANEL_DIALOG = panel
-    if Gui is not None and hasattr(Gui, "Control"):
-        Gui.Control.showDialog(panel)
-    else:
-        panel.form.show()
+    # Floating window rather than the Task panel: Gui.Control.showDialog raises
+    # "Active task dialog found" when another task dialog is up and no-ops on the
+    # Start page. A top-level QWidget.show() is reliable in every context.
+    panel.form.show()
+    panel.form.raise_()
+    panel.form.activateWindow()
 
 
 class OpenPanelCommand:
@@ -1734,10 +1869,13 @@ def show_connection_settings() -> None:
     global _CONNECTION_SETTINGS_DIALOG
     dialog = ConnectionSettingsDialog()
     _CONNECTION_SETTINGS_DIALOG = dialog
-    if Gui is not None and hasattr(Gui, "Control"):
-        Gui.Control.showDialog(dialog)
-    else:
-        dialog.form.show()
+    # Show as a standalone floating window. Gui.Control.showDialog (the Task
+    # panel) silently no-ops on the Start page / without an active document, so
+    # the menu click appears to do nothing. A top-level QWidget.show() is
+    # reliable in every context.
+    dialog.form.show()
+    dialog.form.raise_()
+    dialog.form.activateWindow()
 
 
 class ConnectionSettingsCommand:

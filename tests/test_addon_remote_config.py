@@ -102,6 +102,50 @@ def test_remote_mode_without_token_omits_api_token_key():
     assert "CAD_API_TOKEN" not in overlay
 
 
+def test_remote_mode_sets_slower_poll_interval_default():
+    # Remote polling runs on the GUI thread over the internet; default to a
+    # slower interval than kiosk's 2s to avoid stuttering the UI.
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    assert overlay["CAD_BRIDGE_POLL_INTERVAL_SECONDS"] == "10"
+
+
+def test_remote_mode_poll_interval_env_override_wins():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(
+        base_env={"CAD_BRIDGE_POLL_INTERVAL_SECONDS": "3"}, params=params
+    )
+
+    assert overlay["CAD_BRIDGE_POLL_INTERVAL_SECONDS"] == "3"
+
+
+def test_remote_mode_sets_long_panel_action_timeout_default():
+    # A panel prompt runs the full cloud agent loop (tens of seconds), so the
+    # remote overlay must carry a long HTTP timeout or "Send Prompt" times out.
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    assert overlay["CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS"] == "300"
+
+
+def test_remote_mode_panel_action_timeout_env_override_wins():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(
+        base_env={"CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS": "45"}, params=params
+    )
+
+    assert overlay["CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS"] == "45"
+
+
 def test_remote_mode_preserves_other_base_env_keys():
     addon = _load_addon()
     params = FakeParams({"ServerUrl": "https://cad.example.com"})
@@ -547,3 +591,133 @@ def test_t_returns_en_when_ui_language_is_en(monkeypatch):
     monkeypatch.setattr(addon, "_ui_language", lambda: "en")
 
     assert addon.t("中文", "English") == "English"
+
+
+# ---------------------------------------------------------------------------
+# main-thread pump + background runner (non-blocking panel actions)
+# ---------------------------------------------------------------------------
+
+
+def test_main_thread_pump_runs_queued_tasks_in_order():
+    addon = _load_addon()
+    seen = []
+    addon.post_to_main_thread(lambda: seen.append(1))
+    addon.post_to_main_thread(lambda: seen.append(2))
+
+    ran = addon.drain_main_thread_tasks()
+
+    assert ran == 2
+    assert seen == [1, 2]
+    # queue is now empty
+    assert addon.drain_main_thread_tasks() == 0
+
+
+def test_main_thread_pump_isolates_failing_task():
+    addon = _load_addon()
+    seen = []
+
+    def boom():
+        raise RuntimeError("boom")
+
+    addon.post_to_main_thread(boom)
+    addon.post_to_main_thread(lambda: seen.append("after"))
+
+    ran = addon.drain_main_thread_tasks()
+
+    assert ran == 2
+    assert seen == ["after"]  # failure of the first task didn't stop the second
+
+
+def test_run_in_background_delivers_result_without_qt():
+    # QtCore is None in this test env, so run_in_background falls back to
+    # synchronous execution and delivers the result via on_done.
+    addon = _load_addon()
+    delivered = {}
+
+    addon.run_in_background(
+        lambda: {"ok": True},
+        lambda result, error: delivered.update({"result": result, "error": error}),
+    )
+
+    assert delivered["result"] == {"ok": True}
+    assert delivered["error"] is None
+
+
+def test_run_in_background_delivers_error_without_qt():
+    addon = _load_addon()
+    delivered = {}
+
+    def boom():
+        raise ValueError("nope")
+
+    addon.run_in_background(
+        boom,
+        lambda result, error: delivered.update({"result": result, "error": error}),
+    )
+
+    assert delivered["result"] is None
+    assert isinstance(delivered["error"], ValueError)
+
+
+# ---------------------------------------------------------------------------
+# panel actions must be pure HTTP when selection/document_tree are pre-gathered
+# (so they can run off the GUI thread without touching FreeCAD Gui/App)
+# ---------------------------------------------------------------------------
+
+
+def _raise_gui_read():
+    raise AssertionError("a FreeCAD Gui/App read happened off the main thread")
+
+
+def test_submit_panel_action_pure_when_selection_and_tree_provided(monkeypatch):
+    addon = _load_addon()
+    # If these live GUI/document reads fire, they'd be running on a background
+    # thread (unsafe). Prove they are NOT called when the caller passes data.
+    monkeypatch.setattr(addon, "current_selection", _raise_gui_read)
+    monkeypatch.setattr(addon, "current_document_tree", _raise_gui_read)
+    monkeypatch.setattr(
+        addon,
+        "EFFECTIVE_ENV",
+        {"CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions"},
+    )
+    captured = {}
+
+    def fake_urlopen(request, timeout=None):
+        captured["body"] = request.data
+        return FakeResponse(b'{"ok": true}')
+
+    monkeypatch.setattr(addon.urllib.request, "urlopen", fake_urlopen)
+
+    result = addon.submit_panel_action(
+        "prompt",
+        {"prompt": "p", "selection": {"s": 1}, "document_tree": {"d": 2}},
+    )
+
+    assert result == {"ok": True}
+    import json as _json
+
+    body = _json.loads(captured["body"].decode("utf-8"))
+    assert body["selection"] == {"s": 1}
+    assert body["metadata"]["document_tree"] == {"d": 2}
+
+
+def test_submit_prompt_from_panel_pure_when_data_provided(monkeypatch):
+    addon = _load_addon()
+    monkeypatch.setattr(addon, "current_selection", _raise_gui_read)
+    monkeypatch.setattr(addon, "current_document_tree", _raise_gui_read)
+    monkeypatch.setattr(
+        addon,
+        "EFFECTIVE_ENV",
+        {"CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions"},
+    )
+    monkeypatch.setattr(
+        addon.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: FakeResponse(b'{"ok": true}'),
+    )
+
+    result = addon.submit_prompt_from_panel(
+        "p", selection={"objects": []}, document_tree={"d": 1}
+    )
+
+    assert result == {"ok": True}
