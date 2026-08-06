@@ -124,6 +124,28 @@ def test_remote_mode_poll_interval_env_override_wins():
     assert overlay["CAD_BRIDGE_POLL_INTERVAL_SECONDS"] == "3"
 
 
+def test_remote_mode_sets_long_panel_action_timeout_default():
+    # A panel prompt runs the full cloud agent loop (tens of seconds), so the
+    # remote overlay must carry a long HTTP timeout or "Send Prompt" times out.
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(base_env={}, params=params)
+
+    assert overlay["CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS"] == "300"
+
+
+def test_remote_mode_panel_action_timeout_env_override_wins():
+    addon = _load_addon()
+    params = FakeParams({"ServerUrl": "https://cad.example.com"})
+
+    overlay = addon.remote_overlay_env(
+        base_env={"CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS": "45"}, params=params
+    )
+
+    assert overlay["CAD_PANEL_ACTION_HTTP_TIMEOUT_SECONDS"] == "45"
+
+
 def test_remote_mode_preserves_other_base_env_keys():
     addon = _load_addon()
     params = FakeParams({"ServerUrl": "https://cad.example.com"})
