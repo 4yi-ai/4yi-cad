@@ -1,0 +1,8 @@
+id: b1-002
+domain: building
+tier: t1
+prompt: "生成一栋现代办公楼"
+expected_typology: office_tower
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 30

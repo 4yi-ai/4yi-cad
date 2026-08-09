@@ -46,6 +46,7 @@ def test_load_case_defaults(tmp_path):
     )
     case = load_case(path)
     assert case.required_roles == ()
+    assert case.required_elements == ()
     assert case.min_objects is None
     assert case.smoke is False
     assert case.timeout_s == 900
@@ -57,6 +58,8 @@ def test_load_case_defaults(tmp_path):
         "id: x\ndomain: nope\ntier: t1\nprompt: p\n",
         "id: x\ndomain: mechanical\ntier: t9\nprompt: p\n",
         "id: x\ndomain: site_layout\ntier: t1\nprompt: p\nrequired_roles: [castle]\n",
+        "id: x\ndomain: building\ntier: t1\nprompt: p\n",
+        "id: x\ndomain: building\ntier: t1\nprompt: p\nrequired_elements: [chimney]\n",
         "domain: mechanical\ntier: t1\nprompt: p\n",
         "id: x\ndomain: mechanical\ntier: t1\nprompt: ''\n",
     ],
@@ -91,16 +94,26 @@ def test_full_corpus_shape():
         for t in ("t1", "t2", "t3")
     }
     mech = [c for c in cases if c.domain == "mechanical"]
+    building = [c for c in cases if c.domain == "building"]
     assert len(by_tier_site["t1"]) == 24
     assert len(by_tier_site["t2"]) == 24
     assert len(by_tier_site["t3"]) == 16
     assert len(mech) == 20
+    assert {t: len([c for c in building if c.tier == t]) for t in ("t1", "t2", "t3")} == {
+        "t1": 3,
+        "t2": 3,
+        "t3": 3,
+    }
     smoke = [c.id for c in cases if c.smoke]
     assert sorted(smoke) == sorted(
         ["t1-001", "t1-002", "t1-003", "t1-004", "t2-001", "t2-002",
-         "t3-001", "m1-001", "m1-002", "m2-001"]
+         "t3-001", "b1-001", "b2-001", "b3-001", "m1-001", "m1-002", "m2-001"]
     )
     for c in cases:
         if c.domain == "site_layout":
             assert "plot" in c.required_roles and "building" in c.required_roles
             assert c.min_objects == (10 if c.tier == "t1" else 18)
+        if c.domain == "building":
+            assert {"building", "storey", "slab", "wall", "window", "door", "roof"} <= set(c.required_elements)
+            assert c.expected_typology in {"residential_tower", "office_tower", "villa"}
+            assert c.target_lod in {"lod200", "lod300"}

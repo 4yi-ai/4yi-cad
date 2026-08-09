@@ -61,6 +61,7 @@ from app.cad.freecad import (
     run_freecad_import_sandboxed,
     run_freecad_sandboxed,
 )
+from app.cad.building_audit import building_audit_from_summary, building_failure_message
 from app.cad.script_params import (
     ScriptParameterPatch,
     apply_script_parameter_patches,
@@ -1446,7 +1447,7 @@ def _freecad_panel_agent_prompt(req: FreeCadPanelActionRequest) -> str:
     document_tree = metadata.get("document_tree") if isinstance(metadata, dict) else None
     return "\n".join(
         [
-            "Use FreeCAD and call run_freecad with a complete script.",
+            "Use FreeCAD. For a single residential building call build_building with a validated specification; otherwise call run_freecad with a complete script.",
             "Create or update the remote FreeCAD document, and make sure the result exports an FCStd artifact.",
             "User request:",
             (req.prompt or "").strip(),
@@ -1484,6 +1485,7 @@ async def _collect_freecad_panel_generation(app: FastAPI, req: FreeCadPanelActio
         execute=execute,
         execute_freecad=freecad_execute,
         engine_hint="freecad",
+        intent_prompt=prompt,
         history=[],
     ):
         events.append(event)
@@ -1704,6 +1706,13 @@ async def default_freecad_execute(script: str) -> ExecResult:
 
     inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
     document_summary = inspection.get("document_summary") if inspection.get("ok") else None
+    building_audit = building_audit_from_summary(document_summary)
+    if building_audit:
+        result.diagnostics["building_audit"] = building_audit
+        if building_audit.get("status") != "pass":
+            result.ok = False
+            result.error = building_failure_message(building_audit)
+            return result
     audit = site_layout_audit_from_summary(document_summary)
     needs_repair = site_layout_needs_repair(document_summary)
     if audit:

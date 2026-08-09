@@ -1,0 +1,8 @@
+id: b1-003
+domain: building
+tier: t1
+prompt: "设计一座有明显三维层次的现代别墅"
+expected_typology: villa
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 20

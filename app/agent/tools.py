@@ -6,6 +6,8 @@ parametric solids; FreeCAD is available for workflows that need FreeCAD's docume
 model or import/export surface.
 """
 
+from app.cad.building_spec import BuildingSpec
+
 RUN_CADQUERY_TOOL = {
     "type": "function",
     "function": {
@@ -62,11 +64,38 @@ RUN_FREECAD_TOOL = {
     },
 }
 
-MVP_TOOLS = [RUN_CADQUERY_TOOL, RUN_FREECAD_TOOL]
+def _building_parameters_schema() -> dict:
+    schema = BuildingSpec.model_json_schema()
+    schema["properties"]["typology"] = {
+        "type": "string",
+        "const": "residential_tower",
+        "description": "The currently supported deterministic building template.",
+    }
+    return schema
+
+
+BUILD_BUILDING_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "build_building",
+        "description": (
+            "Generate a professional editable residential tower from a validated "
+            "4yi-cad.building/v1 specification. Use this instead of writing arbitrary "
+            "FreeCAD Python for a single residential building or an underspecified "
+            "request such as 'generate a building'. The service owns deterministic "
+            "BIM hierarchy, walls, slabs, windows, doors, core, stairs, roof, materials, "
+            "and clean geometry. Explicit user dimensions override conservative defaults."
+        ),
+        "parameters": _building_parameters_schema(),
+    },
+}
+
+
+MVP_TOOLS = [RUN_CADQUERY_TOOL, RUN_FREECAD_TOOL, BUILD_BUILDING_TOOL]
 
 SYSTEM_PROMPT = """You are a CAD engineer building for FreeCAD users. Turn the user's
 request into a parametric CAD model, part, or layout by calling exactly one CAD
-execution tool. Do not explain in prose - call either run_cadquery or run_freecad.
+execution tool. Do not explain in prose - call run_cadquery, run_freecad, or build_building.
 
 Engine choice:
 - Prefer run_cadquery for ordinary single-part parametric solids: brackets,
@@ -81,6 +110,12 @@ Engine choice:
 - Use run_freecad for mechanical assemblies with multiple named parts, linkages,
   landing gear, suspension systems, hydraulic cylinders/actuators, hinge brackets,
   pins, bearings, or wheel-and-strut assemblies.
+- Use build_building for a single residential tower or an underspecified request
+  such as "generate a building" / "生成一栋楼房". Supply only the validated
+  building specification; never put Python source in this tool. Explicit user
+  dimensions win, and omitted fields use conservative LOD 200 assumptions.
+- Until dedicated templates are available, use run_freecad for office towers and
+  villas while following the single-building planning contract.
 
 Hard rules:
 - All dimensions are in millimetres. If the user gives metres/meters, convert to

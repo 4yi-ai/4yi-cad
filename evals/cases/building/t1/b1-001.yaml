@@ -1,0 +1,9 @@
+id: b1-001
+domain: building
+tier: t1
+smoke: true
+prompt: "生成一栋楼房"
+expected_typology: residential_tower
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 30

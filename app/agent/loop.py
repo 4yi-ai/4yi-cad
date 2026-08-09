@@ -21,8 +21,14 @@ import re
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Awaitable, Callable
 
+from app.agent.building import (
+    augment_prompt_with_building_plan,
+    infer_building_typology,
+    is_building_prompt,
+)
 from app.agent.site_layout import augment_prompt_with_site_layout_plan, is_site_layout_prompt
 from app.agent.tools import MVP_TOOLS, SYSTEM_PROMPT
+from app.cad.building_templates import building_script
 from app.cad.script_params import extract_script_parameters
 
 DEFAULT_MAX_ATTEMPTS = 3
@@ -44,18 +50,16 @@ class ExecResult:
 
 Executor = Callable[[str], Awaitable[ExecResult]]
 
-_CAD_TOOL_NAMES = {"run_cadquery": "cadquery", "run_freecad": "freecad"}
+_CAD_TOOL_NAMES = {
+    "run_cadquery": "cadquery",
+    "run_freecad": "freecad",
+    "build_building": "freecad",
+}
 _REQUIRE_CAD_TOOL = "required"
 _FREECAD_HINT_RE = re.compile(
     r"\b(freecad|fcstd|techdraw|bim|site|community|campus|neighbou?rhood|"
     r"master\s+plan|building\s+layout|architectural\s+massing|massing)\b|"
     r"小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|道路|景观"
-)
-_SITE_LAYOUT_HINT_RE = re.compile(
-    r"\b(site|community|campus|neighbou?rhood|master\s+plan|building\s+layout|"
-    r"architectural\s+massing|massing|plot|parcel|residential\s+complex|"
-    r"high[-\s]*rise|tower|villa)\b|"
-    r"小区|社区|园区|场地|地块|总图|建筑布局|建筑群|楼栋|道路|景观|高层|别墅"
 )
 _MECHANICAL_ASSEMBLY_HINT_RE = re.compile(
     r"\b(mechanical\s+assembly|landing\s+gear|nose\s+gear|main\s+gear|"
@@ -72,6 +76,15 @@ _ROLE_TEXT_PATTERNS = (
     ("planning_metrics", r"planning\s*metrics?|far|coverage|指标|容积率|覆盖率"),
     ("boundary_wall", r"boundary\s*wall|perimeter\s*wall|围墙|边界墙"),
     ("plot_boundary", r"redline|red\s*line|plot\s*boundary|parcel\s*boundary|boundary|红线|用地线|地界|边界"),
+    ("storey", r"storey|story|floor\s*\d+|楼层|层级"),
+    ("slab", r"floor\s*slab|roof\s*slab|slab|楼板|底板"),
+    ("wall", r"exterior\s*wall|interior\s*wall|wall|外墙|内墙|墙体"),
+    ("window", r"window|glazing|curtain\s*wall|窗|玻璃幕墙"),
+    ("door", r"door|门"),
+    ("core", r"service\s*core|elevator\s*core|core|核心筒|电梯井"),
+    ("stair", r"stair|staircase|楼梯"),
+    ("roof", r"roof|parapet|penthouse|屋顶|女儿墙|机房"),
+    ("space", r"space|room|apartment|office\s*space|房间|户型|办公室"),
     ("building_articulation", r"facade|fin|balcony|floor\s*band|story\s*band|roof\s*cap|立面|阳台|百叶|楼层线|屋顶"),
     ("entrance_system", r"entrance|gate|guard|dropoff|canopy|入口|大门|门岗|落客|雨棚"),
     ("fire_access", r"fire\s*road|fire\s*lane|消防|消防车道"),
@@ -96,6 +109,10 @@ _SITE_ROLE_GROUPS = {
 # Public aliases for eval scoring (app/evals/scoring.py) — same taxonomy the
 # in-loop site-layout quality gate uses.
 SITE_ROLE_GROUPS = _SITE_ROLE_GROUPS
+BUILDING_ROLE_GROUPS = {
+    role: {role}
+    for role in ("building", "storey", "slab", "wall", "window", "door", "core", "stair", "roof", "space")
+}
 
 
 def scene_role_set(scene: dict) -> set[str]:
@@ -123,11 +140,20 @@ def _tool_choice_for_engine(engine: str) -> dict:
     return {"type": "function", "function": {"name": _tool_name_for(engine)}}
 
 
+def _tool_choice_for_name(name: str) -> dict:
+    return {"type": "function", "function": {"name": name}}
+
+
 def _script_of(call) -> str | None:
     try:
         args = json.loads(call.get("function", {}).get("arguments") or "{}")
     except json.JSONDecodeError:
         return None
+    if call.get("function", {}).get("name") == "build_building":
+        try:
+            return building_script(args)
+        except (TypeError, ValueError, NotImplementedError):
+            return None
     script = args.get("script")
     return script if isinstance(script, str) and script.strip() else None
 
@@ -158,14 +184,11 @@ def infer_engine_hint(prompt: str) -> str | None:
     return (
         "freecad"
         if is_site_layout_prompt(prompt)
+        or is_building_prompt(prompt)
         or _FREECAD_HINT_RE.search(normalized)
         or _MECHANICAL_ASSEMBLY_HINT_RE.search(normalized)
         else None
     )
-
-
-def is_site_layout_prompt(prompt: str) -> bool:
-    return bool(_SITE_LAYOUT_HINT_RE.search((prompt or "").lower()))
 
 
 def _viewer_scene_from_result(result: ExecResult) -> dict | None:
@@ -243,19 +266,44 @@ async def run_generation(
     system_prompt: str = SYSTEM_PROMPT,
     tools: list[dict] | None = None,
     engine_hint: str | None = None,
+    intent_prompt: str | None = None,
     tool_choice=None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> AsyncIterator[dict]:
     tools = tools if tools is not None else MVP_TOOLS
-    forced_engine = engine_hint if engine_hint in {"cadquery", "freecad"} else infer_engine_hint(prompt)
+    classification_prompt = intent_prompt if intent_prompt is not None else prompt
+    forced_engine = (
+        engine_hint
+        if engine_hint in {"cadquery", "freecad"}
+        else infer_engine_hint(classification_prompt)
+    )
+    use_building_tool = (
+        is_building_prompt(classification_prompt)
+        and not is_site_layout_prompt(classification_prompt)
+        and infer_building_typology(classification_prompt) == "residential_tower"
+    )
+    forced_tool_name = (
+        "build_building"
+        if use_building_tool
+        else (_tool_name_for(forced_engine) if forced_engine else None)
+    )
     tool_choice = (
-        _tool_choice_for_engine(forced_engine)
-        if forced_engine
+        _tool_choice_for_name(forced_tool_name)
+        if forced_tool_name
         else (_REQUIRE_CAD_TOOL if tool_choice is None else tool_choice)
     )
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     messages.extend(sanitize_chat_history(history))
-    messages.append({"role": "user", "content": augment_prompt_with_site_layout_plan(prompt)})
+    planned_prompt = (
+        augment_prompt_with_site_layout_plan(prompt)
+        if is_site_layout_prompt(classification_prompt)
+        else (
+            augment_prompt_with_building_plan(prompt)
+            if is_building_prompt(classification_prompt)
+            else prompt
+        )
+    )
+    messages.append({"role": "user", "content": planned_prompt})
 
     yield {"type": "status", "message": "thinking"}
 
@@ -271,8 +319,9 @@ async def run_generation(
 
         if script is None:
             # Model replied without a usable tool call; nudge and retry.
-            required = _tool_name_for(forced_engine) if forced_engine else "run_cadquery or run_freecad"
-            last_error = f"you must call {required} with a complete script"
+            required = forced_tool_name or "run_cadquery, run_freecad, or build_building"
+            requirement = "a valid building specification" if required == "build_building" else "a complete script"
+            last_error = f"you must call {required} with {requirement}"
             if attempt < max_attempts:
                 yield {"type": "retry", "attempt": attempt, "message": last_error}
                 messages.append({"role": "assistant", "content": completion.content or ""})
@@ -281,9 +330,17 @@ async def run_generation(
             break
 
         engine = _engine_of(call)
-        if forced_engine and engine != forced_engine:
-            required = _tool_name_for(forced_engine)
-            last_error = f"this request must use {required}; call {required} with a complete script"
+        called_tool_name = call.get("function", {}).get("name")
+        if forced_tool_name and called_tool_name != forced_tool_name:
+            requirement = (
+                "a valid building specification"
+                if forced_tool_name == "build_building"
+                else "a complete script"
+            )
+            last_error = (
+                f"this request must use {forced_tool_name}; "
+                f"call {forced_tool_name} with {requirement}"
+            )
             if attempt < max_attempts:
                 yield {"type": "retry", "attempt": attempt, "message": last_error}
                 messages.append({"role": "assistant", "content": completion.content or ""})
@@ -291,7 +348,7 @@ async def run_generation(
                 continue
             break
 
-        tool_name = _tool_name_for(engine)
+        tool_name = called_tool_name or _tool_name_for(engine)
         yield {
             "type": "script",
             "script": script,
@@ -314,7 +371,7 @@ async def run_generation(
         result.engine = engine
 
         if result.ok:
-            quality_error = site_layout_quality_error(prompt, engine, result)
+            quality_error = site_layout_quality_error(classification_prompt, engine, result)
             if quality_error:
                 last_error = quality_error
                 if attempt < max_attempts:

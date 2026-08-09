@@ -1,0 +1,10 @@
+id: b2-001
+domain: building
+tier: t2
+smoke: true
+prompt: "生成一栋18层住宅塔楼，平面30米×18米，首层4.2米，标准层3米"
+expected_typology: residential_tower
+expected_storeys: 18
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 50

@@ -599,6 +599,13 @@ SEMANTIC_VIEWER_STYLES = (
     ("planning_metrics", (r"far", r"planning\s*metrics?", r"coverage", r"指标", r"容积率", r"覆盖率"), "#475569", "#1e293b", "#1e293b", 0.34, "reference", 10, False, False),
     ("boundary_wall", (r"boundary\s*wall", r"perimeter\s*wall", r"围墙", r"边界墙"), "#64748b", "#334155", "#334155", 0.46, "site_boundary", 24, True, False),
     ("plot_boundary", (r"redline", r"red\s*line", r"plot\s*boundary", r"parcel\s*boundary", r"boundary", r"红线", r"用地线", r"地界", r"边界"), "#ef4444", "#b91c1c", "#dc2626", 0.28, "reference", 18, False, False),
+    ("window", (r"window", r"glazing", r"curtain\s*wall", r"窗", r"玻璃幕墙"), "#527f99", "#294a5d", "#365f73", 0.58, "envelope", 78, True, True),
+    ("door", (r"door", r"门扇", r"入口门"), "#505860", "#252b31", "#343b42", 0.9, "envelope", 80, True, True),
+    ("core", (r"service\s*core", r"elevator\s*core", r"core", r"核心筒", r"电梯井"), "#a8adb3", "#454b52", "#5d646c", 0.9, "structure", 68, True, True),
+    ("stair", (r"stair", r"staircase", r"楼梯"), "#bd9461", "#6f4d2d", "#8f6236", 0.9, "circulation", 69, True, True),
+    ("slab", (r"floor\s*slab", r"slab", r"楼板"), "#b8bdc2", "#4b5560", "#66717d", 0.92, "structure", 62, True, True),
+    ("wall", (r"exterior\s*wall", r"interior\s*wall", r"wall", r"外墙", r"内墙", r"墙体"), "#dfdbcf", "#59616a", "#707983", 0.94, "envelope", 74, True, True),
+    ("roof", (r"roof", r"parapet", r"penthouse", r"屋顶", r"女儿墙", r"机房"), "#858c93", "#333a42", "#4a535d", 0.94, "roof", 76, True, True),
     ("building_articulation", (r"facade", r"fin", r"balcony", r"floor\s*band", r"story\s*band", r"roof\s*cap", r"立面", r"阳台", r"百叶", r"楼层线", r"屋顶"), "#9fb2c7", "#334155", "#475569", 0.72, "model", 72, True, False),
     ("fire_access", (r"fire\s*road", r"fire\s*lane", r"消防", r"消防车道"), "#475569", "#1f2937", "#334155", 0.62, "circulation", 40, True, False),
     ("parking_underground", (r"parking", r"garage", r"underground", r"车库", r"停车", r"地下"), "#94a3b8", "#475569", "#64748b", 0.42, "subsurface", 28, True, False),
@@ -1711,7 +1718,10 @@ def object_summary(obj):
         "out_list": [object_ref(child) for child in list(getattr(obj, "OutList", []))[:40]],
         "properties": property_summary(obj),
     })
-    if shape is not None:
+    # Group/TechDraw/assembly helpers can expose an aggregate Shape after FCStd
+    # reload. Auditing that duplicate tree recursively is both misleading and
+    # extremely expensive for buildings with many storeys.
+    if shape is not None and not is_runtime_helper_object(obj):
         shape_info = shape_summary(shape)
         if shape_info is not None:
             item["shape"] = shape_info
@@ -4540,6 +4550,52 @@ def site_layout_audit(summaries, geometry):
     return report
 
 
+_AGGREGATE_SHAPE_TYPE_IDS = {
+    "app::part",
+    "app::documentobjectgroup",
+    "app::documentobjectgrouppython",
+    "partdesign::body",
+    "partdesign::part",
+    "arch::building",
+    "arch::buildingpart",
+    "bim::building",
+    "bim::buildingpart",
+}
+
+
+def geometry_leaf_summaries(summaries):
+    """Exclude container shapes that duplicate the geometry of their children.
+
+    App::Part, PartDesign::Body, and Arch/BIM containers may expose an aggregate
+    Shape as well as child Shapes. Counting both inflates volume and topology.
+    Ordinary Part booleans are intentionally retained because their OutList is a
+    dependency graph, not a spatial/container hierarchy.
+    """
+    shaped_names = {
+        safe_text(item.get("name"))
+        for item in list(summaries or [])
+        if isinstance(item, dict) and item.get("shape") and item.get("name")
+    }
+    leaves = []
+    for item in list(summaries or []):
+        if not isinstance(item, dict) or not item.get("shape"):
+            continue
+        type_id = safe_text(item.get("type_id")).lower()
+        is_container = type_id in _AGGREGATE_SHAPE_TYPE_IDS or (
+            ("buildingpart" in type_id or type_id.endswith("::building"))
+            and not type_id.startswith("part::")
+        )
+        child_names = {
+            safe_text(ref.get("name"))
+            for ref in list(item.get("out_list") or [])
+            if isinstance(ref, dict) and ref.get("name")
+        }
+        if is_container and child_names.intersection(shaped_names):
+            continue
+        leaves.append(item)
+    return leaves
+
+
 def document_summary(doc):
     if doc is None:
         document = None
@@ -4567,6 +4623,7 @@ def document_summary(doc):
     objects = list(getattr(doc, "Objects", []))
     summaries = [object_summary(obj) for obj in objects]
     summaries.extend(feature_fallback_summaries(doc))
+    geometry_summaries = geometry_leaf_summaries(summaries)
     sketches = [item["sketch"] for item in summaries if item.get("sketch")]
     assemblies = [assembly_summary(obj) for obj in objects if is_assembly_object(obj)]
     assemblies.extend(assembly_fallback_summaries(doc))
@@ -4583,6 +4640,9 @@ def document_summary(doc):
     totals = {
         "object_count": len(objects),
         "shape_object_count": 0,
+        "raw_shape_object_count": sum(1 for item in summaries if item.get("shape")),
+        "aggregate_shape_object_count": sum(1 for item in summaries if item.get("shape"))
+        - len(geometry_summaries),
         "solid_count": 0,
         "shell_count": 0,
         "face_count": 0,
@@ -4593,7 +4653,7 @@ def document_summary(doc):
     }
     max_tolerance = None
     failure_class = None
-    for item in summaries:
+    for item in geometry_summaries:
         shape = item.get("shape")
         if not shape:
             continue
@@ -9669,6 +9729,48 @@ try:
 except Exception:
     emit({"ok": False, "error": "freecad script error:\n" + traceback.format_exc(limit=4)})
 '''
+
+
+def geometry_leaf_summaries(summaries):
+    """Host-side mirror of the harness leaf-geometry classifier.
+
+    Keeping this helper importable makes the aggregation rule unit-testable
+    without requiring FreeCAD to be installed in the unit-test interpreter.
+    """
+    aggregate_type_ids = {
+        "app::part",
+        "app::documentobjectgroup",
+        "app::documentobjectgrouppython",
+        "partdesign::body",
+        "partdesign::part",
+        "arch::building",
+        "arch::buildingpart",
+        "bim::building",
+        "bim::buildingpart",
+    }
+    shaped_names = {
+        str(item.get("name"))
+        for item in list(summaries or [])
+        if isinstance(item, dict) and item.get("shape") and item.get("name")
+    }
+    leaves = []
+    for item in list(summaries or []):
+        if not isinstance(item, dict) or not item.get("shape"):
+            continue
+        type_id = str(item.get("type_id") or "").lower()
+        is_container = type_id in aggregate_type_ids or (
+            ("buildingpart" in type_id or type_id.endswith("::building"))
+            and not type_id.startswith("part::")
+        )
+        child_names = {
+            str(ref.get("name"))
+            for ref in list(item.get("out_list") or [])
+            if isinstance(ref, dict) and ref.get("name")
+        }
+        if is_container and child_names.intersection(shaped_names):
+            continue
+        leaves.append(item)
+    return leaves
 
 
 def resolve_freecadcmd() -> str | None:

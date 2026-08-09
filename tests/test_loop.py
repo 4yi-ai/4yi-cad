@@ -11,8 +11,9 @@ import base64
 import copy
 import json
 
-from app.agent.tools import RUN_FREECAD_TOOL, SYSTEM_PROMPT
+from app.agent.tools import BUILD_BUILDING_TOOL, RUN_FREECAD_TOOL, SYSTEM_PROMPT
 from app.agent.loop import ExecResult, infer_engine_hint, run_generation, site_layout_quality_error
+from app.cad.building_spec import default_building_spec
 from app.gateway import ChatCompletion
 
 
@@ -54,6 +55,22 @@ def _tool_call(
 
 def _no_tool(content: str) -> ChatCompletion:
     return ChatCompletion(content=content, tool_calls=[])
+
+
+def _building_tool_call(call_id: str = "building_1") -> ChatCompletion:
+    return ChatCompletion(
+        content=None,
+        tool_calls=[
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {
+                    "name": "build_building",
+                    "arguments": json.dumps(default_building_spec().model_dump()),
+                },
+            }
+        ],
+    )
 
 
 def _viewer_scene_b64(*roles: str, object_count: int = 18) -> str:
@@ -104,6 +121,13 @@ def test_system_prompt_supports_freecad_site_layouts():
     assert "multi-object site/building layouts" in freecad_description
 
 
+def test_system_prompt_exposes_deterministic_building_tool():
+    assert BUILD_BUILDING_TOOL["function"]["name"] == "build_building"
+    schema = BUILD_BUILDING_TOOL["function"]["parameters"]
+    assert schema["properties"]["typology"]["const"] == "residential_tower"
+    assert "Use build_building for a single residential tower" in SYSTEM_PROMPT
+
+
 def test_system_prompt_supports_freecad_mechanical_assemblies():
     freecad_description = RUN_FREECAD_TOOL["function"]["description"]
 
@@ -122,6 +146,48 @@ def test_site_community_prompts_infer_freecad_engine_hint():
     assert infer_engine_hint("make a 3-floor villa on a 100x100m site") == "freecad"
     assert infer_engine_hint("设计一个带水景和楼栋的小区总图") == "freecad"
     assert infer_engine_hint("make a cube") is None
+
+
+def test_single_building_prompts_infer_freecad_without_becoming_site_layout():
+    from app.agent.site_layout import is_site_layout_prompt
+
+    for prompt in ("生成一栋楼房", "设计一栋办公楼", "make a 12-storey residential tower"):
+        assert infer_engine_hint(prompt) == "freecad"
+        assert is_site_layout_prompt(prompt) is False
+
+
+async def test_single_building_prompt_injects_validated_contract():
+    gw = FakeGateway(_building_tool_call())
+    executed = []
+
+    async def execute(script):
+        return ExecResult(ok=True)
+
+    async def execute_freecad(script):
+        executed.append(script)
+        return ExecResult(ok=True, engine="freecad", exports={"fcstd": "F"})
+
+    await _collect(
+        run_generation(
+            "生成一栋楼房",
+            gateway=gw,
+            execute=execute,
+            execute_freecad=execute_freecad,
+        )
+    )
+
+    user_message = gw.calls[0]["messages"][-1]["content"]
+    assert "Single-building LOD planning contract" in user_message
+    assert '"schema_version":"4yi-cad.building/v1"' in user_message
+    assert '"typology":"residential_tower"' in user_message
+    assert "Project/Site/Building/Storey" in user_message
+    assert "zero OCC check errors" in user_message
+    assert gw.calls[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "build_building"},
+    }
+    assert len(executed) == 1
+    assert 'FreeCAD.newDocument("FourYiResidentialTower")' in executed[0]
 
 
 async def test_site_prompt_injects_component_planner_message():

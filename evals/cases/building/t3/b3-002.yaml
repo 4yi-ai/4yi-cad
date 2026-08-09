@@ -1,0 +1,9 @@
+id: b3-002
+domain: building
+tier: t3
+prompt: "Create a measurable LOD 300 10-storey office building with 8.4m structural grid, 3.9m floors, central service core, stairs, elevators, curtain wall bays and roof plant"
+expected_typology: office_tower
+expected_storeys: 10
+target_lod: lod300
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof, space]
+min_objects: 60

@@ -1,0 +1,9 @@
+id: b2-002
+domain: building
+tier: t2
+prompt: "Create a 12-storey office tower, 36m by 24m, with a central core and curtain wall facade"
+expected_typology: office_tower
+expected_storeys: 12
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 40

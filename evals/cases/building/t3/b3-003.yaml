@@ -1,0 +1,9 @@
+id: b3-003
+domain: building
+tier: t3
+prompt: "设计两层专业BIM别墅模型，包含可识别房间、承重墙、楼板、门窗、楼梯、坡屋顶、露台和材质分类"
+expected_typology: villa
+expected_storeys: 2
+target_lod: lod300
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof, space]
+min_objects: 30

@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.agent.loop import SITE_ROLE_GROUPS, scene_role_set
+from app.agent.loop import BUILDING_ROLE_GROUPS, SITE_ROLE_GROUPS, scene_role_set
 from app.evals.corpus import EvalCase
 from app.evals.geometry import GeometryReport, check_artifacts
 
@@ -38,19 +38,21 @@ def _load_scene(run_dir: Path) -> dict | None:
 
 
 def _score_l3(case: EvalCase, run_dir: Path, details: dict) -> bool | None:
-    if case.domain != "site_layout":
+    if case.domain not in {"site_layout", "building"}:
         return None
     scene = _load_scene(run_dir)
     if scene is None:
-        details["l3_missing_roles"] = list(case.required_roles)
+        details["l3_missing_roles"] = list(case.required_roles or case.required_elements)
         details["l3_reason"] = "no viewer_scene artifact"
         return False
     objects = scene.get("objects") if isinstance(scene.get("objects"), list) else []
     roles = scene_role_set(scene)
+    required = case.required_roles if case.domain == "site_layout" else case.required_elements
+    role_groups = SITE_ROLE_GROUPS if case.domain == "site_layout" else BUILDING_ROLE_GROUPS
     missing = [
         group
-        for group in case.required_roles
-        if not (roles & SITE_ROLE_GROUPS.get(group, {group}))
+        for group in required
+        if not (roles & role_groups.get(group, {group}))
     ]
     details["l3_object_count"] = len(objects)
     details["l3_roles_found"] = sorted(roles)

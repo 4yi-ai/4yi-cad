@@ -7,7 +7,7 @@ import re
 
 SITE_LAYOUT_PROMPT_RE = re.compile(
     r"\b(site|community|campus|neighbou?rhood|master\s*plan|residential\s*layout|"
-    r"high[-\s]*end\s*community|villa|clubhouse|playground|artificial\s*lake)\b|"
+    r"high[-\s]*end\s*community|clubhouse|playground|artificial\s*lake)\b|"
     r"小区|社区|园区|地块|场地|总图|别墅|高层|会所|儿童|游乐|人工湖|景观|消防|地库"
 )
 

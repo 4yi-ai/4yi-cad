@@ -1,0 +1,10 @@
+id: b3-001
+domain: building
+tier: t3
+smoke: true
+prompt: "生成18层住宅塔楼：混凝土框架核心筒，6米柱网，两部楼梯两部电梯，窗墙比40%，带阳台、入口雨棚和屋顶机房"
+expected_typology: residential_tower
+expected_storeys: 18
+target_lod: lod300
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof, space]
+min_objects: 60

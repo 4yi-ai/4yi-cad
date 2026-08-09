@@ -1,0 +1,9 @@
+id: b2-003
+domain: building
+tier: t2
+prompt: "生成一栋两层现代别墅，14米×10米，坡屋顶，入口雨棚和二层露台"
+expected_typology: villa
+expected_storeys: 2
+target_lod: lod200
+required_elements: [building, storey, slab, wall, window, door, core, stair, roof]
+min_objects: 24
