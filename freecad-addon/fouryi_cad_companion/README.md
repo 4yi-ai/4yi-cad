@@ -15,15 +15,28 @@ It has two modes:
 
 ## Manual Install
 
-Copy this directory to the FreeCAD user `Mod` directory:
+The current source of truth is the
+[`4yi-ai/4yi-cad`](https://github.com/4yi-ai/4yi-cad) repository. Do not install
+from the old standalone `4yi-ai/cad-addon` repository: it is not automatically
+synchronized with this repository.
 
-```text
-macOS: ~/Library/Application Support/FreeCAD/Mod/fouryi_cad_companion
-Linux: ~/.local/share/FreeCAD/Mod/fouryi_cad_companion
-Windows: %APPDATA%/FreeCAD/Mod/fouryi_cad_companion
-```
+1. In FreeCAD, open **Tools → Addon Manager**.
+2. Click the gear at the bottom-left and choose **Open Addons Folder**. Use the
+   directory that FreeCAD opens; recent versions can use a versioned path such
+   as `v1-1/Mod`.
+3. Download the
+   [main-branch source ZIP](https://github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip)
+   and extract it.
+4. Completely quit FreeCAD. In the extracted archive, copy
+   `4yi-cad-main/freecad-addon/fouryi_cad_companion` into the Addons folder from
+   step 2. When upgrading, back up and replace the existing
+   `fouryi_cad_companion` directory.
+5. Restart FreeCAD and switch to the **4yi CAD** workbench.
+6. Open **4yi Support Bundle** and verify that `addon_version` matches the
+   version in [`package.xml`](package.xml) (currently `0.5.2`).
 
-Restart FreeCAD and switch to the `4yi CAD` workbench.
+The folder name must remain exactly `fouryi_cad_companion`; avoid an extra
+archive nesting level such as `fouryi_cad_companion/fouryi_cad_companion`.
 
 ## Remote Bridge Environment
 

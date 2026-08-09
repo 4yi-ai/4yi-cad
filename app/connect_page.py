@@ -10,8 +10,8 @@ The page does two things:
      fetches with `credentials: "same-origin"`, no bearer token needed since
      those endpoints sit behind the platform SSO edge, not GUARDED_PREFIXES.
   2. Documents how to install the `fouryi_cad_companion` FreeCAD addon from
-     the standalone `cad-addon` repo (custom-repository or zip fallback) and
-     how to point it at this instance once P2 ships the connection dialog.
+     this repository's source archive into the exact Addons folder reported by
+     FreeCAD, and how to point it at this instance.
 """
 
 from __future__ import annotations
@@ -124,9 +124,6 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
   }
   ol { padding-left: 1.3rem; }
   ol li { margin-bottom: 0.4rem; }
-  ul.mod-paths { list-style: none; padding: 0; margin: 0.5rem 0 0; }
-  ul.mod-paths li { margin-bottom: 0.4rem; }
-  ul.mod-paths span.os-label { display: inline-block; min-width: 84px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -177,34 +174,27 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
   <section class="panel">
     <h2>安装指引</h2>
 
-    <p><strong>方式一:Addon Manager 自定义仓库(推荐)</strong></p>
+    <p><strong>源码 zip 手工安装(当前推荐)</strong></p>
+    <p class="muted">
+      当前要求插件版本 <code>0.5.2</code>。请勿从旧的
+      <code>4yi-ai/cad-addon</code> 自定义仓库安装,该分发源尚未与主仓自动同步。
+    </p>
     <ol>
-      <li>在 FreeCAD 菜单栏打开「编辑」→「首选项」→「Addon Manager」;</li>
-      <li>找到「Custom repositories」,点击「添加」;</li>
-      <li>填入仓库地址:
+      <li>在 FreeCAD 打开「工具」→「Addon Manager」,点击窗口左下角齿轮,
+        选择「Open Addons Folder」打开实际插件目录。FreeCAD 1.1 可能使用
+        <code>v1-1/Mod</code> 等版本化目录,请以这里打开的位置为准。</li>
+      <li>下载 4yi CAD 主仓源码 zip:
         <div class="row">
-          <pre id="repo-url" style="flex:1 1 auto; margin:0;">https://github.com/4yi-ai/cad-addon</pre>
-          <button type="button" id="copy-repo-btn">复制</button>
+          <pre id="source-zip-url" style="flex:1 1 auto; margin:0;">https://github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip</pre>
+          <button type="button" id="copy-source-zip-btn">复制</button>
         </div>
       </li>
-      <li>保存后回到 Addon Manager,点击「刷新」;</li>
-      <li>搜索「4yi CAD Companion」并安装,按提示重启 FreeCAD。</li>
-    </ol>
-
-    <p><strong>方式二:zip 兜底安装</strong></p>
-    <p class="muted">适用于无法访问 git 仓库的内网环境。</p>
-    <ol>
-      <li>下载 zip:
-        <pre>https://github.com/4yi-ai/cad-addon/archive/refs/heads/main.zip</pre>
-      </li>
-      <li>解压后,将文件夹内容放入 FreeCAD 的 Mod 目录:
-        <ul class="mod-paths">
-          <li><span class="os-label">Linux</span><code>~/.local/share/FreeCAD/Mod</code></li>
-          <li><span class="os-label">Windows</span><code>%APPDATA%\FreeCAD\Mod</code></li>
-          <li><span class="os-label">macOS</span><code>~/Library/Application Support/FreeCAD/Mod</code></li>
-        </ul>
-      </li>
-      <li>重启 FreeCAD。</li>
+      <li>解压 zip,找到
+        <code>4yi-cad-main/freecad-addon/fouryi_cad_companion</code>。</li>
+      <li>完全退出 FreeCAD。将整个 <code>fouryi_cad_companion</code> 文件夹复制到
+        第 1 步打开的 Addons 目录;升级时先备份旧文件夹,然后替换。</li>
+      <li>重新启动 FreeCAD,在工作台下拉框选择「4yi CAD」。打开「支持包」并确认
+        <code>addon_version</code> 为 <code>0.5.2</code>。</li>
     </ol>
   </section>
 
@@ -226,7 +216,7 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
       </tbody>
     </table>
     <p class="muted" style="margin-top:0.75rem;">
-      注:「连接设置」对话框随插件后续版本交付后生效;当前版本可先按上述信息记录备用。
+      点击「测试连接」确认地址可达,再点击「保存」;保存后完全退出并重新启动 FreeCAD 生效。
     </p>
   </section>
 </main>
@@ -387,8 +377,8 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
   document.getElementById("copy-token-btn").addEventListener("click", function () {
     copyToClipboard(document.getElementById("token-value").textContent, this);
   });
-  document.getElementById("copy-repo-btn").addEventListener("click", function () {
-    copyToClipboard(document.getElementById("repo-url").textContent, this);
+  document.getElementById("copy-source-zip-btn").addEventListener("click", function () {
+    copyToClipboard(document.getElementById("source-zip-url").textContent, this);
   });
 
   fetchTokens();

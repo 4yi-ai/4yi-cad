@@ -3,7 +3,7 @@
 `/connect` is the "连接本地 FreeCAD" self-serve page: it lets a user issue and
 manage a per-install API token (P1 endpoints under `/api/tokens`, same-origin,
 SSO-protected — no bearer token needed) and walks them through installing the
-`fouryi_cad_companion` FreeCAD addon from the standalone `cad-addon` repo.
+`fouryi_cad_companion` FreeCAD addon from this repository's source archive.
 
 It deliberately is NOT under GUARDED_PREFIXES (see app/main.py) — it must be
 reachable the same way /api/tokens is: same-origin browser session, no bearer.
@@ -55,18 +55,20 @@ def test_connect_page_contains_title_and_key_content(tmp_path):
     body = resp.text
 
     assert "连接本地 FreeCAD" in body
-    assert "github.com/4yi-ai/cad-addon" in body
+    assert "github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip" in body
+    assert "Open Addons Folder" in body
+    assert "4yi-cad-main/freecad-addon/fouryi_cad_companion" in body
     assert "/api/tokens" in body
 
 
-def test_connect_page_lists_all_three_os_mod_paths(tmp_path):
+def test_connect_page_uses_freecad_reported_versioned_addons_folder(tmp_path):
     client = _local_client(tmp_path)
 
     body = client.get("/connect").text
 
-    assert ".local/share/FreeCAD/Mod" in body  # Linux
-    assert "%APPDATA%\\FreeCAD\\Mod" in body  # Windows
-    assert "Library/Application Support/FreeCAD/Mod" in body  # macOS
+    assert "Open Addons Folder" in body
+    assert "v1-1/Mod" in body
+    assert "Library/Application Support/FreeCAD/Mod" not in body
 
 
 def test_connect_page_not_blocked_by_bearer_guard_for_external_client(tmp_path):
@@ -91,10 +93,10 @@ def test_package_xml_declares_freecadmin_minimum_version():
     assert "<freecadmin>" in package_xml
 
 
-def test_package_xml_repository_url_points_at_cad_addon_repo():
+def test_package_xml_repository_url_points_at_source_repo():
     package_xml = (ROOT / "freecad-addon" / "fouryi_cad_companion" / "package.xml").read_text()
 
-    assert "4yi-ai/cad-addon" in package_xml
+    assert "4yi-ai/4yi-cad" in package_xml
     assert 'type="repository"' in package_xml
 
 

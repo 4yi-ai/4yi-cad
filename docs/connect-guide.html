@@ -299,47 +299,42 @@
 
     <li class="step">
       <div class="step-num">2</div>
-      <h3><span data-l="zh">用 Addon Manager 安装插件</span><span data-l="en">Install the add-on via Addon Manager</span></h3>
+      <h3><span data-l="zh">打开插件目录,安装主仓源码</span><span data-l="en">Open the Addons folder and install from source</span></h3>
       <p>
-        <span data-l="zh">在 FreeCAD 里打开 <span class="k">Tools → Addon Manager</span>,点右下角齿轮进入 Preferences,在 <span class="k">Custom repositories</span> 里添加下面这个仓库地址,然后「添加」。</span>
-        <span data-l="en">In FreeCAD open <span class="k">Tools → Addon Manager</span>, click the gear at the bottom-right to open Preferences, and under <span class="k">Custom repositories</span> add the repository URL below, then "Add".</span>
+        <span data-l="zh">在 FreeCAD 打开 <span class="k">Tools → Addon Manager</span>,点窗口左下角齿轮,选择 <span class="k">Open Addons Folder</span>。请使用 FreeCAD 实际打开的目录;FreeCAD 1.1 可能使用 <code>v1-1/Mod</code> 这样的版本化路径。</span>
+        <span data-l="en">In FreeCAD open <span class="k">Tools → Addon Manager</span>, click the gear at the bottom-left, then choose <span class="k">Open Addons Folder</span>. Use the exact directory FreeCAD opens; FreeCAD 1.1 may use a versioned path such as <code>v1-1/Mod</code>.</span>
       </p>
       <div class="field">
-        <span class="lbl"><span data-l="zh">自定义仓库</span><span data-l="en">Custom repo</span></span>
-        <code id="v-repo">https://github.com/4yi-ai/cad-addon</code>
-        <button class="copy" data-copy="v-repo"><span data-l="zh">复制</span><span data-l="en">Copy</span></button>
+        <span class="lbl"><span data-l="zh">源码 ZIP</span><span data-l="en">Source ZIP</span></span>
+        <code id="v-source-zip">https://github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip</code>
+        <button class="copy" data-copy="v-source-zip"><span data-l="zh">复制</span><span data-l="en">Copy</span></button>
       </div>
       <div class="mock">
-        <div class="title-bar"><span>Addon manager · Custom repositories</span><span class="x">⚙</span></div>
+        <div class="title-bar"><span>Addon Manager</span><span class="x">⚙</span></div>
         <div class="body">
-          <div class="mlabel">Repository URL</div>
-          <div class="input"><span>https://github.com/4yi-ai/cad-addon</span></div>
-          <div class="mlabel">Branch</div>
-          <div class="input"><span class="ph"><span data-l="zh">main（留空即可）</span><span data-l="en">main (leave empty)</span></span></div>
-          <div class="btnrow"><span class="btn pri">Add</span></div>
+          <div class="mlabel"><span data-l="zh">齿轮菜单</span><span data-l="en">Gear menu</span></div>
+          <div class="menu">
+            <div class="hot">Open Addons Folder</div>
+            <div>Open Python Dependencies</div>
+          </div>
         </div>
       </div>
       <p>
-        <span data-l="zh">回到 Addon Manager 列表,点「刷新」,搜索 <span class="chip">4yi CAD Companion</span> → 安装 → 按提示重启 FreeCAD。</span>
-        <span data-l="en">Back in the Addon Manager list, click "Refresh", search for <span class="chip">4yi CAD Companion</span> → Install → restart FreeCAD when prompted.</span>
+        <span data-l="zh">下载并解压 ZIP,找到 <code>4yi-cad-main/freecad-addon/fouryi_cad_companion</code>。完全退出 FreeCAD,备份旧目录后,把整个 <code>fouryi_cad_companion</code> 文件夹复制到刚才打开的 Addons 目录。</span>
+        <span data-l="en">Download and extract the ZIP, then locate <code>4yi-cad-main/freecad-addon/fouryi_cad_companion</code>. Completely quit FreeCAD, back up the old directory, and copy the whole <code>fouryi_cad_companion</code> folder into the Addons directory you just opened.</span>
       </p>
-      <div class="note tip"><span class="ic">i</span><span>
-        <span data-l="zh">内网 / 无 git 环境?改用 zip 兜底:下载 <code>cad-addon</code> 的 zip,解压到对应系统的 <b>Mod</b> 目录后重启 FreeCAD。</span>
-        <span data-l="en">On an intranet / no-git environment? Use the zip fallback: download the <code>cad-addon</code> zip and unzip it into your OS's <b>Mod</b> directory, then restart FreeCAD.</span>
+      <div class="note warn"><span class="ic">!</span><span>
+        <span data-l="zh">当前要求插件版本 <code>0.5.2</code>。不要从旧的 <code>4yi-ai/cad-addon</code> 仓库安装:该分发源尚未与主仓自动同步。文件夹名称必须保持为 <code>fouryi_cad_companion</code>,不要多套一层目录。</span>
+        <span data-l="en">The required add-on version is currently <code>0.5.2</code>. Do not install from the old <code>4yi-ai/cad-addon</code> repository: that distribution source is not automatically synchronized with the main repository. Keep the folder name exactly <code>fouryi_cad_companion</code> and avoid an extra nesting level.</span>
       </span></div>
-      <div class="os">
-        <div class="row"><span class="plat">🐧 Linux</span><code>~/.local/share/FreeCAD/Mod</code></div>
-        <div class="row"><span class="plat">🪟 Windows</span><code>%APPDATA%\FreeCAD\Mod</code></div>
-        <div class="row"><span class="plat">🍎 macOS</span><code>~/Library/Application Support/FreeCAD/Mod</code></div>
-      </div>
     </li>
 
     <li class="step">
       <div class="step-num">3</div>
       <h3><span data-l="zh">重启,切换到 4yi 工作台</span><span data-l="en">Restart, switch to the 4yi workbench</span></h3>
       <p>
-        <span data-l="zh">重启后,点左上角的 <span class="k">工作台(Workbench)下拉框</span>,选择 <span class="chip">4yi CAD Companion</span>。连接设置和 AI 面板都在这个工作台里——<span class="k">不在 Tools 菜单</span>。</span>
-        <span data-l="en">After restarting, click the <span class="k">Workbench dropdown</span> at the top-left and pick <span class="chip">4yi CAD Companion</span>. The connection settings and AI panel live in this workbench — <span class="k">not in the Tools menu</span>.</span>
+        <span data-l="zh">重启后,点左上角的 <span class="k">工作台(Workbench)下拉框</span>,选择 <span class="chip">4yi CAD</span>。连接设置和 AI 面板都在这个工作台里——<span class="k">不在 Tools 菜单</span>。打开「4yi 支持包」并确认 <code>addon_version</code> 为 <code>0.5.2</code>。</span>
+        <span data-l="en">After restarting, click the <span class="k">Workbench dropdown</span> at the top-left and pick <span class="chip">4yi CAD</span>. The connection settings and AI panel live in this workbench — <span class="k">not in the Tools menu</span>. Open "4yi Support Bundle" and confirm that <code>addon_version</code> is <code>0.5.2</code>.</span>
       </p>
       <div class="mock">
         <div class="body" style="padding:14px 16px;">
@@ -347,7 +342,7 @@
           <div class="menu">
             <div>Part Design</div>
             <div>Sketcher</div>
-            <div class="hot">4yi CAD Companion ✓</div>
+            <div class="hot">4yi CAD ✓</div>
             <div>Draft</div>
           </div>
         </div>
@@ -416,7 +411,7 @@
       <tbody>
         <tr>
           <td><span data-l="zh">找不到「连接设置」</span><span data-l="en">Can't find Connection Settings</span></td>
-          <td><span data-l="zh">它在 <b>4yi CAD Companion 工作台</b> 里,不在 Tools 菜单。先确认插件已安装、已重启,并从工作台下拉框切过去。</span><span data-l="en">It lives in the <b>4yi CAD Companion workbench</b>, not the Tools menu. Make sure the add-on is installed and FreeCAD restarted, then switch to it via the workbench dropdown.</span></td>
+          <td><span data-l="zh">它在 <b>4yi CAD 工作台</b> 里,不在 Tools 菜单。先确认插件已安装、已重启,并从工作台下拉框切过去。</span><span data-l="en">It lives in the <b>4yi CAD workbench</b>, not the Tools menu. Make sure the add-on is installed and FreeCAD restarted, then switch to it via the workbench dropdown.</span></td>
         </tr>
         <tr>
           <td><span data-l="zh">测试连接失败 / 超时</span><span data-l="en">Test connection fails / times out</span></td>
@@ -427,8 +422,8 @@
           <td><span data-l="zh">Token 无效或已吊销。回 <code>/connect</code> 重新生成一枚,更新到连接设置里并重启 FreeCAD。</span><span data-l="en">The token is invalid or revoked. Generate a new one at <code>/connect</code>, update it in Connection Settings, and restart FreeCAD.</span></td>
         </tr>
         <tr>
-          <td><span data-l="zh">Addon Manager 搜不到</span><span data-l="en">Not found in Addon Manager</span></td>
-          <td><span data-l="zh">确认自定义仓库地址填的是 <code>github.com/4yi-ai/cad-addon</code>,添加后点「刷新」;或用 zip 兜底装到 Mod 目录。</span><span data-l="en">Confirm the custom repo URL is <code>github.com/4yi-ai/cad-addon</code> and click "Refresh" after adding it; or use the zip fallback into the Mod directory.</span></td>
+          <td><span data-l="zh">升级后仍显示旧版本</span><span data-l="en">Old version still appears after upgrade</span></td>
+          <td><span data-l="zh">完全退出 FreeCAD,通过 <b>Open Addons Folder</b> 打开正确目录,备份并替换旧的 <code>fouryi_cad_companion</code> 文件夹,删除重复安装目录后重启;再从支持包确认版本为 <code>0.5.2</code>。</span><span data-l="en">Completely quit FreeCAD, use <b>Open Addons Folder</b> to locate the correct directory, back up and replace the old <code>fouryi_cad_companion</code> folder, remove duplicate installations, then restart and verify version <code>0.5.2</code> in the support bundle.</span></td>
         </tr>
         <tr>
           <td><span data-l="zh">改了设置不生效</span><span data-l="en">Changed settings don't apply</span></td>
@@ -440,8 +435,8 @@
 
   <footer>
     <span><b><span data-l="zh">连接页</span><span data-l="en">Connect</span></b> /connect</span>
-    <span><b><span data-l="zh">插件仓库</span><span data-l="en">Add-on repo</span></b> github.com/4yi-ai/cad-addon</span>
-    <span><b><span data-l="zh">工作台</span><span data-l="en">Workbench</span></b> 4yi CAD Companion</span>
+    <span><b><span data-l="zh">源码</span><span data-l="en">Source</span></b> github.com/4yi-ai/4yi-cad</span>
+    <span><b><span data-l="zh">工作台</span><span data-l="en">Workbench</span></b> 4yi CAD</span>
     <span><b><span data-l="zh">支持</span><span data-l="en">Supports</span></b> FreeCAD 1.0+ · Win / macOS / Linux</span>
   </footer>
 </div>
