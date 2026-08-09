@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import re
 import urllib.parse
@@ -85,6 +86,8 @@ from app.freecad_gui_orchestrator import (
 from app.freecad_intents import parse_freecad_intent
 from app.freecad_state import storage_status, typed_state_diff
 from app.session_store import SessionStore, SqliteSessionStore, utc_now
+
+LOGGER = logging.getLogger(__name__)
 
 # The SPA is a single self-contained file at the repo root, served same-origin.
 # Living at the root (next to pyproject/Dockerfile) also makes the deployment
@@ -2545,6 +2548,11 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
         except Exception as exc:  # noqa: BLE001
+            LOGGER.exception(
+                "remote_freecad_panel_action_failed session_id=%s action=%s",
+                remote_session_id,
+                req.action,
+            )
             raise HTTPException(
                 status_code=503,
                 detail=f"remote FreeCAD panel action failed: {exc}",

@@ -1012,6 +1012,50 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
     assert poll.json()["commands"][0]["op"] == "load_model"
 
 
+def test_freecad_panel_prompt_logs_generation_failure(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    async def fail_generation(*args, **kwargs):
+        raise RuntimeError("gateway generation failed")
+
+    monkeypatch.setattr(
+        "app.main._queue_freecad_panel_agent_generation",
+        fail_generation,
+    )
+    client = _client_with_store(tmp_path)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "FreeCAD panel failure logging"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+
+    with caplog.at_level("ERROR", logger="app.main"):
+        response = client.post(
+            f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+            json={
+                "action": "prompt",
+                "prompt": "generate a building",
+                "selection": {},
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"].endswith("gateway generation failed")
+    record = next(
+        record
+        for record in caplog.records
+        if record.message.startswith("remote_freecad_panel_action_failed")
+    )
+    assert f"session_id={remote['session_id']}" in record.message
+    assert "action=prompt" in record.message
+    assert record.exc_info is not None
+
+
 def test_freecad_bridge_poll_does_not_dispatch_commands_after_stop(tmp_path):
     client = _client_with_store(tmp_path)
     workbench_session_id = client.post(
