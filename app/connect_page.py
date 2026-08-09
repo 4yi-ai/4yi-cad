@@ -180,9 +180,14 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
       <code>4yi-ai/cad-addon</code> 自定义仓库安装,该分发源尚未与主仓自动同步。
     </p>
     <ol>
-      <li>在 FreeCAD 打开「工具」→「Addon Manager」,点击窗口左下角齿轮,
-        选择「Open Addons Folder」打开实际插件目录。FreeCAD 1.1 可能使用
-        <code>v1-1/Mod</code> 等版本化目录,请以这里打开的位置为准。</li>
+      <li>先确定当前 FreeCAD 真正使用的插件目录。在 FreeCAD 打开
+        「视图」→「面板」→「Python 控制台」,输入
+        <code>print(App.getUserAppDataDir() + "Mod")</code>。复制输出的完整路径。
+        本机 FreeCAD 1.1.3 实测为
+        <code>~/Library/Application Support/FreeCAD/v1-1/Mod</code>。</li>
+      <li>macOS 可在 Finder 选择「前往」→「前往文件夹…」并粘贴上述路径。
+        Addon Manager 底部齿轮菜单中的「Open Addons Folder」只是可选快捷方式;
+        如果新版界面没有显示该入口,直接使用 Python 控制台输出的路径。</li>
       <li>下载 4yi CAD 主仓源码 zip:
         <div class="row">
           <pre id="source-zip-url" style="flex:1 1 auto; margin:0;">https://github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip</pre>
@@ -192,7 +197,7 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
       <li>解压 zip,找到
         <code>4yi-cad-main/freecad-addon/fouryi_cad_companion</code>。</li>
       <li>完全退出 FreeCAD。将整个 <code>fouryi_cad_companion</code> 文件夹复制到
-        第 1 步打开的 Addons 目录;升级时先备份旧文件夹,然后替换。</li>
+        前面确认的 <code>Mod</code> 目录;升级时先备份旧文件夹,然后替换。</li>
       <li>重新启动 FreeCAD,在工作台下拉框选择「4yi CAD」。打开「支持包」并确认
         <code>addon_version</code> 为 <code>0.5.2</code>。</li>
     </ol>

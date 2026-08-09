@@ -56,6 +56,7 @@ def test_connect_page_contains_title_and_key_content(tmp_path):
 
     assert "连接本地 FreeCAD" in body
     assert "github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip" in body
+    assert 'print(App.getUserAppDataDir() + "Mod")' in body
     assert "Open Addons Folder" in body
     assert "4yi-cad-main/freecad-addon/fouryi_cad_companion" in body
     assert "/api/tokens" in body
@@ -66,6 +67,7 @@ def test_connect_page_uses_freecad_reported_versioned_addons_folder(tmp_path):
 
     body = client.get("/connect").text
 
+    assert 'print(App.getUserAppDataDir() + "Mod")' in body
     assert "Open Addons Folder" in body
     assert "v1-1/Mod" in body
     assert "Library/Application Support/FreeCAD/Mod" not in body
