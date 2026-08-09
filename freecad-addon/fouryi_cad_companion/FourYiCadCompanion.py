@@ -73,8 +73,8 @@ def t(zh: str, en: str) -> str:
     return zh if _ui_language() == "zh" else en
 
 
-ADDON_VERSION = "0.5.1"
-USER_AGENT = "4yi-freecad-companion/0.5.1"
+ADDON_VERSION = "0.5.2"
+USER_AGENT = "4yi-freecad-companion/0.5.2"
 PARAM_GROUP_PATH = "User parameter:BaseApp/Preferences/Mod/FourYiCad"
 COMMAND_OPEN_PANEL = "FourYi_OpenPanel"
 COMMAND_START_BRIDGE = "FourYi_StartBridge"
@@ -378,7 +378,7 @@ def ensure_main_thread_pump() -> None:
     _MAIN_THREAD_PUMP.start()
 
 
-def run_in_background(work, on_done) -> None:
+def run_in_background(work, on_done) -> threading.Thread | None:
     """Run blocking `work()` off the GUI thread; deliver its result to
     `on_done(result, error)` back on the main thread via the pump. Exactly one
     of (result, error) is set. Falls back to synchronous when Qt is absent."""
@@ -387,7 +387,7 @@ def run_in_background(work, on_done) -> None:
             on_done(work(), None)
         except Exception as exc:
             on_done(None, exc)
-        return
+        return None
     ensure_main_thread_pump()
 
     def _runner() -> None:
@@ -398,7 +398,9 @@ def run_in_background(work, on_done) -> None:
             error = exc
             post_to_main_thread(lambda error=error: on_done(None, error))
 
-    threading.Thread(target=_runner, daemon=True).start()
+    worker = threading.Thread(target=_runner, daemon=True)
+    worker.start()
+    return worker
 
 
 def active_document():
@@ -1781,6 +1783,7 @@ def submit_panel_action(action: str, payload: dict[str, Any] | None = None) -> d
             "selection": selection,
             "macro": payload.get("macro"),
             "patch_id": payload.get("patch_id"),
+            "base_version_id": env.get("CAD_CURRENT_VERSION_ID") or None,
             "metadata": {
                 "source": "freecad_panel",
                 "addon_version": ADDON_VERSION,
@@ -2196,6 +2199,7 @@ class CompanionTaskPanel:
         self.output.setPlainText((current + "\n\n" + text).strip())
 
     def refresh_context(self) -> None:
+        self._recover_finished_action()
         diagnostics = collect_diagnostics()
         active = diagnostics["selection"].get("active_object") or {}
         doc = diagnostics["document_tree"].get("document") or {}
@@ -2382,21 +2386,44 @@ class CompanionTaskPanel:
         if self._action_busy:
             return
         self._action_busy = True
+        self._action_thread = None
         self._append_output(pending_text)
         self.plan_button.setEnabled(False)
         self.apply_button.setEnabled(False)
 
         def done(result, error) -> None:
             self._action_busy = False
+            self._action_thread = None
             self.plan_button.setEnabled(True)
             if error is not None:
                 self._append_output(t("操作失败：%s", "Operation failed: %s") % error)
+                if self._edit_plan and self._edit_plan.get("mode") == "generative_revision":
+                    self.apply_button.setEnabled(True)
             elif on_success is not None:
                 on_success(result or {})
             else:
                 self._append_output(t("操作完成。", "Operation completed."))
 
-        run_in_background(work, done)
+        self._action_thread = run_in_background(work, done)
+
+    def _recover_finished_action(self) -> None:
+        """Drain a completed worker callback even if FreeCAD's global Qt pump stalled."""
+        worker = getattr(self, "_action_thread", None)
+        if not self._action_busy or worker is None or worker.is_alive():
+            return
+        drain_main_thread_tasks()
+        if self._action_busy:
+            self._action_busy = False
+            self._action_thread = None
+            self.plan_button.setEnabled(True)
+            if self._edit_plan and self._edit_plan.get("mode") == "generative_revision":
+                self.apply_button.setEnabled(True)
+            self._append_output(
+                t(
+                    "后台操作已结束，但结果回调未送达；控件已恢复，请重试或查看诊断。",
+                    "The background action ended without delivering its callback; controls were restored. Retry or inspect diagnostics.",
+                )
+            )
 
     def export_bundle(self) -> None:
         path = export_support_bundle()

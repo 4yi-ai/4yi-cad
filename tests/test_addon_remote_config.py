@@ -678,7 +678,10 @@ def test_submit_panel_action_pure_when_selection_and_tree_provided(monkeypatch):
     monkeypatch.setattr(
         addon,
         "EFFECTIVE_ENV",
-        {"CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions"},
+        {
+            "CAD_PANEL_ACTION_URL": "http://control.test/api/freecad/sessions/x/panel/actions",
+            "CAD_CURRENT_VERSION_ID": "version_6",
+        },
     )
     captured = {}
 
@@ -698,6 +701,7 @@ def test_submit_panel_action_pure_when_selection_and_tree_provided(monkeypatch):
 
     body = _json.loads(captured["body"].decode("utf-8"))
     assert body["selection"] == {"s": 1}
+    assert body["base_version_id"] == "version_6"
     assert body["metadata"]["document_tree"] == {"d": 2}
 
 

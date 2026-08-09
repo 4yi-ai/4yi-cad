@@ -500,6 +500,7 @@ class FreeCadPanelActionRequest(BaseModel):
     selection: dict[str, Any] = Field(default_factory=dict)
     patch_id: str | None = Field(default=None, max_length=240)
     macro: str | None = Field(default=None, max_length=120000)
+    base_version_id: str | None = Field(default=None, min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1579,16 +1580,33 @@ async def _queue_freecad_panel_agent_generation(
     if workbench_session is None:
         raise KeyError(remote_session.workbench_session_id)
     active_version_id = workbench_session["session"]["active_version_id"]
+    base_version_id = (
+        req.base_version_id
+        or remote_session.current_version_id
+        or active_version_id
+    )
+    if base_version_id and store.get_version(
+        remote_session.workbench_session_id,
+        base_version_id,
+    ) is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "freecad_base_version_not_found",
+                "message": "The requested FreeCAD base version does not belong to this session.",
+                "base_version_id": base_version_id,
+            },
+        )
     base_fcstd_b64 = _optional_artifact_b64(
         artifact_store,
         remote_session.workbench_session_id,
-        active_version_id,
+        base_version_id,
         "fcstd",
     )
-    if active_version_id and not base_fcstd_b64:
+    if base_version_id and not base_fcstd_b64:
         raise HTTPException(
             status_code=422,
-            detail="active FreeCAD version has no FCStd artifact to edit",
+            detail="requested FreeCAD base version has no FCStd artifact to edit",
         )
     source_document_summary = None
     if base_fcstd_b64:
@@ -1623,7 +1641,7 @@ async def _queue_freecad_panel_agent_generation(
             "document_state": "fcstd_artifact",
             "source": "freecad_panel_agent",
             "remote_session_id": remote_session_id,
-            "source_version_id": active_version_id,
+            "source_version_id": base_version_id,
             "generated_parameters": generation["parameters"],
             "panel_selection": req.selection,
             "panel_generation_events": generation["events"],
@@ -1633,7 +1651,8 @@ async def _queue_freecad_panel_agent_generation(
     metadata = _metadata_with_document_summary(metadata, inspection)
     version = store.add_version(
         session_id=remote_session.workbench_session_id,
-        intent="modify" if active_version_id else "create",
+        parent_version_id=base_version_id,
+        intent="modify" if base_version_id else "create",
         user_instruction=req.prompt or "Generate from FreeCAD panel",
         design_state=_freecad_document_state(),
         script=generation["script"],
@@ -1643,13 +1662,13 @@ async def _queue_freecad_panel_agent_generation(
             extra={
                 "source": "freecad_panel_agent",
                 "remote_session_id": remote_session_id,
-                "source_version_id": active_version_id,
+                "source_version_id": base_version_id,
             },
         ),
         patch={
             "op": "freecad_panel_agent_generate",
             "remote_session_id": remote_session_id,
-            "source_version_id": active_version_id,
+            "source_version_id": base_version_id,
         },
         metadata=metadata,
         status="ok",
@@ -1689,7 +1708,7 @@ async def _queue_freecad_panel_agent_generation(
             "close_existing": True,
             "recompute": True,
         },
-        base_version_id=remote_session.current_version_id,
+        base_version_id=base_version_id,
         metadata={"source": "freecad_panel_agent", "panel_action": req.action},
     )
     event = store.add_remote_freecad_session_event(
@@ -2982,6 +3001,8 @@ def create_app(
                         "source": "freecad_panel",
                     },
                 )
+        except HTTPException:
+            raise
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="remote FreeCAD session not found") from exc
         except Exception as exc:  # noqa: BLE001

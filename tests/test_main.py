@@ -9,6 +9,7 @@ import base64
 import json
 
 import httpx
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.agent.loop import ExecResult, MAX_CHAT_HISTORY_MESSAGE_CHARS
@@ -1015,7 +1016,7 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
     assert poll.json()["commands"][0]["op"] == "load_model"
 
 
-def test_freecad_panel_prompt_edits_active_fcstd_instead_of_replacing_it(
+def test_freecad_panel_prompt_edits_requested_fcstd_instead_of_active_version(
     tmp_path,
     monkeypatch,
 ):
@@ -1116,6 +1117,19 @@ def test_freecad_panel_prompt_edits_active_fcstd_instead_of_replacing_it(
         version_id=source_version.id,
         exports={"fcstd": "QkFTRQ=="},
     )
+    newer_version = store.add_version(
+        session_id=workbench["id"],
+        intent="modify",
+        design_state={},
+        script="",
+        geometry_summary={},
+        metadata={"document_summary": source_summary},
+    )
+    client.app.state.artifact_store.save_version_artifacts(
+        session_id=workbench["id"],
+        version_id=newer_version.id,
+        exports={"fcstd": "TEFURVNU"},
+    )
     remote = client.post(
         "/api/freecad/sessions",
         json={"session_id": workbench["id"]},
@@ -1126,6 +1140,7 @@ def test_freecad_panel_prompt_edits_active_fcstd_instead_of_replacing_it(
         json={
             "action": "prompt",
             "prompt": "Add a sky garden on floor 8",
+            "base_version_id": source_version.id,
             "selection": {"active_object": {"name": "Tower1"}},
             "metadata": {"document_tree": {"objects": source_summary["objects"]}},
         },
@@ -1192,6 +1207,66 @@ def test_freecad_panel_prompt_logs_generation_failure(
     assert f"session_id={remote['session_id']}" in record.message
     assert "action=prompt" in record.message
     assert record.exc_info is not None
+
+
+def test_freecad_panel_prompt_preserves_http_generation_error(tmp_path, monkeypatch):
+    async def fail_generation(*args, **kwargs):
+        raise HTTPException(status_code=502, detail="existing-document edit rejected")
+
+    monkeypatch.setattr(
+        "app.main._queue_freecad_panel_agent_generation",
+        fail_generation,
+    )
+    client = _client_with_store(tmp_path)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "FreeCAD panel HTTP failure"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+
+    response = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "prompt",
+            "prompt": "generate a building",
+            "selection": {},
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "existing-document edit rejected"
+
+
+def test_freecad_panel_prompt_rejects_base_version_from_outside_session(tmp_path):
+    client = _client_with_store(tmp_path)
+    workbench_session_id = client.post(
+        "/api/sessions",
+        json={"title": "FreeCAD panel invalid base"},
+    ).json()["session"]["id"]
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench_session_id},
+    ).json()
+
+    response = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "prompt",
+            "prompt": "edit the selected tower",
+            "base_version_id": "version_from_another_session",
+            "selection": {},
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == {
+        "code": "freecad_base_version_not_found",
+        "message": "The requested FreeCAD base version does not belong to this session.",
+        "base_version_id": "version_from_another_session",
+    }
 
 
 def test_freecad_bridge_poll_does_not_dispatch_commands_after_stop(tmp_path):

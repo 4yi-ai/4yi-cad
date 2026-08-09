@@ -120,6 +120,7 @@ class SessionStore:
         self,
         *,
         session_id: str,
+        parent_version_id: str | None = None,
         intent: str,
         design_state: dict[str, Any],
         script: str,
@@ -418,6 +419,7 @@ class SqliteSessionStore(SessionStore):
         self,
         *,
         session_id: str,
+        parent_version_id: str | None = None,
         intent: str,
         design_state: dict[str, Any],
         script: str,
@@ -437,6 +439,19 @@ class SqliteSessionStore(SessionStore):
             if session_row is None:
                 raise KeyError(session_id)
 
+            resolved_parent_version_id = (
+                parent_version_id
+                if parent_version_id is not None
+                else session_row["active_version_id"]
+            )
+            if resolved_parent_version_id is not None:
+                parent_row = con.execute(
+                    "select id from design_versions where session_id = ? and id = ?",
+                    (session_id, resolved_parent_version_id),
+                ).fetchone()
+                if parent_row is None:
+                    raise KeyError(resolved_parent_version_id)
+
             current_max = con.execute(
                 "select coalesce(max(version_number), 0) from design_versions where session_id = ?",
                 (session_id,),
@@ -445,7 +460,7 @@ class SqliteSessionStore(SessionStore):
                 id=uuid.uuid4().hex,
                 session_id=session_id,
                 version_number=int(current_max) + 1,
-                parent_version_id=session_row["active_version_id"],
+                parent_version_id=resolved_parent_version_id,
                 intent=intent,
                 user_instruction=user_instruction,
                 design_state=design_state,

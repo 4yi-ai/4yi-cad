@@ -308,6 +308,87 @@ def test_freecad_addon_panel_action_uses_dedicated_timeout(monkeypatch):
     assert captured["timeout"] == 300
 
 
+def test_freecad_addon_panel_action_recovers_controls_after_error():
+    addon = _load_addon()
+
+    class Button:
+        def __init__(self):
+            self.enabled = True
+
+        def setEnabled(self, enabled):
+            self.enabled = enabled
+
+    class Output:
+        def __init__(self):
+            self.value = ""
+
+        def toPlainText(self):
+            return self.value
+
+        def setPlainText(self, value):
+            self.value = value
+
+    panel = object.__new__(addon.CompanionTaskPanel)
+    panel._action_busy = False
+    panel._action_thread = None
+    panel._edit_plan = {"mode": "generative_revision"}
+    panel.plan_button = Button()
+    panel.apply_button = Button()
+    panel.output = Output()
+
+    def fail():
+        raise RuntimeError("generation rejected")
+
+    panel._run_action_async(fail, "pending")
+
+    assert panel._action_busy is False
+    assert panel.plan_button.enabled is True
+    assert panel.apply_button.enabled is True
+    assert "generation rejected" in panel.output.value
+
+
+def test_freecad_addon_panel_recovers_if_finished_worker_callback_is_missing():
+    addon = _load_addon()
+
+    class Button:
+        def __init__(self):
+            self.enabled = False
+
+        def setEnabled(self, enabled):
+            self.enabled = enabled
+
+    class Output:
+        def __init__(self):
+            self.value = ""
+
+        def toPlainText(self):
+            return self.value
+
+        def setPlainText(self, value):
+            self.value = value
+
+    class FinishedWorker:
+        @staticmethod
+        def is_alive():
+            return False
+
+    panel = object.__new__(addon.CompanionTaskPanel)
+    panel._action_busy = True
+    panel._action_thread = FinishedWorker()
+    panel._edit_plan = {"mode": "generative_revision"}
+    panel.plan_button = Button()
+    panel.apply_button = Button()
+    panel.output = Output()
+
+    panel._recover_finished_action()
+
+    assert panel._action_busy is False
+    assert panel._action_thread is None
+    assert panel.plan_button.enabled is True
+    assert panel.apply_button.enabled is True
+    assert "控件已恢复" in panel.output.value or "controls were restored" in panel.output.value
+
+
 def test_freecad_addon_diagnostics_redacts_endpoint_values(tmp_path):
     addon = _load_addon()
     env = {
