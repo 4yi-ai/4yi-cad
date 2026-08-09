@@ -371,12 +371,24 @@ def test_freecad_addon_runtime_polls_and_posts_command_result(tmp_path):
 def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
     addon = _load_addon()
 
+    class FakeShape:
+        @staticmethod
+        def isNull():
+            return False
+
+    class FakeViewObject:
+        Visibility = False
+
+    class HiddenShapeObject(FakeObject):
+        Shape = FakeShape()
+        ViewObject = FakeViewObject()
+
     class LoadedDocument:
         def __init__(self, path):
             self.Name = "Loaded"
             self.Label = "Loaded"
             self.FileName = path
-            self.Objects = [FakeObject()]
+            self.Objects = [HiddenShapeObject()]
             self.recomputed = False
 
         def recompute(self):
@@ -434,7 +446,42 @@ def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
     assert FakeApp.opened_paths == [str(loaded_path)]
     assert FakeApp.active_name == "Loaded"
     assert FakeApp.ActiveDocument.recomputed is True
+    assert FakeApp.ActiveDocument.Objects[0].ViewObject.Visibility is True
     assert FakeApp.closed_names == ["Old"]
     assert env["CAD_CURRENT_VERSION_ID"] == "version_1"
     assert env["CAD_WORKBENCH_SESSION_ID"] == "workbench_1"
     assert result["result"]["document_tree"]["document"]["file_name"] == str(loaded_path)
+    assert result["result"]["visibility_restore"] == {
+        "status": "restored_all_hidden_shapes",
+        "shape_object_count": 1,
+        "visible_count": 1,
+        "restored_count": 1,
+    }
+
+
+def test_freecad_addon_load_model_visibility_preserves_intentional_mix():
+    addon = _load_addon()
+
+    class Shape:
+        @staticmethod
+        def isNull():
+            return False
+
+    class View:
+        def __init__(self, visible):
+            self.Visibility = visible
+
+    class Obj:
+        def __init__(self, visible):
+            self.Shape = Shape()
+            self.ViewObject = View(visible)
+
+    visible = Obj(True)
+    hidden = Obj(False)
+    doc = type("Doc", (), {"Objects": [visible, hidden]})()
+
+    result = addon.restore_loaded_model_visibility(doc)
+
+    assert result["status"] == "preserved"
+    assert visible.ViewObject.Visibility is True
+    assert hidden.ViewObject.Visibility is False

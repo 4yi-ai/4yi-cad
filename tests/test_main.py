@@ -2393,6 +2393,94 @@ def test_freecad_edit_delivery_requires_every_requested_sky_garden_floor():
     assert diagnostics["missing_floors"] == [8, 16]
 
 
+def test_freecad_edit_delivery_rejects_sky_gardens_above_selected_tower():
+    tower = {
+        "name": "Tower1",
+        "label": "HighRise residential tower 1 body",
+        "shape": {
+            "valid": True,
+            "bbox": {
+                "min": [-41968.0, 2540.5, 0.0],
+                "max": [-40356.0, 4745.5, 8184.0],
+            },
+        },
+    }
+    output_summary = {
+        "objects": [
+            tower,
+            *[
+                {
+                    "name": f"SkyGarden_F{floor}_Slab",
+                    "label": f"Sky Garden Floor {floor}",
+                    "shape": {
+                        "valid": True,
+                        "bbox": {
+                            "min": [-41968.0, -459.5, z],
+                            "max": [-40356.0, 2540.5, z + 400.0],
+                        },
+                    },
+                }
+                for floor, z in ((8, 21000.0), (16, 45000.0), (24, 69000.0))
+            ],
+        ]
+    }
+
+    error, diagnostics = _freecad_edit_delivery_error(
+        prompt="给左侧高楼在第8、16、24层各增加一个空中花园",
+        source_document_summary={"objects": [tower]},
+        output_document_summary=output_summary,
+        selection={"active_object": {"name": "Tower1"}},
+    )
+
+    assert error is not None
+    assert "outside or detached" in error
+    assert diagnostics["missing_floors"] == []
+    assert diagnostics["misplaced_floors"] == [8, 16, 24]
+
+
+def test_freecad_edit_delivery_accepts_sky_gardens_within_selected_tower_scale():
+    tower = {
+        "name": "Tower1",
+        "label": "HighRise residential tower 1 body",
+        "shape": {
+            "valid": True,
+            "bbox": {
+                "min": [-41968.0, 2540.5, 0.0],
+                "max": [-40356.0, 4745.5, 8184.0],
+            },
+        },
+    }
+    output_summary = {
+        "objects": [
+            tower,
+            *[
+                {
+                    "name": f"SkyGarden_F{floor}_Slab",
+                    "label": f"Sky Garden Floor {floor}",
+                    "shape": {
+                        "valid": True,
+                        "bbox": {
+                            "min": [-41968.0, 2200.0, z],
+                            "max": [-40356.0, 3000.0, z + 200.0],
+                        },
+                    },
+                }
+                for floor, z in ((8, 2200.0), (16, 4400.0), (24, 6600.0))
+            ],
+        ]
+    }
+
+    error, diagnostics = _freecad_edit_delivery_error(
+        prompt="给左侧高楼在第8、16、24层各增加一个空中花园",
+        source_document_summary={"objects": [tower]},
+        output_document_summary=output_summary,
+        selection={"active_object": {"name": "Tower1"}},
+    )
+
+    assert error is None
+    assert diagnostics["misplaced_floors"] == []
+
+
 async def test_default_freecad_document_edit_execute_rejects_replacement_before_sandbox(
     monkeypatch,
 ):

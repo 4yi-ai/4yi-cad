@@ -1454,7 +1454,10 @@ def _freecad_panel_agent_prompt(
         "and injects it as `doc`, `App.ActiveDocument`, and `FreeCAD.ActiveDocument`. Modify that "
         "document in place. Do not call newDocument, openDocument, or closeDocument; do not "
         "reconstruct or replace the site. Preserve every existing object unless the user explicitly "
-        "asks to delete it, and create clearly named shape objects for every requested addition."
+        "asks to delete it, and create clearly named shape objects for every requested addition. "
+        "Position and scale additions from the selected object's actual dimensions/bounding box in "
+        "the supplied document tree. When the model is scaled, map requested floor numbers into the "
+        "target's modeled height; never assume a real-world 3000 mm storey height."
         if editing_existing
         else "This is a new document generation request."
     )
@@ -1839,6 +1842,79 @@ def _garden_object_matches_floor(item: dict[str, Any], floor: int) -> bool:
     )
 
 
+def _summary_object_by_name(
+    document_summary: dict[str, Any] | None,
+    name: str | None,
+) -> dict[str, Any] | None:
+    if not name:
+        return None
+    return next(
+        (item for item in _summary_objects(document_summary) if item.get("name") == name),
+        None,
+    )
+
+
+def _shape_bbox(item: dict[str, Any] | None) -> dict[str, list[float]] | None:
+    shape = item.get("shape") if isinstance(item, dict) else None
+    bbox = shape.get("bbox") if isinstance(shape, dict) else None
+    if not isinstance(bbox, dict):
+        return None
+    minimum = bbox.get("min")
+    maximum = bbox.get("max")
+    if not (
+        isinstance(minimum, list)
+        and isinstance(maximum, list)
+        and len(minimum) >= 3
+        and len(maximum) >= 3
+    ):
+        return None
+    try:
+        return {
+            "min": [float(value) for value in minimum[:3]],
+            "max": [float(value) for value in maximum[:3]],
+        }
+    except (TypeError, ValueError):
+        return None
+
+
+def _bbox_axis_gap(
+    left: dict[str, list[float]],
+    right: dict[str, list[float]],
+    axis: int,
+) -> float:
+    return max(
+        0.0,
+        left["min"][axis] - right["max"][axis],
+        right["min"][axis] - left["max"][axis],
+    )
+
+
+def _garden_bbox_attached_to_target(
+    garden_bbox: dict[str, list[float]],
+    target_bbox: dict[str, list[float]],
+) -> bool:
+    target_size = [
+        max(0.0, target_bbox["max"][axis] - target_bbox["min"][axis])
+        for axis in range(3)
+    ]
+    target_height = target_size[2]
+    if target_height <= 0:
+        return False
+    garden_center_z = (garden_bbox["min"][2] + garden_bbox["max"][2]) / 2.0
+    z_margin = max(target_height * 0.15, 1.0)
+    if not (
+        target_bbox["min"][2] - z_margin
+        <= garden_center_z
+        <= target_bbox["max"][2] + z_margin
+    ):
+        return False
+    horizontal_margin = max(target_size[0], target_size[1], 1.0)
+    return (
+        _bbox_axis_gap(garden_bbox, target_bbox, 0) <= horizontal_margin
+        and _bbox_axis_gap(garden_bbox, target_bbox, 1) <= horizontal_margin
+    )
+
+
 def _freecad_edit_delivery_error(
     *,
     prompt: str,
@@ -1920,6 +1996,42 @@ def _freecad_edit_delivery_error(
                 f"visible Sky Garden shape objects{detail}.",
                 diagnostics,
             )
+
+        target_bbox = _shape_bbox(
+            _summary_object_by_name(output_document_summary, target_name)
+        )
+        if target_bbox:
+            misplaced_floors = []
+            floors_to_check = requested_floors or [0]
+            for floor in floors_to_check:
+                candidates = [
+                    item
+                    for item in garden_shapes
+                    if floor == 0 or _garden_object_matches_floor(item, floor)
+                ]
+                if not any(
+                    garden_bbox
+                    and _garden_bbox_attached_to_target(garden_bbox, target_bbox)
+                    for garden_bbox in (_shape_bbox(item) for item in candidates)
+                ):
+                    misplaced_floors.append(floor)
+            diagnostics.update(
+                {
+                    "selected_target_bbox": target_bbox,
+                    "misplaced_floors": misplaced_floors,
+                }
+            )
+            if misplaced_floors:
+                floor_detail = (
+                    misplaced_floors if requested_floors else "requested sky gardens"
+                )
+                return (
+                    "semantic delivery check failed: sky garden geometry for floors "
+                    f"{floor_detail} is outside or detached from the selected target bounding box. "
+                    "Derive placement from the selected object's modeled height and position; do not "
+                    "assume real-world storey dimensions.",
+                    diagnostics,
+                )
 
     return None, diagnostics
 

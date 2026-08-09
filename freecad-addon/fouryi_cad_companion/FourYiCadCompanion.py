@@ -73,8 +73,8 @@ def t(zh: str, en: str) -> str:
     return zh if _ui_language() == "zh" else en
 
 
-ADDON_VERSION = "0.5.0"
-USER_AGENT = "4yi-freecad-companion/0.5.0"
+ADDON_VERSION = "0.5.1"
+USER_AGENT = "4yi-freecad-companion/0.5.1"
 PARAM_GROUP_PATH = "User parameter:BaseApp/Preferences/Mod/FourYiCad"
 COMMAND_OPEN_PANEL = "FourYi_OpenPanel"
 COMMAND_START_BRIDGE = "FourYi_StartBridge"
@@ -822,6 +822,52 @@ def fit_active_view() -> None:
         pass
 
 
+def restore_loaded_model_visibility(doc) -> dict[str, Any]:
+    """Avoid a blank canvas when a headless-generated FCStd hides every shape."""
+    shape_objects = []
+    visible_count = 0
+    for obj in list(getattr(doc, "Objects", []) or []):
+        shape = getattr(obj, "Shape", None)
+        view = getattr(obj, "ViewObject", None)
+        if shape is None or view is None or not hasattr(view, "Visibility"):
+            continue
+        try:
+            if hasattr(shape, "isNull") and shape.isNull():
+                continue
+        except Exception:
+            continue
+        shape_objects.append(obj)
+        try:
+            if bool(view.Visibility):
+                visible_count += 1
+        except Exception:
+            pass
+
+    if not shape_objects:
+        return {"status": "no_shapes", "shape_object_count": 0, "restored_count": 0}
+    if visible_count:
+        return {
+            "status": "preserved",
+            "shape_object_count": len(shape_objects),
+            "visible_count": visible_count,
+            "restored_count": 0,
+        }
+
+    restored_count = 0
+    for obj in shape_objects:
+        try:
+            obj.ViewObject.Visibility = True
+            restored_count += 1
+        except Exception:
+            pass
+    return {
+        "status": "restored_all_hidden_shapes",
+        "shape_object_count": len(shape_objects),
+        "visible_count": restored_count,
+        "restored_count": restored_count,
+    }
+
+
 def execute_load_model(payload: dict[str, Any], env: dict[str, str], timeout: float) -> dict[str, Any]:
     if App is None:
         raise BridgeCommandError("freecad_unavailable", "FreeCAD is not available")
@@ -850,6 +896,7 @@ def execute_load_model(payload: dict[str, Any], env: dict[str, str], timeout: fl
     if doc is not None and payload.get("recompute", True) is not False and hasattr(doc, "recompute"):
         doc.recompute()
         recompute = {"status": "ok"}
+    visibility_restore = restore_loaded_model_visibility(doc)
     env["SESSION_FCSTD_PATH"] = str(path)
     if payload.get("version_id"):
         env["CAD_CURRENT_VERSION_ID"] = str(payload["version_id"])
@@ -868,6 +915,7 @@ def execute_load_model(payload: dict[str, Any], env: dict[str, str], timeout: fl
             "version_id": payload.get("version_id"),
         },
         "changed_objects": sorted(before_names ^ after_names),
+        "visibility_restore": visibility_restore,
         "console": ["Loaded %s" % path.name],
         "recompute_status": recompute,
         "undo": {"available": document_undo_available(doc), "source": "freecad_addon"},
