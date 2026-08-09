@@ -19,8 +19,14 @@ REPAIRABLE_REQUIREMENT_CODES = {
 
 QUALITY_REBUILD_ISSUE_CODES = {
     "outside_plot_boundary",
-    "building_spacing_below_minimum",
     "site_layout_object_budget_above_reference",
+}
+
+# Concept-plan spacing is advisory until the project has authoritative building
+# use, height, fire-code, and jurisdiction data. Keep it visible in the audit,
+# but do not rebuild or reject an otherwise successful, unrelated CAD edit.
+NON_BLOCKING_REVIEW_ISSUE_CODES = {
+    "building_spacing_below_minimum",
 }
 
 REFERENCE_QUALITY_REPAIR_CHECK_TARGETS = {
@@ -140,6 +146,8 @@ def site_layout_issue_requires_repair(issue: dict | None) -> bool:
     if not isinstance(issue, dict):
         return False
     code = issue.get("code")
+    if code in NON_BLOCKING_REVIEW_ISSUE_CODES:
+        return False
     if code in REPAIRABLE_REQUIREMENT_CODES or code in QUALITY_REBUILD_ISSUE_CODES:
         return True
     if code == "site_layout_reference_quality_below_reference":

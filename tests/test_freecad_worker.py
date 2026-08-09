@@ -213,6 +213,28 @@ def test_site_layout_warning_only_audit_does_not_require_repair():
     assert site_layout_needs_rebuild(summary["site_layout"]) is False
 
 
+def test_site_layout_spacing_warning_is_advisory_and_does_not_rebuild():
+    summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "component_count": 80,
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "building_spacing_below_minimum",
+                    "message": "Residential building spacing is below the concept-plan threshold.",
+                },
+            ],
+        }
+    }
+
+    assert site_layout_needs_repair(summary) is False
+    assert site_layout_needs_rebuild(summary["site_layout"]) is False
+    assert "REBUILD_EXISTING = False" in site_layout_repair_script(summary["site_layout"])
+
+
 def test_site_layout_structural_reference_quality_still_requires_repair():
     summary = {
         "site_layout": {

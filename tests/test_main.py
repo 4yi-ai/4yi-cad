@@ -2356,6 +2356,64 @@ async def test_default_freecad_execute_accepts_site_layout_warning_only_audit(mo
     assert audit_diagnostics["repair_status"] == "not_needed"
 
 
+async def test_default_freecad_execute_keeps_spacing_warning_without_repair(monkeypatch):
+    edit_calls = []
+    warning_summary = {
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "component_count": 80,
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "building_spacing_below_minimum",
+                    "message": "Residential building spacing is below the concept-plan threshold.",
+                },
+            ],
+        }
+    }
+
+    def fake_run_freecad_sandboxed(*args, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "OK", "step": "STEP", "stl": "STL"},
+            },
+        )
+
+    def fake_inspect(fcstd_b64, **kwargs):
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "document_summary": warning_summary,
+            },
+        )
+
+    def fake_edit(*args, **kwargs):
+        edit_calls.append(args)
+        return SandboxResult(success=False, error="should not repair spacing warning")
+
+    monkeypatch.setattr("app.main.run_freecad_sandboxed", fake_run_freecad_sandboxed)
+    monkeypatch.setattr("app.main.run_freecad_document_inspect_sandboxed", fake_inspect)
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+
+    result = await default_freecad_execute("import FreeCAD\nresult = []")
+
+    assert result.ok is True
+    assert result.exports["fcstd"] == "OK"
+    assert edit_calls == []
+    audit_diagnostics = result.diagnostics["site_layout_audit"]
+    assert audit_diagnostics["status"] == "needs_review"
+    assert audit_diagnostics["issue_count"] == 1
+    assert audit_diagnostics["repair_status"] == "not_needed"
+    assert audit_diagnostics["audit"]["issues"][0]["code"] == "building_spacing_below_minimum"
+
+
 async def test_default_freecad_execute_accepts_repaired_site_layout_with_warnings(monkeypatch):
     failing_summary = {
         "site_layout": {
