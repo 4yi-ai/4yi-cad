@@ -10134,6 +10134,14 @@ def _tail(value: str, limit: int = 4000) -> str:
     return value[-limit:]
 
 
+def _request_timeout(request: dict) -> float:
+    try:
+        value = float(request.get("timeout", 90.0))
+    except (TypeError, ValueError):
+        value = 90.0
+    return max(1.0, min(900.0, value))
+
+
 def main() -> None:
     try:
         request = json.load(sys.stdin)
@@ -10141,12 +10149,14 @@ def main() -> None:
         json.dump({"ok": False, "error": f"invalid request: {exc}"}, sys.stdout)
         return
     operation = request.get("operation") or "run_script"
+    timeout = _request_timeout(request)
     if operation == "import_model":
         json.dump(
             run_freecad_import_model(
                 request.get("format", ""),
                 request.get("data_b64", ""),
                 filename=request.get("filename"),
+                timeout=timeout,
             ),
             sys.stdout,
         )
@@ -10156,6 +10166,7 @@ def main() -> None:
             run_freecad_document_script(
                 request.get("script", ""),
                 request.get("fcstd_b64", ""),
+                timeout=timeout,
             ),
             sys.stdout,
         )
@@ -10164,6 +10175,7 @@ def main() -> None:
         json.dump(
             run_freecad_document_inspect(
                 request.get("fcstd_b64", ""),
+                timeout=timeout,
             ),
             sys.stdout,
         )
@@ -10174,11 +10186,12 @@ def main() -> None:
                 request.get("patches", []),
                 request.get("fcstd_b64", ""),
                 dry_run=bool(request.get("dry_run")),
+                timeout=timeout,
             ),
             sys.stdout,
         )
         return
-    json.dump(run_freecad_script(request.get("script", "")), sys.stdout)
+    json.dump(run_freecad_script(request.get("script", ""), timeout=timeout), sys.stdout)
 
 
 if __name__ == "__main__":

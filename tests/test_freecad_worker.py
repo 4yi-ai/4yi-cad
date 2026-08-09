@@ -5,9 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from app.cad.freecad import MINIMAL_FREECAD_SMOKE_SCRIPT, _freecad_cpu_seconds
+from app.cad.freecad import (
+    MINIMAL_FREECAD_SMOKE_SCRIPT,
+    _freecad_cpu_seconds,
+    _freecad_worker_timeout,
+    run_freecad_sandboxed,
+)
 from app.cad.freecad_worker import (
     FREECAD_RESULT_PREFIX,
+    _request_timeout,
     geometry_leaf_summaries,
     resolve_freecadcmd,
     run_freecad_document_inspect,
@@ -29,6 +35,35 @@ SITE_LAYOUT_REFERENCE_SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts" / "freecad" / "high_end_community_100m.py"
 )
 SITE_LAYOUT_FREECAD_SMOKE_SCRIPT = SITE_LAYOUT_REFERENCE_SCRIPT.read_text(encoding="utf-8")
+
+
+def test_freecad_worker_timeout_leaves_outer_sandbox_margin():
+    assert _freecad_worker_timeout(240) == 230
+    assert _freecad_worker_timeout(5) == 1
+    assert _freecad_worker_timeout(2_000) == 900
+
+
+def test_freecad_sandbox_forwards_worker_timeout(monkeypatch):
+    captured = {}
+
+    def fake_run_sandboxed(payload, **kwargs):
+        captured["payload"] = payload
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr("app.cad.freecad.run_sandboxed", fake_run_sandboxed)
+
+    run_freecad_sandboxed("result = None", timeout_s=240)
+
+    assert captured["payload"]["timeout"] == 230
+    assert captured["kwargs"]["timeout_s"] == 240
+
+
+def test_freecad_worker_request_timeout_is_validated():
+    assert _request_timeout({}) == 90
+    assert _request_timeout({"timeout": 230}) == 230
+    assert _request_timeout({"timeout": "bad"}) == 90
+    assert _request_timeout({"timeout": 10_000}) == 900
 
 
 def test_geometry_leaf_summaries_excludes_container_aggregate_shapes():

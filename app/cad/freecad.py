@@ -7,6 +7,7 @@ import sys
 from app.cad.runner import SandboxResult, run_sandboxed
 
 FREECAD_WORKER_ARGV = [sys.executable, "-m", "app.cad.freecad_worker"]
+FREECAD_WORKER_TIMEOUT_MARGIN_S = 10.0
 
 MINIMAL_FREECAD_SMOKE_SCRIPT = """
 import FreeCAD
@@ -30,6 +31,11 @@ def _freecad_cpu_seconds(cpu_seconds: int | None) -> int | None:
     return cpu_seconds
 
 
+def _freecad_worker_timeout(timeout_s: float) -> float:
+    """Leave time for JSON/base64 handling before the outer sandbox deadline."""
+    return max(1.0, min(900.0, float(timeout_s) - FREECAD_WORKER_TIMEOUT_MARGIN_S))
+
+
 def run_freecad_sandboxed(
     script: str,
     *,
@@ -38,7 +44,7 @@ def run_freecad_sandboxed(
     address_space_mb: int | None = 4096,
 ) -> SandboxResult:
     return run_sandboxed(
-        {"script": script},
+        {"script": script, "timeout": _freecad_worker_timeout(timeout_s)},
         timeout_s=timeout_s,
         cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
         address_space_mb=address_space_mb,
@@ -61,6 +67,7 @@ def run_freecad_import_sandboxed(
             "format": import_format,
             "data_b64": data_b64,
             "filename": filename,
+            "timeout": _freecad_worker_timeout(timeout_s),
         },
         timeout_s=timeout_s,
         cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
@@ -82,6 +89,7 @@ def run_freecad_document_edit_sandboxed(
             "operation": "edit_document",
             "script": script,
             "fcstd_b64": fcstd_b64,
+            "timeout": _freecad_worker_timeout(timeout_s),
         },
         timeout_s=timeout_s,
         cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
@@ -101,6 +109,7 @@ def run_freecad_document_inspect_sandboxed(
         {
             "operation": "inspect_document",
             "fcstd_b64": fcstd_b64,
+            "timeout": _freecad_worker_timeout(timeout_s),
         },
         timeout_s=timeout_s,
         cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
@@ -124,6 +133,7 @@ def run_freecad_document_patch_sandboxed(
             "patches": patches,
             "fcstd_b64": fcstd_b64,
             "dry_run": dry_run,
+            "timeout": _freecad_worker_timeout(timeout_s),
         },
         timeout_s=timeout_s,
         cpu_seconds=_freecad_cpu_seconds(cpu_seconds),
