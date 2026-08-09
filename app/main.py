@@ -1442,13 +1442,27 @@ def _compact_json_for_prompt(value: Any, *, max_chars: int = 4000) -> str:
     return text[: max_chars - 20] + "...[truncated]"
 
 
-def _freecad_panel_agent_prompt(req: FreeCadPanelActionRequest) -> str:
+def _freecad_panel_agent_prompt(
+    req: FreeCadPanelActionRequest,
+    *,
+    editing_existing: bool = False,
+) -> str:
     metadata = req.metadata if isinstance(req.metadata, dict) else {}
     document_tree = metadata.get("document_tree") if isinstance(metadata, dict) else None
+    edit_contract = (
+        "This is an EDIT of an existing FCStd document. The executor opens the base document "
+        "and injects it as `doc`, `App.ActiveDocument`, and `FreeCAD.ActiveDocument`. Modify that "
+        "document in place. Do not call newDocument, openDocument, or closeDocument; do not "
+        "reconstruct or replace the site. Preserve every existing object unless the user explicitly "
+        "asks to delete it, and create clearly named shape objects for every requested addition."
+        if editing_existing
+        else "This is a new document generation request."
+    )
     return "\n".join(
         [
             "Use FreeCAD. For a single residential building call build_building with a validated specification; otherwise call run_freecad with a complete script.",
             "Create or update the remote FreeCAD document, and make sure the result exports an FCStd artifact.",
+            edit_contract,
             "User request:",
             (req.prompt or "").strip(),
             "",
@@ -1461,14 +1475,30 @@ def _freecad_panel_agent_prompt(req: FreeCadPanelActionRequest) -> str:
     )
 
 
-async def _collect_freecad_panel_generation(app: FastAPI, req: FreeCadPanelActionRequest) -> dict[str, Any]:
+async def _collect_freecad_panel_generation(
+    app: FastAPI,
+    req: FreeCadPanelActionRequest,
+    *,
+    base_fcstd_b64: str | None = None,
+    source_document_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     prompt = (req.prompt or "").strip()
     if not prompt:
         raise HTTPException(status_code=422, detail="prompt is required")
 
     gw = _get_gateway(app)
     execute = _get_execute(app)
-    freecad_execute = _get_freecad_execute(app)
+    if base_fcstd_b64:
+        async def freecad_execute(script: str) -> ExecResult:
+            return await default_freecad_document_edit_execute(
+                script,
+                base_fcstd_b64,
+                prompt=prompt,
+                source_document_summary=source_document_summary,
+                selection=req.selection,
+            )
+    else:
+        freecad_execute = _get_freecad_execute(app)
     events: list[dict[str, Any]] = []
     exports: dict[str, str] = {}
     script = ""
@@ -1480,7 +1510,7 @@ async def _collect_freecad_panel_generation(app: FastAPI, req: FreeCadPanelActio
     ok = False
 
     async for event in run_generation(
-        _freecad_panel_agent_prompt(req),
+        _freecad_panel_agent_prompt(req, editing_existing=bool(base_fcstd_b64)),
         gateway=gw,
         execute=execute,
         execute_freecad=freecad_execute,
@@ -1546,7 +1576,32 @@ async def _queue_freecad_panel_agent_generation(
     if workbench_session is None:
         raise KeyError(remote_session.workbench_session_id)
     active_version_id = workbench_session["session"]["active_version_id"]
-    generation = await _collect_freecad_panel_generation(app, req)
+    base_fcstd_b64 = _optional_artifact_b64(
+        artifact_store,
+        remote_session.workbench_session_id,
+        active_version_id,
+        "fcstd",
+    )
+    if active_version_id and not base_fcstd_b64:
+        raise HTTPException(
+            status_code=422,
+            detail="active FreeCAD version has no FCStd artifact to edit",
+        )
+    source_document_summary = None
+    if base_fcstd_b64:
+        source_inspection = await _inspect_fcstd_b64(base_fcstd_b64)
+        if not source_inspection.get("ok"):
+            raise HTTPException(
+                status_code=422,
+                detail=source_inspection.get("error") or "active FCStd document could not be inspected",
+            )
+        source_document_summary = source_inspection.get("document_summary")
+    generation = await _collect_freecad_panel_generation(
+        app,
+        req,
+        base_fcstd_b64=base_fcstd_b64,
+        source_document_summary=source_document_summary,
+    )
     exports = generation["exports"]
     inspection = await _inspect_fcstd_b64(exports.get("fcstd"))
     result = ExecResult(
@@ -1689,6 +1744,267 @@ async def default_execute(script: str) -> ExecResult:
         error=r.get("error"),
         engine="cadquery",
     )
+
+
+_FORBIDDEN_FREECAD_EDIT_CALL_RE = re.compile(
+    r"\b(?:FreeCAD|App)\s*\.\s*(?:newDocument|openDocument|closeDocument)\s*\("
+)
+_SKY_GARDEN_RE = re.compile(r"空中花园|sky[\s_-]*garden", re.IGNORECASE)
+
+
+def _freecad_edit_script_contract_error(script: str) -> str | None:
+    if _FORBIDDEN_FREECAD_EDIT_CALL_RE.search(script or ""):
+        return (
+            "existing-document edit rejected: use the pre-opened `doc` object and do not call "
+            "newDocument, openDocument, or closeDocument. Modify the base FCStd in place and "
+            "preserve its existing objects."
+        )
+    return None
+
+
+def _summary_objects(document_summary: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(document_summary, dict):
+        return []
+    return [
+        item
+        for item in list(document_summary.get("objects") or [])
+        if isinstance(item, dict)
+    ]
+
+
+def _summary_object_names(document_summary: dict[str, Any] | None) -> set[str]:
+    return {
+        str(item.get("name"))
+        for item in _summary_objects(document_summary)
+        if item.get("name")
+    }
+
+
+def _summary_geometry_signature(document_summary: dict[str, Any] | None) -> str:
+    objects = []
+    for item in _summary_objects(document_summary):
+        objects.append(
+            {
+                "name": item.get("name"),
+                "label": item.get("label"),
+                "placement": item.get("placement"),
+                "shape": item.get("shape"),
+            }
+        )
+    return json.dumps(objects, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _selection_object_name(selection: dict[str, Any] | None) -> str | None:
+    if not isinstance(selection, dict):
+        return None
+    active = selection.get("active_object")
+    if isinstance(active, dict) and active.get("name"):
+        return str(active["name"])
+    for item in list(selection.get("objects") or []):
+        if isinstance(item, dict) and item.get("name"):
+            return str(item["name"])
+    return None
+
+
+def _requested_sky_garden_floors(prompt: str) -> list[int]:
+    if not _SKY_GARDEN_RE.search(prompt or ""):
+        return []
+    floors: set[int] = set()
+    chinese_floor_lists = re.findall(
+        r"(?:第\s*)?((?:\d+\s*(?:(?:、|,|，|和|及|与)\s*\d+\s*)*))\s*(?:层|楼)",
+        prompt or "",
+    )
+    for floor_list in chinese_floor_lists:
+        floors.update(int(value) for value in re.findall(r"\d+", floor_list))
+    english_floor_lists = re.findall(
+        r"floors?\s*((?:\d+\s*(?:,|and|、)?\s*)+)",
+        prompt or "",
+        flags=re.IGNORECASE,
+    )
+    for floor_list in english_floor_lists:
+        floors.update(int(value) for value in re.findall(r"\d+", floor_list))
+    return sorted(floors)
+
+
+def _garden_object_matches_floor(item: dict[str, Any], floor: int) -> bool:
+    text = " ".join(str(item.get(key) or "") for key in ("name", "label"))
+    if not _SKY_GARDEN_RE.search(text):
+        return False
+    return bool(
+        re.search(
+            rf"(?:^|[^a-z0-9])(?:f|floor)?\s*0*{floor}(?:[^0-9]|$)|第\s*{floor}\s*层",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _freecad_edit_delivery_error(
+    *,
+    prompt: str,
+    source_document_summary: dict[str, Any] | None,
+    output_document_summary: dict[str, Any] | None,
+    selection: dict[str, Any] | None,
+) -> tuple[str | None, dict[str, Any]]:
+    source_names = _summary_object_names(source_document_summary)
+    output_names = _summary_object_names(output_document_summary)
+    missing_names = sorted(source_names - output_names)
+    added_names = sorted(output_names - source_names)
+    diagnostics: dict[str, Any] = {
+        "source_object_count": len(source_names),
+        "output_object_count": len(output_names),
+        "added_object_count": len(added_names),
+        "added_objects": added_names[:80],
+        "missing_source_object_count": len(missing_names),
+        "missing_source_objects": missing_names[:40],
+    }
+    if source_names and missing_names:
+        return (
+            "existing-document edit rejected: the output removed or replaced base objects "
+            f"({', '.join(missing_names[:8])}). Modify the pre-opened `doc` in place and preserve "
+            "the complete source model.",
+            diagnostics,
+        )
+
+    target_name = _selection_object_name(selection)
+    diagnostics["selected_target"] = target_name
+    if target_name and target_name not in output_names:
+        return (
+            f"existing-document edit rejected: selected target {target_name!r} is missing from the output",
+            diagnostics,
+        )
+
+    if (
+        source_names
+        and not added_names
+        and _summary_geometry_signature(source_document_summary)
+        == _summary_geometry_signature(output_document_summary)
+    ):
+        return (
+            "existing-document edit rejected: the generated FCStd is a no-op; it contains no new "
+            "objects or geometry changes for the requested modification.",
+            diagnostics,
+        )
+
+    if _SKY_GARDEN_RE.search(prompt or ""):
+        garden_shapes = [
+            item
+            for item in _summary_objects(output_document_summary)
+            if item.get("shape")
+            and _SKY_GARDEN_RE.search(
+                " ".join(str(item.get(key) or "") for key in ("name", "label"))
+            )
+        ]
+        requested_floors = _requested_sky_garden_floors(prompt)
+        missing_floors = [
+            floor
+            for floor in requested_floors
+            if not any(_garden_object_matches_floor(item, floor) for item in garden_shapes)
+        ]
+        diagnostics.update(
+            {
+                "semantic_check": "sky_garden",
+                "requested_floors": requested_floors,
+                "matched_sky_garden_shape_count": len(garden_shapes),
+                "missing_floors": missing_floors,
+            }
+        )
+        if not garden_shapes or missing_floors:
+            detail = (
+                f"; missing requested floors {missing_floors}"
+                if missing_floors
+                else ""
+            )
+            return (
+                "semantic delivery check failed: the edited FCStd must contain clearly named, "
+                f"visible Sky Garden shape objects{detail}.",
+                diagnostics,
+            )
+
+    return None, diagnostics
+
+
+async def default_freecad_document_edit_execute(
+    script: str,
+    base_fcstd_b64: str,
+    *,
+    prompt: str,
+    source_document_summary: dict[str, Any] | None,
+    selection: dict[str, Any] | None = None,
+) -> ExecResult:
+    """Run a generative panel edit against its FCStd base without template replacement."""
+    contract_error = _freecad_edit_script_contract_error(script)
+    if contract_error:
+        return ExecResult(ok=False, engine="freecad", error=contract_error)
+
+    res = await asyncio.to_thread(
+        run_freecad_document_edit_sandboxed,
+        script,
+        base_fcstd_b64,
+        timeout_s=FREECAD_SANDBOX_TIMEOUT_S,
+        cpu_seconds=FREECAD_SANDBOX_CPU_SECONDS,
+        address_space_mb=FREECAD_SANDBOX_ADDRESS_SPACE_MB,
+    )
+    result = _freecad_exec_result_from_sandbox(res, "FreeCAD document edit failed")
+    if not result.ok:
+        return result
+
+    inspection = await _inspect_fcstd_b64(result.exports.get("fcstd"))
+    if not inspection.get("ok"):
+        result.ok = False
+        result.error = inspection.get("error") or "edited FCStd could not be inspected"
+        return result
+    output_summary = inspection.get("document_summary")
+    delivery_error, delivery_diagnostics = _freecad_edit_delivery_error(
+        prompt=prompt,
+        source_document_summary=source_document_summary,
+        output_document_summary=output_summary,
+        selection=selection,
+    )
+    result.diagnostics["edit_delivery"] = delivery_diagnostics
+    if delivery_error:
+        result.ok = False
+        result.error = delivery_error
+        return result
+
+    geometry = output_summary.get("geometry") if isinstance(output_summary, dict) else {}
+    geometry = geometry if isinstance(geometry, dict) else {}
+    if (
+        geometry.get("valid") is False
+        or int(geometry.get("invalid_object_count") or 0) > 0
+        or int(geometry.get("check_error_count") or 0) > 0
+    ):
+        result.ok = False
+        result.error = "edited FCStd failed geometry validity checks"
+        return result
+
+    audit = site_layout_audit_from_summary(output_summary)
+    source_audit = site_layout_audit_from_summary(source_document_summary)
+    if audit:
+        result.diagnostics["site_layout_audit"] = _site_layout_audit_diagnostics(
+            audit,
+            repair_status="preserved_base_edit",
+            before=source_audit,
+        )
+        source_error_codes = {
+            str(issue.get("code"))
+            for issue in list((source_audit or {}).get("issues") or [])
+            if isinstance(issue, dict) and issue.get("severity") == "error"
+        }
+        new_errors = [
+            issue
+            for issue in list(audit.get("issues") or [])
+            if isinstance(issue, dict)
+            and issue.get("severity") == "error"
+            and str(issue.get("code")) not in source_error_codes
+        ]
+        if new_errors:
+            result.ok = False
+            result.error = site_layout_failure_message(
+                {**audit, "issues": new_errors}
+            )
+            return result
+    return result
 
 
 async def default_freecad_execute(script: str) -> ExecResult:

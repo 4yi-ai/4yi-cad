@@ -18,8 +18,11 @@ from app.cad.runner import SandboxResult
 from app.freecad_gui_orchestrator import FreeCadGuiSessionLaunch
 from app.gateway import ChatCompletion
 from app.main import (
+    _freecad_edit_delivery_error,
+    _freecad_edit_script_contract_error,
     _freecad_gui_proxy_target_url,
     create_app,
+    default_freecad_document_edit_execute,
     default_freecad_execute,
 )
 from app.session_store import SqliteSessionStore
@@ -1010,6 +1013,141 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
     )
     assert poll.status_code == 200
     assert poll.json()["commands"][0]["op"] == "load_model"
+
+
+def test_freecad_panel_prompt_edits_active_fcstd_instead_of_replacing_it(
+    tmp_path,
+    monkeypatch,
+):
+    source_summary = {
+        "document": {"name": "Site", "label": "Site"},
+        "objects": [
+            {
+                "name": "Tower1",
+                "label": "HighRise residential tower 1 body",
+                "type_id": "Part::Box",
+                "shape": {"valid": True, "volume": 1000.0},
+            }
+        ],
+        "geometry": {
+            "object_count": 1,
+            "shape_object_count": 1,
+            "valid": True,
+            "invalid_object_count": 0,
+            "check_error_count": 0,
+        },
+    }
+    output_summary = {
+        "document": {"name": "Site", "label": "Site"},
+        "objects": [
+            *source_summary["objects"],
+            {
+                "name": "SkyGarden_F8_Slab",
+                "label": "Sky Garden F8 Slab",
+                "type_id": "Part::Box",
+                "shape": {"valid": True, "volume": 100.0},
+            },
+        ],
+        "geometry": {
+            "object_count": 2,
+            "shape_object_count": 2,
+            "valid": True,
+            "invalid_object_count": 0,
+            "check_error_count": 0,
+        },
+    }
+    inspect_calls = []
+    edit_calls = []
+
+    async def fake_inspect_fcstd(fcstd_b64):
+        inspect_calls.append(fcstd_b64)
+        summary = source_summary if fcstd_b64 == "QkFTRQ==" else output_summary
+        return {"ok": True, "document_summary": summary, "freecad_version": "1.1.3"}
+
+    async def fake_edit_execute(
+        script,
+        base_fcstd_b64,
+        *,
+        prompt,
+        source_document_summary,
+        selection,
+    ):
+        edit_calls.append(
+            {
+                "script": script,
+                "base_fcstd_b64": base_fcstd_b64,
+                "prompt": prompt,
+                "source_document_summary": source_document_summary,
+                "selection": selection,
+            }
+        )
+        return ExecResult(
+            ok=True,
+            engine="freecad",
+            freecad_version="1.1.3",
+            exports={"fcstd": "TkVX", "step": "U1RFUA=="},
+        )
+
+    monkeypatch.setattr("app.main._inspect_fcstd_b64", fake_inspect_fcstd)
+    monkeypatch.setattr(
+        "app.main.default_freecad_document_edit_execute",
+        fake_edit_execute,
+    )
+    gateway = FakeGateway(
+        tool_name="run_freecad",
+        script="garden = doc.addObject('Part::Box', 'SkyGarden_F8_Slab')\nresult = doc\n",
+    )
+    client = _client_with_store(tmp_path, gateway=gateway)
+    workbench = client.post(
+        "/api/sessions",
+        json={"title": "Edit existing FCStd"},
+    ).json()["session"]
+    store = client.app.state.session_store
+    source_version = store.add_version(
+        session_id=workbench["id"],
+        intent="create",
+        design_state={},
+        script="",
+        geometry_summary={},
+        metadata={"document_summary": source_summary},
+    )
+    client.app.state.artifact_store.save_version_artifacts(
+        session_id=workbench["id"],
+        version_id=source_version.id,
+        exports={"fcstd": "QkFTRQ=="},
+    )
+    remote = client.post(
+        "/api/freecad/sessions",
+        json={"session_id": workbench["id"]},
+    ).json()
+
+    response = client.post(
+        f"/api/freecad/sessions/{remote['session_id']}/panel/actions",
+        json={
+            "action": "prompt",
+            "prompt": "Add a sky garden on floor 8",
+            "selection": {"active_object": {"name": "Tower1"}},
+            "metadata": {"document_tree": {"objects": source_summary["objects"]}},
+        },
+    )
+
+    assert response.status_code == 200
+    generated = response.json()["generated_version"]
+    assert generated["parent_version_id"] == source_version.id
+    assert generated["metadata"]["source_version_id"] == source_version.id
+    assert edit_calls == [
+        {
+            "script": "garden = doc.addObject('Part::Box', 'SkyGarden_F8_Slab')\nresult = doc\n",
+            "base_fcstd_b64": "QkFTRQ==",
+            "prompt": "Add a sky garden on floor 8",
+            "source_document_summary": source_summary,
+            "selection": {"active_object": {"name": "Tower1"}},
+        }
+    ]
+    assert inspect_calls == ["QkFTRQ==", "TkVX"]
+    prompt_text = gateway.calls[0]["messages"][-1]["content"]
+    assert "This is an EDIT of an existing FCStd document" in prompt_text
+    assert "Do not call newDocument" in prompt_text
 
 
 def test_freecad_panel_prompt_logs_generation_failure(
@@ -2209,6 +2347,174 @@ def test_freecad_smoke_endpoint_reports_missing_runtime(monkeypatch):
         "error": "FreeCADCmd unavailable",
         "timed_out": False,
     }
+
+
+def test_freecad_edit_contract_rejects_document_replacement_calls():
+    assert _freecad_edit_script_contract_error(
+        "doc = FreeCAD.newDocument('replacement')\n"
+    )
+    assert _freecad_edit_script_contract_error("App.closeDocument(doc.Name)\n")
+    assert _freecad_edit_script_contract_error(
+        "garden = doc.addObject('Part::Box', 'SkyGarden_F8')\n"
+    ) is None
+
+
+def test_freecad_edit_delivery_requires_every_requested_sky_garden_floor():
+    source_summary = {
+        "objects": [
+            {
+                "name": "Tower1",
+                "label": "HighRise residential tower 1 body",
+                "shape": {"valid": True, "volume": 1000.0},
+            }
+        ]
+    }
+    output_summary = {
+        "objects": [
+            *source_summary["objects"],
+            {
+                "name": "SkyGarden_F24_Slab",
+                "label": "Sky Garden Floor 24",
+                "shape": {"valid": True, "volume": 50.0},
+            },
+        ]
+    }
+
+    error, diagnostics = _freecad_edit_delivery_error(
+        prompt="给左侧高楼在第8、16、24层各增加一个空中花园",
+        source_document_summary=source_summary,
+        output_document_summary=output_summary,
+        selection={"active_object": {"name": "Tower1"}},
+    )
+
+    assert error is not None
+    assert "missing requested floors" in error
+    assert diagnostics["requested_floors"] == [8, 16, 24]
+    assert diagnostics["missing_floors"] == [8, 16]
+
+
+async def test_default_freecad_document_edit_execute_rejects_replacement_before_sandbox(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_edit(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("replacement script must not reach the sandbox")
+
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+
+    result = await default_freecad_document_edit_execute(
+        "doc = FreeCAD.newDocument('replacement')\n",
+        "QkFTRQ==",
+        prompt="add a sky garden on floor 8",
+        source_document_summary={"objects": [{"name": "Tower1"}]},
+        selection={"active_object": {"name": "Tower1"}},
+    )
+
+    assert result.ok is False
+    assert "newDocument" in (result.error or "")
+    assert calls == []
+
+
+async def test_default_freecad_document_edit_execute_preserves_base_and_semantics(
+    monkeypatch,
+):
+    edit_calls = []
+    source_summary = {
+        "objects": [
+            {
+                "name": "Tower1",
+                "label": "HighRise residential tower 1 body",
+                "placement": {"base": [0, 0, 0]},
+                "shape": {"valid": True, "volume": 1000.0},
+            },
+            {
+                "name": "ExistingSite",
+                "label": "Existing site",
+                "shape": {"valid": True, "volume": 2000.0},
+            },
+        ],
+        "geometry": {
+            "valid": True,
+            "invalid_object_count": 0,
+            "check_error_count": 0,
+        },
+    }
+    output_summary = {
+        "objects": [
+            *source_summary["objects"],
+            *[
+                {
+                    "name": f"SkyGarden_F{floor}_Slab",
+                    "label": f"Sky Garden Floor {floor}",
+                    "shape": {"valid": True, "volume": 50.0},
+                }
+                for floor in (8, 16, 24)
+            ],
+        ],
+        "geometry": {
+            "valid": True,
+            "invalid_object_count": 0,
+            "check_error_count": 0,
+        },
+        "site_layout": {
+            "applicable": True,
+            "status": "needs_review",
+            "coverage_score": 1.0,
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "building_spacing_below_minimum",
+                    "message": "Review tower spacing.",
+                }
+            ],
+        },
+    }
+
+    def fake_edit(script, fcstd_b64, **kwargs):
+        edit_calls.append({"script": script, "fcstd_b64": fcstd_b64})
+        return SandboxResult(
+            success=True,
+            result={
+                "ok": True,
+                "freecad_version": "1.1.3",
+                "exports": {"fcstd": "RURJVEVE", "step": "U1RFUA=="},
+            },
+        )
+
+    async def fake_inspect(fcstd_b64):
+        assert fcstd_b64 == "RURJVEVE"
+        return {
+            "ok": True,
+            "freecad_version": "1.1.3",
+            "document_summary": output_summary,
+        }
+
+    monkeypatch.setattr("app.main.run_freecad_document_edit_sandboxed", fake_edit)
+    monkeypatch.setattr("app.main._inspect_fcstd_b64", fake_inspect)
+
+    result = await default_freecad_document_edit_execute(
+        "garden = doc.addObject('Part::Box', 'SkyGarden_F8_Slab')\nresult = doc\n",
+        "QkFTRQ==",
+        prompt="给左侧高楼在第8、16、24层各增加一个空中花园",
+        source_document_summary=source_summary,
+        selection={"active_object": {"name": "Tower1"}},
+    )
+
+    assert result.ok is True
+    assert result.exports["fcstd"] == "RURJVEVE"
+    assert edit_calls == [
+        {
+            "script": "garden = doc.addObject('Part::Box', 'SkyGarden_F8_Slab')\nresult = doc\n",
+            "fcstd_b64": "QkFTRQ==",
+        }
+    ]
+    delivery = result.diagnostics["edit_delivery"]
+    assert delivery["requested_floors"] == [8, 16, 24]
+    assert delivery["matched_sky_garden_shape_count"] == 3
+    assert delivery["missing_source_object_count"] == 0
+    assert result.diagnostics["site_layout_audit"]["repair_status"] == "preserved_base_edit"
 
 
 async def test_default_freecad_execute_repairs_missing_site_layout_roles(monkeypatch):
