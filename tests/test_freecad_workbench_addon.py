@@ -119,6 +119,162 @@ def test_freecad_addon_panel_prompt_without_selection_posts_agent_prompt(monkeyp
     assert submitted["payload"]["macro"] is None
 
 
+def test_freecad_addon_selected_numeric_prompt_never_posts_executable_macro(monkeypatch):
+    addon = _load_addon()
+    submitted = {}
+
+    def fake_submit(action, payload):
+        submitted["action"] = action
+        submitted["payload"] = payload
+        return {"status": "queued"}
+
+    monkeypatch.setattr(addon, "submit_panel_action", fake_submit)
+
+    result = addon.submit_prompt_from_panel(
+        "把选中孔改成 6mm",
+        selection={"active_object": {"name": "Hole001"}},
+        document_tree={"objects": []},
+    )
+
+    assert result == {"status": "queued"}
+    assert submitted["action"] == "prompt"
+    assert submitted["payload"]["macro"] is None
+
+
+def test_natural_language_edit_plan_compiles_selected_property_with_units():
+    addon = _load_addon()
+    selection = {"active_object": {"name": "Tower002", "label": "住宅塔楼 2"}}
+    tree = {
+        "objects": [
+            {
+                "name": "Tower002",
+                "label": "住宅塔楼 2",
+                "type_id": "Part::Feature",
+                "properties": {"Height": {"value": 96000.0, "unit": "mm"}, "Width": 24000.0},
+            }
+        ]
+    }
+
+    plan = addon.plan_natural_language_edit("将选中塔楼高度增加 10 米", selection, tree)
+
+    assert plan["mode"] == "typed_property"
+    assert plan["target"]["name"] == "Tower002"
+    assert plan["operations"] == [
+        {
+            "op": "set_property",
+            "selector": {"name": "Tower002"},
+            "property": "Height",
+            "from": 96000.0,
+            "value": 106000.0,
+            "unit": "mm",
+            "operation_kind": "increase",
+        }
+    ]
+
+
+def test_natural_language_edit_plan_routes_ambiguous_change_to_cloud_revision():
+    addon = _load_addon()
+    selection = {"active_object": {"name": "Tower002", "label": "住宅塔楼 2"}}
+    tree = {
+        "objects": [
+            {
+                "name": "Tower002",
+                "label": "住宅塔楼 2",
+                "properties": {"Height": 96000.0, "Width": 24000.0},
+            }
+        ]
+    }
+
+    plan = addon.plan_natural_language_edit("给这栋楼增加三个空中花园", selection, tree)
+
+    assert plan["mode"] == "generative_revision"
+    assert plan["operations"] == []
+
+
+def test_floor_count_language_is_not_misread_as_millimetres():
+    addon = _load_addon()
+    selection = {"active_object": {"name": "Tower002", "label": "高层住宅 2"}}
+    tree = {
+        "objects": [
+            {
+                "name": "Tower002",
+                "label": "高层住宅 2",
+                "properties": {"Height": 96000.0},
+            }
+        ]
+    }
+
+    plan = addon.plan_natural_language_edit("给这栋高楼增加 3 层", selection, tree)
+
+    assert plan["mode"] == "generative_revision"
+
+
+class EditableObject:
+    Name = "Tower002"
+    Label = "住宅塔楼 2"
+    TypeId = "Part::Feature"
+
+    def __init__(self):
+        self.Height = 96000.0
+
+
+class TransactionDocument:
+    def __init__(self):
+        self.obj = EditableObject()
+        self.before = None
+        self.committed = None
+        self.recompute_count = 0
+
+    def getObject(self, name):
+        return self.obj if name == self.obj.Name else None
+
+    def openTransaction(self, _label):
+        self.before = self.obj.Height
+
+    def abortTransaction(self):
+        self.obj.Height = self.before
+        self.before = None
+
+    def commitTransaction(self):
+        self.committed = self.before
+        self.before = None
+
+    def undo(self):
+        self.obj.Height = self.committed
+
+    def recompute(self):
+        self.recompute_count += 1
+
+
+def test_typed_edit_preview_can_cancel_commit_and_undo():
+    addon = _load_addon()
+    plan = {
+        "mode": "typed_property",
+        "operations": [
+            {
+                "op": "set_property",
+                "selector": {"name": "Tower002"},
+                "property": "Height",
+                "from": 96000.0,
+                "value": 106000.0,
+            }
+        ],
+    }
+    doc = TransactionDocument()
+
+    preview = addon.begin_typed_edit_preview(plan, doc)
+    assert doc.obj.Height == 106000.0
+    addon.cancel_typed_edit_preview(preview)
+    assert doc.obj.Height == 96000.0
+
+    preview = addon.begin_typed_edit_preview(plan, doc)
+    addon.commit_typed_edit_preview(preview)
+    assert doc.obj.Height == 106000.0
+    addon.undo_last_typed_edit(doc)
+    assert doc.obj.Height == 96000.0
+    assert doc.recompute_count == 4
+
+
 def test_freecad_addon_panel_action_uses_dedicated_timeout(monkeypatch):
     addon = _load_addon()
     captured = {}
@@ -266,6 +422,7 @@ def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
                 "fcstd_b64": "RkNTdGQ=",
                 "filename": "current.FCStd",
                 "version_id": "version_1",
+                "workbench_session_id": "workbench_1",
             },
         },
         env,
@@ -279,4 +436,5 @@ def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
     assert FakeApp.ActiveDocument.recomputed is True
     assert FakeApp.closed_names == ["Old"]
     assert env["CAD_CURRENT_VERSION_ID"] == "version_1"
+    assert env["CAD_WORKBENCH_SESSION_ID"] == "workbench_1"
     assert result["result"]["document_tree"]["document"]["file_name"] == str(loaded_path)
