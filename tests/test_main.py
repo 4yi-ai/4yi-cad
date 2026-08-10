@@ -983,6 +983,19 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
         "/api/sessions",
         json={"title": "FreeCAD panel generate"},
     ).json()["session"]["id"]
+    store = client.app.state.session_store
+    old_version = store.add_version(
+        session_id=workbench_session_id,
+        intent="create",
+        design_state={},
+        script="",
+        geometry_summary={},
+    )
+    client.app.state.artifact_store.save_version_artifacts(
+        session_id=workbench_session_id,
+        version_id=old_version.id,
+        exports={"fcstd": "T0xE"},
+    )
     remote = client.post(
         "/api/freecad/sessions",
         json={"session_id": workbench_session_id},
@@ -993,6 +1006,7 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
         json={
             "action": "prompt",
             "prompt": "生成一个入口门厅模型",
+            "start_new_model": True,
             "selection": {},
             "metadata": {"source": "freecad_panel_test", "document_tree": {"objects": []}},
         },
@@ -1001,6 +1015,9 @@ def test_freecad_panel_prompt_generates_version_and_queues_load_model(
     assert prompt.status_code == 200
     body = prompt.json()
     assert body["status"] == "queued"
+    assert body["generated_version"]["parent_version_id"] is None
+    assert body["generated_version"]["intent"] == "create"
+    assert body["generated_version"]["metadata"]["start_new_model"] is True
     assert body["generated_version"]["metadata"]["source"] == "freecad_panel_agent"
     assert body["generated_version"]["metadata"]["artifact_refs"]["fcstd"]["bytes"] == 5
     assert body["generation_event"]["event_type"] == "panel_agent_generation_completed"

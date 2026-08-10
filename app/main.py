@@ -501,6 +501,7 @@ class FreeCadPanelActionRequest(BaseModel):
     patch_id: str | None = Field(default=None, max_length=240)
     macro: str | None = Field(default=None, max_length=120000)
     base_version_id: str | None = Field(default=None, min_length=1)
+    start_new_model: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1580,7 +1581,9 @@ async def _queue_freecad_panel_agent_generation(
     if workbench_session is None:
         raise KeyError(remote_session.workbench_session_id)
     active_version_id = workbench_session["session"]["active_version_id"]
-    base_version_id = (
+    # A newly-created local FreeCAD document is an explicit model boundary.
+    # In that case do not silently inherit the remote session's last revision.
+    base_version_id = None if req.start_new_model else (
         req.base_version_id
         or remote_session.current_version_id
         or active_version_id
@@ -1645,6 +1648,7 @@ async def _queue_freecad_panel_agent_generation(
             "generated_parameters": generation["parameters"],
             "panel_selection": req.selection,
             "panel_generation_events": generation["events"],
+            "start_new_model": req.start_new_model,
         }
     )
     metadata = _metadata_with_freecad_diagnostics(metadata, result)
@@ -1652,6 +1656,7 @@ async def _queue_freecad_panel_agent_generation(
     version = store.add_version(
         session_id=remote_session.workbench_session_id,
         parent_version_id=base_version_id,
+        inherit_active_parent=not req.start_new_model,
         intent="modify" if base_version_id else "create",
         user_instruction=req.prompt or "Generate from FreeCAD panel",
         design_state=_freecad_document_state(),

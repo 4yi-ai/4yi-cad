@@ -121,6 +121,7 @@ class SessionStore:
         *,
         session_id: str,
         parent_version_id: str | None = None,
+        inherit_active_parent: bool = True,
         intent: str,
         design_state: dict[str, Any],
         script: str,
@@ -420,6 +421,7 @@ class SqliteSessionStore(SessionStore):
         *,
         session_id: str,
         parent_version_id: str | None = None,
+        inherit_active_parent: bool = True,
         intent: str,
         design_state: dict[str, Any],
         script: str,
@@ -439,11 +441,9 @@ class SqliteSessionStore(SessionStore):
             if session_row is None:
                 raise KeyError(session_id)
 
-            resolved_parent_version_id = (
-                parent_version_id
-                if parent_version_id is not None
-                else session_row["active_version_id"]
-            )
+            resolved_parent_version_id = parent_version_id
+            if resolved_parent_version_id is None and inherit_active_parent:
+                resolved_parent_version_id = session_row["active_version_id"]
             if resolved_parent_version_id is not None:
                 parent_row = con.execute(
                     "select id from design_versions where session_id = ? and id = ?",

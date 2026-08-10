@@ -308,6 +308,47 @@ def test_freecad_addon_panel_action_uses_dedicated_timeout(monkeypatch):
     assert captured["timeout"] == 300
 
 
+def test_freecad_addon_new_local_document_does_not_send_stale_base(monkeypatch):
+    addon = _load_addon()
+    captured = {}
+
+    class Document:
+        Name = "Unnamed"
+
+    class FakeApp:
+        ActiveDocument = Document()
+
+    monkeypatch.setattr(addon, "App", FakeApp)
+    monkeypatch.setattr(
+        addon,
+        "EFFECTIVE_ENV",
+        {
+            "CAD_PANEL_ACTION_URL": "http://control.test/panel/actions",
+            "CAD_CURRENT_VERSION_ID": "old_version",
+            "CAD_BOUND_DOCUMENT_NAME": "CloudModel",
+        },
+    )
+    monkeypatch.setattr(
+        addon,
+        "post_json",
+        lambda url, payload, timeout, env=None: captured.setdefault("payload", payload),
+    )
+
+    assert addon.active_document_starts_new_model() is True
+    addon.submit_panel_action(
+        "prompt",
+        {
+            "prompt": "创建一个板",
+            "selection": {},
+            "document_tree": {},
+            "start_new_model": True,
+        },
+    )
+
+    assert captured["payload"]["start_new_model"] is True
+    assert captured["payload"]["base_version_id"] is None
+
+
 def test_freecad_addon_panel_action_recovers_controls_after_error():
     addon = _load_addon()
 
@@ -530,6 +571,7 @@ def test_freecad_addon_load_model_opens_fcstd(tmp_path, monkeypatch):
     assert FakeApp.ActiveDocument.Objects[0].ViewObject.Visibility is True
     assert FakeApp.closed_names == ["Old"]
     assert env["CAD_CURRENT_VERSION_ID"] == "version_1"
+    assert env["CAD_BOUND_DOCUMENT_NAME"] == "Loaded"
     assert env["CAD_WORKBENCH_SESSION_ID"] == "workbench_1"
     assert result["result"]["document_tree"]["document"]["file_name"] == str(loaded_path)
     assert result["result"]["visibility_restore"] == {
