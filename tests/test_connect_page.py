@@ -55,20 +55,20 @@ def test_connect_page_contains_title_and_key_content(tmp_path):
     body = resp.text
 
     assert "连接本地 FreeCAD" in body
+    assert "github.com/4yi-ai/cad-addon" in body
     assert "github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip" in body
     assert 'print(App.getUserAppDataDir() + "Mod")' in body
-    assert "Open Addons Folder" in body
+    assert "Custom repositories" in body
     assert "4yi-cad-main/freecad-addon/fouryi_cad_companion" in body
     assert "/api/tokens" in body
 
 
-def test_connect_page_uses_freecad_reported_versioned_addons_folder(tmp_path):
+def test_connect_page_keeps_verified_manual_install_fallback(tmp_path):
     client = _local_client(tmp_path)
 
     body = client.get("/connect").text
 
     assert 'print(App.getUserAppDataDir() + "Mod")' in body
-    assert "Open Addons Folder" in body
     assert "v1-1/Mod" in body
     assert "Library/Application Support/FreeCAD/Mod" not in body
 
@@ -98,7 +98,7 @@ def test_package_xml_declares_freecadmin_minimum_version():
 def test_package_xml_repository_url_points_at_source_repo():
     package_xml = (ROOT / "freecad-addon" / "fouryi_cad_companion" / "package.xml").read_text()
 
-    assert "4yi-ai/4yi-cad" in package_xml
+    assert "4yi-ai/cad-addon" in package_xml
     assert 'type="repository"' in package_xml
 
 
