@@ -349,6 +349,22 @@ def test_freecad_addon_new_local_document_does_not_send_stale_base(monkeypatch):
     assert captured["payload"]["base_version_id"] is None
 
 
+def test_freecad_addon_fresh_unnamed_document_starts_new_model(monkeypatch):
+    addon = _load_addon()
+
+    class Document:
+        Name = "Unnamed"
+
+    class FakeApp:
+        ActiveDocument = Document()
+
+    monkeypatch.setattr(addon, "App", FakeApp)
+
+    assert addon.active_document_starts_new_model(
+        {"CAD_CURRENT_VERSION_ID": "stale_remote_version"}
+    ) is True
+
+
 def test_freecad_addon_panel_action_recovers_controls_after_error():
     addon = _load_addon()
 
