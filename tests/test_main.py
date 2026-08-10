@@ -1180,6 +1180,8 @@ def test_freecad_panel_prompt_edits_requested_fcstd_instead_of_active_version(
     prompt_text = gateway.calls[0]["messages"][-1]["content"]
     assert "This is an EDIT of an existing FCStd document" in prompt_text
     assert "Do not call newDocument" in prompt_text
+    assert "prefer assigning the resulting Shape back to the existing target object" in prompt_text
+    assert "do not rely only on ViewObject.Visibility" in prompt_text
 
 
 def test_freecad_panel_prompt_logs_generation_failure(
