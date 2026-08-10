@@ -188,7 +188,8 @@ CONNECT_PAGE_HTML = r"""<!doctype html>
         </div>
         Branch 填 <code>main</code>,然后确认并关闭首选项。
       </li>
-      <li>打开「工具」→「Addon Manager」,搜索「4yi CAD Companion」并安装。</li>
+      <li>打开「工具」→「Addon Manager」,搜索仓库名「cad-addon」并安装。
+        FreeCAD 1.1 的自定义仓库搜索暂时不匹配显示名「4yi CAD Companion」。</li>
       <li>重新启动 FreeCAD,在工作台下拉框选择「4yi CAD」。打开「支持包」并确认
         <code>addon_version</code> 为 <code>0.5.2</code>。</li>
     </ol>

@@ -56,6 +56,7 @@ def test_connect_page_contains_title_and_key_content(tmp_path):
 
     assert "连接本地 FreeCAD" in body
     assert "github.com/4yi-ai/cad-addon" in body
+    assert "cad-addon" in body
     assert "github.com/4yi-ai/4yi-cad/archive/refs/heads/main.zip" in body
     assert 'print(App.getUserAppDataDir() + "Mod")' in body
     assert "Custom repositories" in body
