@@ -64,6 +64,23 @@ def test_connect_page_contains_title_and_key_content(tmp_path):
     assert "/api/tokens" in body
 
 
+def test_connect_page_supports_chinese_and_english(tmp_path):
+    client = _local_client(tmp_path)
+
+    body = client.get("/connect").text
+
+    assert 'data-locale="zh"' in body
+    assert 'data-locale="en"' in body
+    assert "连接本地 FreeCAD" in body
+    assert "Connect local FreeCAD" in body
+    assert "安装指引" in body
+    assert 'installTitle: "Installation"' in body
+    assert "Manage API Tokens" in body
+    assert "Configure the connection" in body
+    assert 'window.localStorage.getItem("freecad-addon-locale")' in body
+    assert 'new URLSearchParams(window.location.search).get("lang")' in body
+
+
 def test_connect_page_keeps_verified_manual_install_fallback(tmp_path):
     client = _local_client(tmp_path)
 
